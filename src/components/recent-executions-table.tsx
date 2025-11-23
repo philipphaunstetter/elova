@@ -1,10 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
-import { AppLayout } from '@/components/app-layout'
-import { WithN8NConnection } from '@/components/with-n8n-connection'
 import { apiClient } from '@/lib/api-client'
 import { Execution, TimeRange } from '@/types'
 import { 
@@ -15,8 +11,7 @@ import {
   ExclamationTriangleIcon,
   MagnifyingGlassIcon,
   CalendarIcon,
-  ArrowPathIcon,
-  ChartBarIcon
+  ArrowPathIcon
 } from '@heroicons/react/24/outline'
 import { Badge } from '@/components/badge'
 import { Button } from '@/components/button'
@@ -42,13 +37,16 @@ const statusColors = {
   'unknown': 'zinc'
 } as const
 
-function HistoryContent() {
+interface RecentExecutionsTableProps {
+  timeRange: TimeRange
+}
+
+export function RecentExecutionsTable({ timeRange }: RecentExecutionsTableProps) {
   const [executions, setExecutions] = useState<Execution[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [timeRange, setTimeRange] = useState<TimeRange>('7d')
   const [sortBy, setSortBy] = useState<'startedAt' | 'duration' | 'status'>('startedAt')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [n8nUrl, setN8nUrl] = useState<string>('')
@@ -61,6 +59,8 @@ function HistoryContent() {
         params.append('status', statusFilter)
       }
       params.append('timeRange', timeRange)
+      // Limit to 100 for dashboard view to keep it lightweight
+      params.append('limit', '100')
       
       const response = await apiClient.get<{ data: { items: Execution[] } }>(`/executions?${params}`)
       setExecutions(response.data.items)
@@ -154,21 +154,6 @@ function HistoryContent() {
     }).format(new Date(date))
   }
 
-  const getStatusStats = () => {
-    const stats = {
-      total: executions.length,
-      success: executions.filter(e => e.status === 'success').length,
-      error: executions.filter(e => e.status === 'error').length,
-      running: executions.filter(e => e.status === 'running').length,
-      waiting: executions.filter(e => e.status === 'waiting').length,
-      canceled: executions.filter(e => e.status === 'canceled').length,
-    }
-    stats.success = Math.round((stats.success / stats.total) * 100) || 0
-    return stats
-  }
-
-  const stats = getStatusStats()
-
   const openN8nExecution = (execution: Execution) => {
     if (!n8nUrl) {
       console.error('n8n URL not available')
@@ -201,15 +186,8 @@ function HistoryContent() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">History</h1>
-          <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
-            Complete execution history with advanced filtering and analysis
-          </p>
-        </div>
-        
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Live Execution Log</h3>
         <div className="flex space-x-3">
           <Button 
             outline
@@ -223,85 +201,10 @@ function HistoryContent() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-white dark:bg-slate-800 overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <ChartBarIcon className="h-6 w-6 text-gray-400" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Total Executions</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-white">
-                    {loading ? '...' : stats.total.toLocaleString()}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <CheckCircleIcon className="h-6 w-6 text-green-400" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Successful</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-white">
-                    {loading ? '...' : stats.success.toLocaleString()}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <XCircleIcon className="h-6 w-6 text-red-400" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Failed</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-white">
-                    {loading ? '...' : stats.error.toLocaleString()}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <PlayIcon className="h-6 w-6 text-blue-400" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Running</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-white">
-                    {loading ? '...' : stats.running.toLocaleString()}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Filters and Search */}
-      <div className="bg-white dark:bg-slate-800 p-6 shadow rounded-lg">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
-          <div className="lg:col-span-2">
+      <div className="bg-white dark:bg-slate-800 p-4 shadow rounded-lg border border-gray-200 dark:border-slate-700">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="lg:col-span-1">
             <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
               Search
             </label>
@@ -309,7 +212,7 @@ function HistoryContent() {
               <MagnifyingGlassIcon data-slot="icon" />
               <Input
                 name="search"
-                placeholder="Search by execution ID, workflow, or error..."
+                placeholder="Search ID, workflow..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -330,22 +233,6 @@ function HistoryContent() {
               <ListboxOption value="running"><ListboxLabel>Running</ListboxLabel></ListboxOption>
               <ListboxOption value="waiting"><ListboxLabel>Waiting</ListboxLabel></ListboxOption>
               <ListboxOption value="canceled"><ListboxLabel>Canceled</ListboxLabel></ListboxOption>
-            </Listbox>
-          </div>
-
-          <div>
-            <label htmlFor="timeRange" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-              Time Range
-            </label>
-            <Listbox
-              value={timeRange}
-              onChange={(value) => setTimeRange(value as TimeRange)}
-            >
-              <ListboxOption value="1h"><ListboxLabel>Last hour</ListboxLabel></ListboxOption>
-              <ListboxOption value="24h"><ListboxLabel>Last 24 hours</ListboxLabel></ListboxOption>
-              <ListboxOption value="7d"><ListboxLabel>Last 7 days</ListboxLabel></ListboxOption>
-              <ListboxOption value="30d"><ListboxLabel>Last 30 days</ListboxLabel></ListboxOption>
-              <ListboxOption value="90d"><ListboxLabel>Last 90 days</ListboxLabel></ListboxOption>
             </Listbox>
           </div>
 
@@ -378,26 +265,9 @@ function HistoryContent() {
         </div>
       </div>
 
-      {/* Results Summary */}
-      <div className="bg-white dark:bg-slate-800 px-4 py-3 border border-gray-200 dark:border-slate-300 rounded-md">
-        <div className="flex items-center justify-between text-sm text-gray-600 dark:text-slate-400">
-          <span>
-            Showing {filteredAndSortedExecutions.length} of {executions.length} executions
-          </span>
-          <span className="flex items-center">
-            <CalendarIcon className="h-4 w-4 mr-1" />
-            {timeRange === '1h' && 'Last hour'} 
-            {timeRange === '24h' && 'Last 24 hours'}
-            {timeRange === '7d' && 'Last 7 days'}
-            {timeRange === '30d' && 'Last 30 days'}
-            {timeRange === '90d' && 'Last 90 days'}
-          </span>
-        </div>
-      </div>
-
       {/* Executions List */}
-      <div className="bg-white dark:bg-slate-800 shadow overflow-hidden sm:rounded-lg">
-        {loading ? (
+      <div className="bg-white dark:bg-slate-800 shadow overflow-hidden sm:rounded-lg border border-gray-200 dark:border-slate-700">
+        {loading && executions.length === 0 ? (
           <div className="p-8 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
             <p className="mt-2 text-sm text-gray-500 dark:text-slate-400">Loading execution history...</p>
@@ -414,13 +284,13 @@ function HistoryContent() {
             </p>
           </div>
         ) : (
-          <ul className="divide-y divide-gray-200">
+          <ul className="divide-y divide-gray-200 dark:divide-slate-700 max-h-[600px] overflow-y-auto">
             {filteredAndSortedExecutions.map((execution) => {
               const StatusIcon = statusIcons[execution.status]
               const statusColor = statusColors[execution.status]
               
               return (
-                <li key={execution.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50 dark:hover:bg-slate-800">
+                <li key={execution.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center min-w-0 flex-1">
                       <div className="flex-shrink-0">
@@ -434,42 +304,44 @@ function HistoryContent() {
                       </div>
                       <div className="ml-4 min-w-0 flex-1">
                         <div className="flex items-center space-x-3">
-                          <p className="text-sm font-medium text-gray-900 truncate">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                             {(execution.metadata as { workflowName?: string })?.workflowName || execution.providerWorkflowId}
                           </p>
-                          <Badge color={statusColor} className="capitalize">
+                          <Badge color={statusColor} className="capitalize text-[10px] px-1.5 py-0.5">
                             {execution.status}
                           </Badge>
-                          {(execution.metadata as { firstNode?: { name?: string } })?.firstNode?.name && (
-                            <Badge color="blue">
-                              {(execution.metadata as { firstNode?: { name?: string } }).firstNode?.name}
-                            </Badge>
-                          )}
                         </div>
-                        <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
-                          <span>ID: {execution.providerExecutionId}</span>
+                        <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-slate-400 mt-1">
+                          <span className="font-mono">{execution.providerExecutionId.substring(0, 8)}...</span>
                           <span>•</span>
                           <span>{formatDate(execution.startedAt)}</span>
                           <span>•</span>
-                          <span>Duration: {formatDuration(execution.duration)}</span>
+                          <span>{formatDuration(execution.duration)}</span>
+                          {execution.aiCost && execution.aiCost > 0 && (
+                            <>
+                              <span>•</span>
+                              <span className="font-medium text-gray-700 dark:text-slate-300">${execution.aiCost.toFixed(4)}</span>
+                            </>
+                          )}
                         </div>
                         {execution.error && (
-                          <p className="text-sm text-red-600 truncate mt-1 max-w-md">
+                          <p className="text-xs text-red-600 truncate mt-1 max-w-md">
                             {execution.error.message}
                           </p>
                         )}
                       </div>
                     </div>
                     
-                    <div className="flex-shrink-0">
+                    <div className="flex-shrink-0 ml-2">
                       <Button 
                         outline
+                        className="text-xs px-2 py-1 h-7"
                         onClick={(e: React.MouseEvent) => {
                           e.stopPropagation()
                           openN8nExecution(execution)
                         }}
                       >
-                        View in n8n
+                        Open
                       </Button>
                     </div>
                   </div>
@@ -480,36 +352,5 @@ function HistoryContent() {
         )}
       </div>
     </div>
-  )
-}
-
-export default function HistoryPage() {
-  const { user, loading } = useAuth()
-  const router = useRouter()
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/auth/signin')
-    }
-  }, [user, loading, router])
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return null
-  }
-
-  return (
-    <AppLayout>
-      <WithN8NConnection>
-        <HistoryContent />
-      </WithN8NConnection>
-    </AppLayout>
   )
 }

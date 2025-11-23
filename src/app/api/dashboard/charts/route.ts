@@ -43,6 +43,8 @@ export interface ChartDataPoint {
   failedExecutions: number
   successRate: number
   avgResponseTime: number | null
+  aiCost: number
+  totalTokens: number
 }
 
 /**
@@ -164,6 +166,10 @@ async function generateChartData(userId: string, timeRange: TimeRange): Promise<
       const failedExecutions = bucket.executions.filter(e => e.status === 'error').length
       const successRate = totalExecutions > 0 ? Math.round((successfulExecutions / totalExecutions) * 100) : 0
 
+      // Calculate AI stats for bucket
+      const aiCost = bucket.executions.reduce((sum, e) => sum + (e.aiCost || 0), 0)
+      const totalTokens = bucket.executions.reduce((sum, e) => sum + (e.totalTokens || 0), 0)
+
       // Calculate average response time using duration from internal format
       const completedExecutions = bucket.executions.filter(e => e.duration !== undefined)
       let avgResponseTime: number | null = null
@@ -180,7 +186,9 @@ async function generateChartData(userId: string, timeRange: TimeRange): Promise<
         successfulExecutions,
         failedExecutions,
         successRate,
-        avgResponseTime
+        avgResponseTime,
+        aiCost,
+        totalTokens
       })
     }
 

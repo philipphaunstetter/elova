@@ -175,6 +175,10 @@ export interface DashboardStats {
   successRate: number
   avgResponseTime?: number
 
+  // AI Stats
+  totalCost?: number
+  totalTokens?: number
+
   // Time series data for charts
   executionsTrend?: TimeSeriesPoint[]
   successRateTrend?: TimeSeriesPoint[]

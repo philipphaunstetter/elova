@@ -113,6 +113,10 @@ async function fetchDashboardStatsFromDb(userId: string, timeRange: TimeRange): 
     const failedExecutions = filteredExecutions.filter(e => e.status === 'error').length
     const successRate = totalExecutions > 0 ? Math.round((successfulExecutions / totalExecutions) * 100) : 0
 
+    // Calculate AI stats
+    const totalCost = filteredExecutions.reduce((sum, e) => sum + (e.aiCost || 0), 0)
+    const totalTokens = filteredExecutions.reduce((sum, e) => sum + (e.totalTokens || 0), 0)
+
     // Calculate average response time (duration)
     const completedExecutions = filteredExecutions.filter(e => e.duration !== undefined)
     let avgResponseTime: number | undefined
@@ -175,6 +179,8 @@ timestamp: execution.startedAt
       failedExecutions,
       successRate,
       avgResponseTime,
+      totalCost,
+      totalTokens,
       topWorkflows,
       recentFailures
     }
@@ -218,6 +224,8 @@ export async function GET(request: NextRequest) {
         successfulExecutions: 0,
         failedExecutions: 0,
         successRate: 0,
+        totalCost: 0,
+        totalTokens: 0,
         topWorkflows: [],
         recentFailures: []
       }

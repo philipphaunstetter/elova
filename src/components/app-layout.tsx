@@ -39,7 +39,6 @@ const navigation = [
   { name: 'n8n Instances', href: '/providers', icon: ServerIcon, current: false },
   { name: 'Analytics', href: '/analytics', icon: AnalyticsIcon, current: false },
   { name: 'Monitors', href: '/monitors', icon: MonitorsIcon, current: false },
-  { name: 'History', href: '/history', icon: HistoryIcon, current: false },
 ]
 
 function AppSidebar() {

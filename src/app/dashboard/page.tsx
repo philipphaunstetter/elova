@@ -5,77 +5,107 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { AppLayout } from '@/components/app-layout'
 import { WithN8NConnection } from '@/components/with-n8n-connection'
-import { MetricsChart } from '@/components/charts/metrics-chart'
+import { VolumeChart } from '@/components/charts/volume-chart'
+import { StatusDistributionChart } from '@/components/charts/status-distribution-chart'
+import { CostChart } from '@/components/charts/cost-chart'
+import { RecentExecutionsTable } from '@/components/recent-executions-table'
 import { apiClient } from '@/lib/api-client'
 import { DashboardStats, TimeRange } from '@/types'
+import { ChartDataPoint } from '@/app/api/dashboard/charts/route'
+import { Listbox, ListboxOption, ListboxLabel } from '@/components/listbox'
 import { 
   PlayIcon,
   ClockIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  CurrencyDollarIcon
 } from '@heroicons/react/24/outline'
+
+const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
+  { value: '1h', label: 'Last hour' },
+  { value: '24h', label: '24 hours' },
+  { value: '7d', label: '7 days' },
+  { value: '30d', label: '30 days' },
+  { value: '90d', label: '90 days' }
+]
 
 function DashboardContent() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [timeRange, setTimeRange] = useState<TimeRange>('30d') // Changed to 30d to show more realistic totals
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([])
+  const [timeRange, setTimeRange] = useState<TimeRange>('30d')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true)
-        const response = await apiClient.get<{ data: DashboardStats }>(`/dashboard/stats?timeRange=${timeRange}`)
-        setStats(response.data)
+        const [statsRes, chartsRes] = await Promise.all([
+          apiClient.get<{ data: DashboardStats }>(`/dashboard/stats?timeRange=${timeRange}`),
+          apiClient.get<{ data: ChartDataPoint[] }>(`/dashboard/charts?timeRange=${timeRange}`)
+        ])
+        
+        setStats(statsRes.data)
+        setChartData(chartsRes.data)
         setError(null)
       } catch (err) {
-        console.error('Failed to fetch dashboard stats:', err)
+        console.error('Failed to fetch dashboard data:', err)
         setError('Failed to load dashboard data')
       } finally {
         setLoading(false)
       }
     }
 
-    fetchStats()
+    fetchData()
   }, [timeRange])
 
   const statsDisplay = [
     { 
-      name: 'Total Executions', 
-      value: loading ? '...' : (stats?.totalExecutions ?? '0').toString(),
-      icon: PlayIcon, 
-      change: '',
-      changeType: 'neutral' as const
-    },
-    { 
       name: 'Success Rate', 
       value: loading ? '...' : `${stats?.successRate ?? 0}%`,
       icon: CheckCircleIcon, 
-      change: '',
       changeType: 'positive' as const
     },
     { 
-      name: 'Failed Executions', 
-      value: loading ? '...' : (stats?.failedExecutions ?? '0').toString(),
-      icon: XCircleIcon, 
-      change: '',
-      changeType: 'negative' as const
-    },
-    { 
-      name: 'Avg Response Time', 
-      value: loading ? '...' : `${stats?.avgResponseTime ?? 0}ms`,
-      icon: ClockIcon, 
-      change: '',
+      name: 'Total Executions', 
+      value: loading ? '...' : (stats?.totalExecutions ?? '0').toLocaleString(),
+      icon: PlayIcon, 
       changeType: 'neutral' as const
     },
+    { 
+      name: 'AI Cost', 
+      value: loading ? '...' : `$${(stats?.totalCost ?? 0).toFixed(2)}`,
+      icon: CurrencyDollarIcon, 
+      changeType: 'neutral' as const
+    },
+    { 
+      name: 'Failed Executions', 
+      value: loading ? '...' : (stats?.failedExecutions ?? '0').toLocaleString(),
+      icon: XCircleIcon, 
+      changeType: (stats?.failedExecutions ?? 0) > 0 ? 'negative' as const : 'neutral' as const
+    },
   ]
+
+  // Generate dynamic pulse text
+  const getPulseText = () => {
+    if (loading || !stats) return 'Analyzing system status...'
+    
+    const errors = stats.failedExecutions
+    const successRate = stats.successRate
+    
+    if (errors === 0) {
+      return `System is healthy. ${successRate}% success rate over the last ${timeRange}.`
+    } else {
+      return `Attention needed. ${errors} failed executions recorded in the last ${timeRange}.`
+    }
+  }
 
   if (error) {
     return (
       <div className="text-center py-12">
         <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-red-400" />
-        <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white dark:text-white">Error loading dashboard</h3>
+        <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">Error loading dashboard</h3>
         <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">{error}</p>
         <button
           onClick={() => window.location.reload()}
@@ -89,36 +119,102 @@ function DashboardContent() {
 
   return (
     <div className="space-y-8">
-      {/* Page Header */}
-      <div className="mb-8">
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white dark:text-white">Dashboard</h1>
-            <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
-              Overview of your workflow automation across all platforms
-            </p>
-          </div>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Operations Center</h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+            Monitor workflow performance and costs
+          </p>
+        </div>
+        <div className="w-40">
+          <Listbox
+            value={timeRange}
+            onChange={(value) => setTimeRange(value as TimeRange)}
+          >
+            {TIME_RANGE_OPTIONS.map((option) => (
+              <ListboxOption key={option.value} value={option.value}>
+                <ListboxLabel>{option.label}</ListboxLabel>
+              </ListboxOption>
+            ))}
+          </Listbox>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+      {/* Row 1: Pulse & Volume */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Pulse */}
+        <div className="lg:col-span-1 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 flex flex-col">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">System Pulse</h3>
+          <div className="flex-1 flex flex-col justify-center">
+            <p className="text-xl font-light text-gray-600 dark:text-slate-300 mb-6 leading-relaxed">
+              {getPulseText()}
+            </p>
+            <div className="space-y-4">
+              {stats?.recentFailures && stats.recentFailures.length > 0 ? (
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">Recent Issues</h4>
+                  <ul className="space-y-2">
+                    {stats.recentFailures.slice(0, 2).map((fail, i) => (
+                      <li key={i} className="text-xs text-red-700 dark:text-red-300 flex items-start">
+                        <XCircleIcon className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
+                        <span className="truncate">{fail.workflowName}: {fail.error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
+                  <div className="flex items-center text-green-800 dark:text-green-200">
+                    <CheckCircleIcon className="h-5 w-5 mr-2" />
+                    <span className="text-sm font-medium">All systems operational</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Volume Chart */}
+        <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Execution Volume</h3>
+          <VolumeChart data={chartData} timeRange={timeRange} />
+        </div>
+      </div>
+
+      {/* Row 2: KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {statsDisplay.map((item) => (
-          <div key={item.name} className="bg-white dark:bg-slate-800 px-4 py-5 sm:p-6 shadow rounded-lg overflow-hidden ring-1 ring-zinc-950/5 dark:ring-white/10">
-            <dt className="text-sm font-medium text-gray-500 dark:text-slate-400 truncate flex items-center">
-              <item.icon className="h-5 w-5 mr-2 text-gray-400 dark:text-slate-500" />
+          <div key={item.name} className="bg-white dark:bg-slate-800 px-6 py-6 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700">
+            <dt className="text-sm font-medium text-gray-500 dark:text-slate-400 truncate flex items-center mb-2">
+              <item.icon className={`h-5 w-5 mr-2 ${
+                item.changeType === 'positive' ? 'text-green-500' : 
+                item.changeType === 'negative' ? 'text-red-500' : 
+                'text-gray-400'
+              }`} />
               {item.name}
             </dt>
-            <dd className="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">{item.value}</dd>
+            <dd className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{item.value}</dd>
           </div>
         ))}
       </div>
 
-      {/* Metrics Chart */}
-      <MetricsChart 
-        timeRange={timeRange}
-        onTimeRangeChange={setTimeRange}
-      />
+      {/* Row 3: Deep Dive Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Status Distribution</h3>
+          <StatusDistributionChart data={chartData} timeRange={timeRange} />
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">AI Costs & Tokens</h3>
+          <CostChart data={chartData} timeRange={timeRange} />
+        </div>
+      </div>
+
+      {/* Row 4: Integrated History */}
+      <div className="pt-4">
+        <RecentExecutionsTable timeRange={timeRange} />
+      </div>
     </div>
   )
 }
