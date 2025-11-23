@@ -19,8 +19,8 @@ import { Provider } from '@/types'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table'
 import { Badge } from '@/components/badge'
 import { Button } from '@/components/button'
-import { Input } from '@/components/input'
-import { Select } from '@/components/select'
+import { Input, InputGroup } from '@/components/input'
+import { Listbox, ListboxOption, ListboxLabel } from '@/components/listbox'
 import { showToast } from '@/components/toast'
 import { TablePagination } from '@/components/TablePagination'
 
@@ -256,49 +256,49 @@ function WorkflowsContent() {
           <label htmlFor="provider" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
             n8n Instance
           </label>
-          <Select
+          <Listbox
             value={providerFilter}
-            onChange={(e) => setProviderFilter(e.target.value)}
+            onChange={setProviderFilter}
           >
-            <option value="all">All instances</option>
+            <ListboxOption value="all">
+              <ListboxLabel>All instances</ListboxLabel>
+            </ListboxOption>
             {providers.map(provider => (
-              <option key={provider.id} value={provider.id}>
-                {provider.name}
-              </option>
+              <ListboxOption key={provider.id} value={provider.id}>
+                <ListboxLabel>{provider.name}</ListboxLabel>
+              </ListboxOption>
             ))}
-          </Select>
+          </Listbox>
         </div>
 
         <div>
           <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
             Search
           </label>
-          <div className="relative">
+          <InputGroup>
+            <MagnifyingGlassIcon data-slot="icon" />
             <Input
-              id="search"
-              type="text"
+              name="search"
               placeholder="Search workflows..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
             />
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          </div>
+          </InputGroup>
         </div>
 
         <div>
           <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
             Status
           </label>
-          <Select
+          <Listbox
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive' | 'archived')}
+            onChange={(value) => setStatusFilter(value as 'all' | 'active' | 'inactive' | 'archived')}
           >
-            <option value="all">All workflows</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="archived">Archived</option>
-          </Select>
+            <ListboxOption value="all"><ListboxLabel>All workflows</ListboxLabel></ListboxOption>
+            <ListboxOption value="active"><ListboxLabel>Active</ListboxLabel></ListboxOption>
+            <ListboxOption value="inactive"><ListboxLabel>Inactive</ListboxLabel></ListboxOption>
+            <ListboxOption value="archived"><ListboxLabel>Archived</ListboxLabel></ListboxOption>
+          </Listbox>
         </div>
 
         <div className="flex items-end">

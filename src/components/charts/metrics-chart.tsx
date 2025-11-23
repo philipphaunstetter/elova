@@ -15,6 +15,9 @@ import {
 import { TimeRange } from '@/types'
 import { apiClient } from '@/lib/api-client'
 import { ChartDataPoint } from '@/app/api/dashboard/charts/route'
+import { Checkbox, CheckboxField } from '@/components/checkbox'
+import { Label } from '@/components/fieldset'
+import { Listbox, ListboxOption, ListboxLabel } from '@/components/listbox'
 
 interface MetricsChartProps {
   timeRange: TimeRange
@@ -158,28 +161,27 @@ export function MetricsChart({ timeRange, onTimeRangeChange }: MetricsChartProps
           </div>
           <div className="flex items-center space-x-4">
             {/* Time Range Selector */}
-            <select 
-              value={timeRange}
-              onChange={(e) => onTimeRangeChange(e.target.value as TimeRange)}
-              className="text-sm border-gray-300 rounded-md focus:border-blue-500 focus:ring-blue-500"
-            >
-              {TIME_RANGE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <div className="w-40">
+              <Listbox
+                value={timeRange}
+                onChange={(value) => onTimeRangeChange(value as TimeRange)}
+              >
+                {TIME_RANGE_OPTIONS.map((option) => (
+                  <ListboxOption key={option.value} value={option.value}>
+                    <ListboxLabel>{option.label}</ListboxLabel>
+                  </ListboxOption>
+                ))}
+              </Listbox>
+            </div>
             
             {/* Show Events Toggle */}
-            <label className="flex items-center text-sm text-gray-600">
-              <input
-                type="checkbox"
+            <CheckboxField>
+              <Checkbox
                 checked={showEvents}
-                onChange={(e) => setShowEvents(e.target.checked)}
-                className="mr-2 text-blue-600 focus:ring-blue-500"
+                onChange={setShowEvents}
               />
-              Show events
-            </label>
+              <Label>Show events</Label>
+            </CheckboxField>
           </div>
         </div>
       </div>

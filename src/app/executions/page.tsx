@@ -31,8 +31,8 @@ import { DEMO_WORKFLOWS } from '@/lib/demo-data'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table'
 import { Badge } from '@/components/badge'
 import { Button } from '@/components/button'
-import { Input } from '@/components/input'
-import { Select } from '@/components/select'
+import { Input, InputGroup } from '@/components/input'
+import { Listbox, ListboxOption, ListboxLabel } from '@/components/listbox'
 import { showToast } from '@/components/toast'
 import { formatExecutionId, createN8nExecutionUrl } from '@/lib/utils'
 import { AICostTooltip } from '@/components/ai-cost-tooltip'
@@ -485,67 +485,67 @@ function ExecutionsContent() {
               <label htmlFor="provider" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                 n8n Instance
               </label>
-              <Select
+              <Listbox
                 value={providerFilter}
-                onChange={(e) => setProviderFilter(e.target.value)}
+                onChange={setProviderFilter}
               >
-                <option value="all">All instances</option>
+                <ListboxOption value="all">
+                  <ListboxLabel>All instances</ListboxLabel>
+                </ListboxOption>
                 {providers.map(provider => (
-                  <option key={provider.id} value={provider.id}>
-                    {provider.name}
-                  </option>
+                  <ListboxOption key={provider.id} value={provider.id}>
+                    <ListboxLabel>{provider.name}</ListboxLabel>
+                  </ListboxOption>
                 ))}
-              </Select>
+              </Listbox>
             </div>
 
             <div>
               <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                 Search
               </label>
-              <div className="relative">
+              <InputGroup>
+                <MagnifyingGlassIcon data-slot="icon" />
                 <Input
-                  id="search"
-                  type="text"
+                  name="search"
                   placeholder="Search executions..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
                 />
-                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              </div>
+              </InputGroup>
             </div>
 
             <div>
               <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                 Status
               </label>
-              <Select
+              <Listbox
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as ExecutionStatus | 'all')}
+                onChange={(value) => setStatusFilter(value as ExecutionStatus | 'all')}
               >
-                <option value="all">All statuses</option>
-                <option value="success">Success</option>
-                <option value="error">Error</option>
-                <option value="running">Running</option>
-                <option value="waiting">Waiting</option>
-                <option value="canceled">Canceled</option>
-              </Select>
+                <ListboxOption value="all"><ListboxLabel>All statuses</ListboxLabel></ListboxOption>
+                <ListboxOption value="success"><ListboxLabel>Success</ListboxLabel></ListboxOption>
+                <ListboxOption value="error"><ListboxLabel>Error</ListboxLabel></ListboxOption>
+                <ListboxOption value="running"><ListboxLabel>Running</ListboxLabel></ListboxOption>
+                <ListboxOption value="waiting"><ListboxLabel>Waiting</ListboxLabel></ListboxOption>
+                <ListboxOption value="canceled"><ListboxLabel>Canceled</ListboxLabel></ListboxOption>
+              </Listbox>
             </div>
 
             <div>
               <label htmlFor="timeRange" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                 Time Range
               </label>
-              <Select
+              <Listbox
                 value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+                onChange={(value) => setTimeRange(value as TimeRange)}
               >
-                <option value="1h">Last hour</option>
-                <option value="24h">Last 24 hours</option>
-                <option value="7d">Last 7 days</option>
-                <option value="30d">Last 30 days</option>
-                <option value="all">All Time</option>
-              </Select>
+                <ListboxOption value="1h"><ListboxLabel>Last hour</ListboxLabel></ListboxOption>
+                <ListboxOption value="24h"><ListboxLabel>Last 24 hours</ListboxLabel></ListboxOption>
+                <ListboxOption value="7d"><ListboxLabel>Last 7 days</ListboxLabel></ListboxOption>
+                <ListboxOption value="30d"><ListboxLabel>Last 30 days</ListboxLabel></ListboxOption>
+                <ListboxOption value="all"><ListboxLabel>All Time</ListboxLabel></ListboxOption>
+              </Listbox>
             </div>
 
             <div className="flex items-end">

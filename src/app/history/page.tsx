@@ -20,8 +20,8 @@ import {
 } from '@heroicons/react/24/outline'
 import { Badge } from '@/components/badge'
 import { Button } from '@/components/button'
-import { Input } from '@/components/input'
-import { Select } from '@/components/select'
+import { Input, InputGroup } from '@/components/input'
+import { Listbox, ListboxOption, ListboxLabel } from '@/components/listbox'
 import { createN8nExecutionUrl } from '@/lib/utils'
 
 const statusIcons = {
@@ -305,77 +305,75 @@ function HistoryContent() {
             <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
               Search
             </label>
-            <div className="relative">
+            <InputGroup>
+              <MagnifyingGlassIcon data-slot="icon" />
               <Input
-                id="search"
-                type="text"
+                name="search"
                 placeholder="Search by execution ID, workflow, or error..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
               />
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            </div>
+            </InputGroup>
           </div>
 
           <div>
             <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
               Status
             </label>
-            <Select 
-              value={statusFilter} 
-              onChange={(e) => setStatusFilter(e.target.value)}
+            <Listbox
+              value={statusFilter}
+              onChange={setStatusFilter}
             >
-              <option value="all">All statuses</option>
-              <option value="success">Success</option>
-              <option value="error">Error</option>
-              <option value="running">Running</option>
-              <option value="waiting">Waiting</option>
-              <option value="canceled">Canceled</option>
-            </Select>
+              <ListboxOption value="all"><ListboxLabel>All statuses</ListboxLabel></ListboxOption>
+              <ListboxOption value="success"><ListboxLabel>Success</ListboxLabel></ListboxOption>
+              <ListboxOption value="error"><ListboxLabel>Error</ListboxLabel></ListboxOption>
+              <ListboxOption value="running"><ListboxLabel>Running</ListboxLabel></ListboxOption>
+              <ListboxOption value="waiting"><ListboxLabel>Waiting</ListboxLabel></ListboxOption>
+              <ListboxOption value="canceled"><ListboxLabel>Canceled</ListboxLabel></ListboxOption>
+            </Listbox>
           </div>
 
           <div>
             <label htmlFor="timeRange" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
               Time Range
             </label>
-            <Select 
-              value={timeRange} 
-              onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+            <Listbox
+              value={timeRange}
+              onChange={(value) => setTimeRange(value as TimeRange)}
             >
-              <option value="1h">Last hour</option>
-              <option value="24h">Last 24 hours</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="90d">Last 90 days</option>
-            </Select>
+              <ListboxOption value="1h"><ListboxLabel>Last hour</ListboxLabel></ListboxOption>
+              <ListboxOption value="24h"><ListboxLabel>Last 24 hours</ListboxLabel></ListboxOption>
+              <ListboxOption value="7d"><ListboxLabel>Last 7 days</ListboxLabel></ListboxOption>
+              <ListboxOption value="30d"><ListboxLabel>Last 30 days</ListboxLabel></ListboxOption>
+              <ListboxOption value="90d"><ListboxLabel>Last 90 days</ListboxLabel></ListboxOption>
+            </Listbox>
           </div>
 
           <div>
             <label htmlFor="sortBy" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
               Sort By
             </label>
-            <Select 
-              value={sortBy} 
-              onChange={(e) => setSortBy(e.target.value as 'startedAt' | 'duration' | 'status')}
+            <Listbox
+              value={sortBy}
+              onChange={(value) => setSortBy(value as 'startedAt' | 'duration' | 'status')}
             >
-              <option value="startedAt">Start Time</option>
-              <option value="duration">Duration</option>
-              <option value="status">Status</option>
-            </Select>
+              <ListboxOption value="startedAt"><ListboxLabel>Start Time</ListboxLabel></ListboxOption>
+              <ListboxOption value="duration"><ListboxLabel>Duration</ListboxLabel></ListboxOption>
+              <ListboxOption value="status"><ListboxLabel>Status</ListboxLabel></ListboxOption>
+            </Listbox>
           </div>
 
           <div>
             <label htmlFor="sortOrder" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
               Order
             </label>
-            <Select 
-              value={sortOrder} 
-              onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+            <Listbox
+              value={sortOrder}
+              onChange={(value) => setSortOrder(value as 'asc' | 'desc')}
             >
-              <option value="desc">Descending</option>
-              <option value="asc">Ascending</option>
-            </Select>
+              <ListboxOption value="desc"><ListboxLabel>Descending</ListboxLabel></ListboxOption>
+              <ListboxOption value="asc"><ListboxLabel>Ascending</ListboxLabel></ListboxOption>
+            </Listbox>
           </div>
         </div>
       </div>

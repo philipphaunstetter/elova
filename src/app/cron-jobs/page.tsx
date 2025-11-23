@@ -17,7 +17,7 @@ import { Provider } from '@/types'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table'
 import { Badge } from '@/components/badge'
 import { Button } from '@/components/button'
-import { Select } from '@/components/select'
+import { Listbox, ListboxOption, ListboxLabel } from '@/components/listbox'
 import { showToast } from '@/components/toast'
 import cronstrue from 'cronstrue'
 import { TablePagination } from '@/components/TablePagination'
@@ -205,32 +205,34 @@ function CronJobsContent() {
           <label htmlFor="provider" className="block text-sm font-medium text-gray-700 dark:text-slate-300 dark:text-slate-300 mb-1">
             n8n Instance
           </label>
-          <Select
+          <Listbox
             value={providerFilter}
-            onChange={(e) => setProviderFilter(e.target.value)}
+            onChange={setProviderFilter}
           >
-            <option value="all">All instances</option>
+            <ListboxOption value="all">
+              <ListboxLabel>All instances</ListboxLabel>
+            </ListboxOption>
             {providers.map(provider => (
-              <option key={provider.id} value={provider.id}>
-                {provider.name}
-              </option>
+              <ListboxOption key={provider.id} value={provider.id}>
+                <ListboxLabel>{provider.name}</ListboxLabel>
+              </ListboxOption>
             ))}
-          </Select>
+          </Listbox>
         </div>
 
         <div>
           <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-slate-300 dark:text-slate-300 mb-1">
             Workflow Status
           </label>
-          <Select
+          <Listbox
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive' | 'archived')}
+            onChange={(value) => setStatusFilter(value as 'all' | 'active' | 'inactive' | 'archived')}
           >
-            <option value="all">All workflows</option>
-            <option value="active">Active only</option>
-            <option value="inactive">Inactive only</option>
-            <option value="archived">Archived only</option>
-          </Select>
+            <ListboxOption value="all"><ListboxLabel>All workflows</ListboxLabel></ListboxOption>
+            <ListboxOption value="active"><ListboxLabel>Active only</ListboxLabel></ListboxOption>
+            <ListboxOption value="inactive"><ListboxLabel>Inactive only</ListboxLabel></ListboxOption>
+            <ListboxOption value="archived"><ListboxLabel>Archived only</ListboxLabel></ListboxOption>
+          </Listbox>
         </div>
       </div>
 
