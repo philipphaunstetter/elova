@@ -711,7 +711,7 @@ function ExecutionsContent() {
                             <TableCell>
                               {item.totalTokens > 0 ? (
                                 <div className="text-sm font-medium">
-                                  {item.totalTokens.toLocaleString()} total
+                                  {item.totalTokens.toLocaleString()}
                                 </div>
                               ) : (
                                 <span className="text-gray-400 text-sm">-</span>
@@ -788,7 +788,7 @@ function ExecutionsContent() {
                                       openN8nExecution(execution)
                                     }}
                                   >
-                                    n8n
+                                    Open in n8n
                                   </Button>
                                 </TableCell>
                               </TableRow>
@@ -809,10 +809,13 @@ function ExecutionsContent() {
                         onClick={() => viewExecutionDetails(execution.id)}
                       >
                         <TableCell>
-                          <Badge color={statusColors[execution.status]} className="flex items-center space-x-1">
-                            <StatusIcon className="h-3 w-3" />
-                            <span className="capitalize">{execution.status}</span>
-                          </Badge>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-6" />
+                            <Badge color={statusColors[execution.status]} className="flex items-center space-x-1">
+                              <StatusIcon className="h-3 w-3" />
+                              <span className="capitalize">{execution.status}</span>
+                            </Badge>
+                          </div>
                         </TableCell>
                         <TableCell className="font-mono text-sm">
                           {formatExecutionId(execution.providerExecutionId)}
@@ -856,14 +859,9 @@ function ExecutionsContent() {
                         </TableCell>
                         <TableCell>
                           {execution.totalTokens && execution.totalTokens > 0 ? (
-                            <div className="text-sm">
-                              <div className="font-medium text-gray-900 dark:text-white">
-                                {execution.totalTokens.toLocaleString()}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {execution.inputTokens?.toLocaleString() || 0} in / {execution.outputTokens?.toLocaleString() || 0} out
-                              </div>
-                            </div>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {execution.totalTokens.toLocaleString()}
+                            </span>
                           ) : (
                             <span className="text-gray-400 text-sm">-</span>
                           )}
@@ -874,11 +872,6 @@ function ExecutionsContent() {
                               <div className="font-medium text-gray-900 dark:text-white">
                                 ${execution.aiCost.toFixed(4)}
                               </div>
-                              {execution.aiProvider && (
-                                <div className="text-xs text-gray-500 capitalize">
-                                  {execution.aiProvider}
-                                </div>
-                              )}
                             </div>
                           ) : (
                             <span className="text-gray-400 text-sm">-</span>
@@ -893,7 +886,7 @@ function ExecutionsContent() {
                               openN8nExecution(execution)
                             }}
                           >
-                            n8n
+                            Open in n8n
                           </Button>
                         </TableCell>
                       </TableRow>
