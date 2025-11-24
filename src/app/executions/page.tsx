@@ -56,6 +56,16 @@ const statusColors = {
   'unknown': 'zinc'
 } as const
 
+const modeColors: Record<string, 'cyan' | 'amber' | 'violet' | 'emerald' | 'zinc' | 'blue' | 'rose'> = {
+  'manual': 'cyan',
+  'trigger': 'amber',
+  'webhook': 'violet',
+  'cron': 'emerald',
+  'unknown': 'zinc',
+  'poll': 'blue',
+  'error': 'rose'
+}
+
 interface ExecutionGroup {
   type: 'group'
   id: string
@@ -694,7 +704,7 @@ function ExecutionsContent() {
                               ~{formatDuration(item.avgDuration)}
                             </TableCell>
                             <TableCell>
-                              <Badge color="blue" className="capitalize">
+                              <Badge color={modeColors[item.mode] || 'zinc'} className="capitalize">
                                 {item.mode}
                               </Badge>
                             </TableCell>
@@ -840,7 +850,7 @@ function ExecutionsContent() {
                           {formatDuration(execution.duration)}
                         </TableCell>
                         <TableCell>
-                          <Badge color="blue" className="capitalize">
+                          <Badge color={modeColors[execution.mode] || 'zinc'} className="capitalize">
                             {(execution.metadata as any)?.firstNode?.name || execution.mode}
                           </Badge>
                         </TableCell>
