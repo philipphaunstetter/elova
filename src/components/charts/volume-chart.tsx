@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useTheme } from '@/contexts/ThemeContext'
 import {
-  Line,
   AreaChart,
   Area,
   XAxis,
@@ -14,8 +13,6 @@ import {
 } from 'recharts'
 import { TimeRange } from '@/types'
 import { ChartDataPoint } from '@/app/api/dashboard/charts/route'
-import { Checkbox, CheckboxField } from '@/components/checkbox'
-import { Label } from '@/components/fieldset'
 
 interface VolumeChartProps {
   data: ChartDataPoint[]
@@ -71,7 +68,6 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export function VolumeChart({ data, timeRange }: VolumeChartProps) {
   const { theme } = useTheme()
-  const [showExecutions, setShowExecutions] = useState(true)
   
   const gridColor = theme === 'dark' ? '#3f3f46' : '#f3f4f6'
   const textColor = theme === 'dark' ? '#94a3b8' : '#64748b'
@@ -86,16 +82,6 @@ export function VolumeChart({ data, timeRange }: VolumeChartProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <CheckboxField>
-          <Checkbox
-            checked={showExecutions}
-            onChange={setShowExecutions}
-          />
-          <Label className="text-xs">Show volume</Label>
-        </CheckboxField>
-      </div>
-      
       <ResponsiveContainer width="100%" height={320}>
         <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
           <defs>
@@ -121,45 +107,20 @@ export function VolumeChart({ data, timeRange }: VolumeChartProps) {
           />
           
           <YAxis
-            yAxisId="left"
             axisLine={false}
             tickLine={false}
             tick={{ fontSize: 11, fill: textColor }}
-          />
-          
-          <YAxis
-            yAxisId="right"
-            orientation="right"
-            domain={[0, 100]}
-            axisLine={false}
-            tickLine={false}
-            tick={{ fontSize: 11, fill: textColor }}
-            tickFormatter={(val) => `${val}%`}
           />
           
           <Tooltip content={<CustomTooltip />} cursor={{ stroke: theme === 'dark' ? '#334155' : '#cbd5e1', strokeWidth: 1 }} />
           
-          {showExecutions && (
-            <Area
-              yAxisId="left"
-              type="monotone"
-              dataKey="totalExecutions"
-              stroke="#3b82f6"
-              strokeWidth={2}
-              fill="url(#executionsGradient)"
-              name="Total Executions"
-              animationDuration={1000}
-            />
-          )}
-          
-          <Line
-            yAxisId="right"
+          <Area
             type="monotone"
-            dataKey="successRate"
-            stroke="#10b981"
+            dataKey="totalExecutions"
+            stroke="#3b82f6"
             strokeWidth={2}
-            dot={false}
-            name="Success Rate"
+            fill="url(#executionsGradient)"
+            name="Total Executions"
             animationDuration={1000}
           />
         </AreaChart>

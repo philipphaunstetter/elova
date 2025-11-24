@@ -81,6 +81,13 @@ async function generateChartData(userId: string, timeRange: TimeRange): Promise<
             startedAt: row.started_at, // Keep as ISO string from database
             stoppedAt: row.stopped_at || undefined, // Keep as ISO string from database
             duration: row.duration,
+            // AI Metrics
+            totalTokens: row.total_tokens || 0,
+            inputTokens: row.input_tokens || 0,
+            outputTokens: row.output_tokens || 0,
+            aiCost: row.ai_cost || 0,
+            aiProvider: row.ai_provider,
+            aiModel: row.ai_model,
             metadata: {
               workflowName: row.workflow_name || 'Unknown',
               finished: Boolean(row.finished)
