@@ -154,7 +154,7 @@ function DashboardContent() {
         {/* Left: Recent Activity */}
         <div className="lg:col-span-1 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 flex flex-col">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Recent Activity</h3>
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1">
             {loading ? (
               <div className="space-y-4">
                  {[...Array(5)].map((_, i) => (
@@ -169,7 +169,7 @@ function DashboardContent() {
               </div>
             ) : (
               <div className="flow-root">
-                <ul className="-my-5 divide-y divide-gray-200 dark:divide-slate-700">
+                <ul className="divide-y divide-gray-200 dark:divide-slate-700">
                   {stats?.recentActivity?.map((execution) => {
                     const StatusIcon = statusIcons[execution.status] || ClockIcon
                     return (
