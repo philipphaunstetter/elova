@@ -159,7 +159,7 @@ function ExecutionDetailContent() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-rose-600"></div>
       </div>
     )
   }
@@ -234,7 +234,7 @@ function ExecutionDetailContent() {
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <ClockIcon className="h-6 w-6 text-blue-400" />
+                <ClockIcon className="h-6 w-6 text-rose-400" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
@@ -266,7 +266,7 @@ function ExecutionDetailContent() {
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <CpuChipIcon className="h-6 w-6 text-indigo-400" />
+                <CpuChipIcon className="h-6 w-6 text-rose-400" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
@@ -356,7 +356,7 @@ function ExecutionDetailContent() {
                                 ) : (
                                   <ChevronRightIcon className="h-4 w-4 mr-2 text-gray-400" />
                                 )}
-                                <h4 className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                <h4 className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">
                                   {nodeName}
                                 </h4>
                               </div>
@@ -505,7 +505,7 @@ export default function ExecutionDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-rose-600"></div>
       </div>
     )
   }

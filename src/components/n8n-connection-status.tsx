@@ -189,7 +189,7 @@ export function N8NConnectionStatus({ onConnectionRestored, showRetry = true }: 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-600"></div>
       </div>
     )
   }
@@ -236,10 +236,10 @@ export function N8NConnectionStatus({ onConnectionRestored, showRetry = true }: 
             {/* Help Section */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-start space-x-3">
-                <InformationCircleIcon className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                <InformationCircleIcon className="h-5 w-5 text-rose-500 mt-0.5 flex-shrink-0" />
                 <div className="text-sm">
                   <p className="font-medium text-blue-800 mb-2">How to get your n8n API key:</p>
-                  <ol className="text-blue-700 space-y-1 ml-4 list-decimal">
+                  <ol className="text-rose-700 space-y-1 ml-4 list-decimal">
                     <li>Open your n8n instance</li>
                     <li>Go to <strong>Settings</strong> → <strong>n8n API</strong></li>
                     <li>Create a new API key</li>
@@ -319,7 +319,7 @@ export function N8NConnectionStatus({ onConnectionRestored, showRetry = true }: 
             <div className="text-center">
               <p className="text-xs text-gray-500">
                 Need help? Check the{' '}
-                <Link href="/docs/n8n-integration" className="text-indigo-600 hover:text-indigo-800 underline">
+                <Link href="/docs/n8n-integration" className="text-rose-600 hover:text-indigo-800 underline">
                   n8n integration guide
                 </Link>
               </p>
@@ -376,7 +376,7 @@ export function N8NConnectionStatus({ onConnectionRestored, showRetry = true }: 
               >
                 {testing ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600 mr-2"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-rose-600 mr-2"></div>
                     Testing...
                   </>
                 ) : (
@@ -393,7 +393,7 @@ export function N8NConnectionStatus({ onConnectionRestored, showRetry = true }: 
           <div className="text-center">
             <p className="text-xs text-gray-500">
               Need help? Check the{' '}
-              <Link href="/docs/n8n-integration" className="text-indigo-600 hover:text-indigo-800 underline">
+              <Link href="/docs/n8n-integration" className="text-rose-600 hover:text-indigo-800 underline">
                 n8n integration guide
               </Link>
             </p>

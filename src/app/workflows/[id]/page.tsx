@@ -115,7 +115,7 @@ function WorkflowDetailContent() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-rose-600"></div>
       </div>
     )
   }
@@ -232,7 +232,7 @@ function WorkflowDetailContent() {
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <ClockIcon className="h-6 w-6 text-blue-400" />
+                <ClockIcon className="h-6 w-6 text-rose-400" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
@@ -361,7 +361,7 @@ export default function WorkflowDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-rose-600"></div>
       </div>
     )
   }

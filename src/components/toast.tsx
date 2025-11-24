@@ -23,13 +23,13 @@ export interface ToastProps {
 const toastStyles = {
   success: 'bg-green-50 border-green-200 dark:bg-green-900/30 dark:border-green-700',
   error: 'bg-red-50 border-red-200 dark:bg-red-900/30 dark:border-red-700', 
-  info: 'bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700',
+  info: 'bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-rose-700',
 }
 
 const iconStyles = {
   success: 'text-green-400',
   error: 'text-red-400',
-  info: 'text-blue-400',
+  info: 'text-rose-400',
 }
 
 const textStyles = {

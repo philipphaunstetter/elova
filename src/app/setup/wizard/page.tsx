@@ -339,7 +339,7 @@ export default function SetupWizardPage() {
               >
                 {testingConnection ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600 mr-2"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-rose-600 mr-2"></div>
                     Testing Connection...
                   </>
                 ) : (
@@ -379,7 +379,7 @@ export default function SetupWizardPage() {
                 id="syncInterval"
                 value={formData.syncInterval}
                 onChange={(e) => handleInputChange('syncInterval', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-rose-500 focus:border-rose-500"
               >
                 <option value="5">5 minutes</option>
                 <option value="15">15 minutes</option>
@@ -397,7 +397,7 @@ export default function SetupWizardPage() {
                   type="checkbox"
                   checked={formData.analyticsEnabled}
                   onChange={(e) => handleInputChange('analyticsEnabled', e.target.checked)}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-rose-600 focus:ring-rose-500 border-gray-300 rounded"
                 />
                 <div>
                   <Label htmlFor="analyticsEnabled" className="text-sm font-medium text-gray-900">
@@ -427,7 +427,7 @@ export default function SetupWizardPage() {
                   checked={formData.emailEnabled}
                   onChange={(e) => handleInputChange('emailEnabled', e.target.checked)}
                   disabled
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded opacity-50"
+                  className="h-4 w-4 text-rose-600 focus:ring-rose-500 border-gray-300 rounded opacity-50"
                 />
                 <div>
                   <Label htmlFor="emailEnabled" className="text-sm font-medium text-gray-500">
@@ -486,7 +486,7 @@ export default function SetupWizardPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center space-x-2 mb-4">
-            <ChartPieIcon className="h-8 w-8 text-indigo-600" />
+            <ChartPieIcon className="h-8 w-8 text-rose-600" />
             <span className="text-2xl font-bold text-gray-900 dark:text-white">Elova</span>
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Setup Wizard</h1>
@@ -505,7 +505,7 @@ export default function SetupWizardPage() {
                   {status === 'complete' ? (
                     <div className="group flex w-full items-center">
                       <span className="flex items-center px-6 py-4 text-sm font-medium">
-                        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-indigo-600">
+                        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-rose-600">
                           <CheckIconSolid aria-hidden="true" className="size-6 text-white" />
                         </span>
                         <span className="ml-4 text-sm font-medium text-gray-900">{step.name}</span>
@@ -513,10 +513,10 @@ export default function SetupWizardPage() {
                     </div>
                   ) : status === 'current' ? (
                     <div aria-current="step" className="flex items-center px-6 py-4 text-sm font-medium">
-                      <span className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-indigo-600">
-                        <StepIcon className="size-5 text-indigo-600" />
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-rose-600">
+                        <StepIcon className="size-5 text-rose-600" />
                       </span>
-                      <span className="ml-4 text-sm font-medium text-indigo-600">{step.name}</span>
+                      <span className="ml-4 text-sm font-medium text-rose-600">{step.name}</span>
                     </div>
                   ) : (
                     <div className="group flex items-center">
@@ -551,7 +551,7 @@ export default function SetupWizardPage() {
         <Card className="max-w-2xl mx-auto">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
-              {React.createElement(steps[currentStep - 1].icon, { className: "h-6 w-6 text-indigo-600" })}
+              {React.createElement(steps[currentStep - 1].icon, { className: "h-6 w-6 text-rose-600" })}
               <span>{steps[currentStep - 1].name}</span>
             </CardTitle>
             <CardDescription>

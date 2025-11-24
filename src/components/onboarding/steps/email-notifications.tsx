@@ -114,7 +114,7 @@ export function EmailNotificationsStep({
       <Card>
         <CardHeader className="text-center">
           <div className="flex items-center justify-center space-x-2 mb-4">
-            <EnvelopeIcon className="h-8 w-8 text-indigo-600" />
+            <EnvelopeIcon className="h-8 w-8 text-rose-600" />
           </div>
           <CardTitle className="text-2xl">Email Notifications</CardTitle>
           <CardDescription className="text-base">
@@ -146,10 +146,10 @@ export function EmailNotificationsStep({
               {/* Help Section */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-start space-x-3">
-                  <InformationCircleIcon className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                  <InformationCircleIcon className="h-5 w-5 text-rose-500 mt-0.5 flex-shrink-0" />
                   <div className="text-sm">
                     <p className="font-medium text-blue-800 mb-2">Using Resend for email delivery:</p>
-                    <ol className="text-blue-700 space-y-1 ml-4 list-decimal">
+                    <ol className="text-rose-700 space-y-1 ml-4 list-decimal">
                       <li>
                         Sign up for a free account at{' '}
                         <a 
@@ -165,7 +165,7 @@ export function EmailNotificationsStep({
                       <li>Add your domain (or use their testing domain)</li>
                       <li>Enter your API key and sender details below</li>
                     </ol>
-                    <p className="text-blue-600 mt-2 font-medium">
+                    <p className="text-rose-600 mt-2 font-medium">
                       Free tier includes 3,000 emails/month - perfect for monitoring alerts!
                     </p>
                   </div>
@@ -235,7 +235,7 @@ outline
                 >
                   {testing ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600 mr-2"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-rose-600 mr-2"></div>
                       Sending Test Email...
                     </>
                   ) : (

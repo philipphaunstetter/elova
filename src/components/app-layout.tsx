@@ -48,7 +48,7 @@ function AppSidebar() {
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-center space-x-2">
-          <DashboardIcon className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
+          <DashboardIcon className="h-8 w-8 text-rose-600 dark:text-rose-400" />
           <span className="text-lg font-semibold text-zinc-900 dark:text-white">
             Elova
           </span>

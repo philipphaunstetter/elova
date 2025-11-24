@@ -54,7 +54,7 @@ export function InitialSyncModal() {
                     {/* Animated Icon */}
                     <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-indigo-100 dark:bg-indigo-900 mb-4">
                         {syncStatus.status === 'in_progress' && (
-                            <ArrowPathIcon className="h-8 w-8 text-indigo-600 dark:text-indigo-400 animate-spin" />
+                            <ArrowPathIcon className="h-8 w-8 text-rose-600 dark:text-rose-400 animate-spin" />
                         )}
                         {syncStatus.status === 'completed' && (
                             <CheckCircleIcon className="h-8 w-8 text-green-600 dark:text-green-400" />
@@ -93,7 +93,7 @@ export function InitialSyncModal() {
                     {/* Progress Indicator */}
                     {syncStatus.status === 'in_progress' && (
                         <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 mb-4 overflow-hidden">
-                            <div className="bg-indigo-600 dark:bg-indigo-500 h-2 rounded-full animate-pulse" style={{ width: '60%' }} />
+                            <div className="bg-rose-600 dark:bg-rose-500 h-2 rounded-full animate-pulse" style={{ width: '60%' }} />
                         </div>
                     )}
 
@@ -101,7 +101,7 @@ export function InitialSyncModal() {
                     {syncStatus.status === 'failed' && (
                         <button
                             onClick={() => setShowModal(false)}
-                            className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                            className="mt-4 px-4 py-2 bg-rose-600 text-white rounded-md hover:bg-rose-700 transition-colors"
                         >
                             Continue Anyway
                         </button>

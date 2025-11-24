@@ -67,7 +67,7 @@ export function AICostTooltip({ type, model, inputTokens, outputTokens, cost, on
 
                     <div className="flex justify-between border-t border-gray-200 dark:border-slate-700 pt-2 font-semibold">
                         <span className="text-gray-900 dark:text-white">Total:</span>
-                        <span className="text-indigo-600 dark:text-indigo-400">${cost?.toFixed(5)}</span>
+                        <span className="text-rose-600 dark:text-rose-400">${cost?.toFixed(5)}</span>
                     </div>
 
                     {!pricing && (

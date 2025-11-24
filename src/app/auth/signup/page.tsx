@@ -21,7 +21,7 @@ export default function SignUp() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <Link href="/" className="flex justify-center">
           <div className="flex items-center space-x-2">
-            <ChartPieIcon className="h-8 w-8 text-indigo-600" />
+            <ChartPieIcon className="h-8 w-8 text-rose-600" />
             <span className="text-xl font-bold text-gray-900">Elova</span>
           </div>
         </Link>
@@ -42,7 +42,7 @@ export default function SignUp() {
           
           <p className="mt-6 text-center text-sm text-gray-500 dark:text-slate-400">
             Already have an account?{' '}
-            <Link href="/auth/signin" className="font-semibold leading-6 text-indigo-600 hover:text-indigo-500">
+            <Link href="/auth/signin" className="font-semibold leading-6 text-rose-600 hover:text-rose-500">
               Sign in
             </Link>
           </p>

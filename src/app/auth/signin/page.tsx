@@ -45,7 +45,7 @@ export default function SignIn() {
         {/* Logo and Title */}
         <div className="text-center">
           <Link href="/" className="inline-flex items-center space-x-2">
-            <ChartPieIcon className="h-8 w-8 text-indigo-600" />
+            <ChartPieIcon className="h-8 w-8 text-rose-600" />
             <span className="text-2xl font-bold text-gray-900 dark:text-white">Elova</span>
           </Link>
           <h2 className="mt-6 text-xl text-gray-600">
@@ -65,7 +65,7 @@ export default function SignIn() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
                 placeholder="Email address"
               />
             </div>
@@ -79,7 +79,7 @@ export default function SignIn() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
                 placeholder="Your Password"
               />
             </div>
@@ -95,21 +95,21 @@ export default function SignIn() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 text-white py-3 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+              className="w-full bg-rose-600 text-white py-3 px-4 rounded-md hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
             >
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
           
           <div className="mt-6 text-center">
-            <Link href="#" className="text-sm text-indigo-600 hover:text-indigo-500">
+            <Link href="#" className="text-sm text-rose-600 hover:text-rose-500">
               Forgot your password?
             </Link>
           </div>
           
           <div className="mt-4 text-center">
             <span className="text-sm text-gray-500 dark:text-slate-400">Don&apos;t have an account? </span>
-            <Link href="#" className="text-sm text-indigo-600 hover:text-indigo-500 font-medium">
+            <Link href="#" className="text-sm text-rose-600 hover:text-rose-500 font-medium">
               Sign up
             </Link>
           </div>

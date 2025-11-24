@@ -145,7 +145,7 @@ export function ExecutionCharts({ timeRange, onTimeRangeChange }: ExecutionChart
                 onClick={() => onTimeRangeChange(option.value)}
                 className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                   timeRange === option.value
-                    ? 'bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-800'
+                    ? 'bg-blue-100 text-rose-700 border border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-800'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
                 }`}
               >
@@ -221,7 +221,7 @@ export function ExecutionCharts({ timeRange, onTimeRangeChange }: ExecutionChart
           {/* Success Rate Chart */}
           <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow">
             <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4 flex items-center">
-              <CheckCircleIcon className="h-5 w-5 mr-2 text-blue-500" />
+              <CheckCircleIcon className="h-5 w-5 mr-2 text-rose-500" />
               Success Rate
             </h4>
             <ResponsiveContainer width="100%" height={300}>

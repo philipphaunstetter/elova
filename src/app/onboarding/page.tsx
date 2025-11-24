@@ -229,7 +229,7 @@ export default function OnboardingPage() {
               <button 
                 onClick={completeOnboarding}
                 disabled={loading}
-                className="w-full px-6 py-3 bg-indigo-600 text-white text-lg rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                className="w-full px-6 py-3 bg-rose-600 text-white text-lg rounded-lg hover:bg-rose-700 disabled:opacity-50"
               >
                 {loading ? 'Finalizing...' : 'Continue to Add n8n Instances'}
               </button>
@@ -248,7 +248,7 @@ export default function OnboardingPage() {
       <div className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center space-x-3">
-            <ChartPieIcon className="h-8 w-8 text-indigo-600" />
+            <ChartPieIcon className="h-8 w-8 text-rose-600" />
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Elova Setup</h1>
           </div>
           <p className="mt-2 text-gray-600">

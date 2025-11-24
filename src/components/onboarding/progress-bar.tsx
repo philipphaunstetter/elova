@@ -54,7 +54,7 @@ export function OnboardingProgressBar({ steps, currentStep, onStepClick }: Progr
                       )}
                     >
                       <span className="shrink-0">
-                        <span className="flex size-10 items-center justify-center rounded-full bg-indigo-600">
+                        <span className="flex size-10 items-center justify-center rounded-full bg-rose-600">
                           <CheckIcon aria-hidden="true" className="size-6 text-white" />
                         </span>
                       </span>
@@ -76,7 +76,7 @@ export function OnboardingProgressBar({ steps, currentStep, onStepClick }: Progr
                   >
                     <span
                       aria-hidden="true"
-                      className="absolute top-0 left-0 h-full w-1 bg-indigo-600 lg:top-auto lg:bottom-0 lg:h-1 lg:w-full"
+                      className="absolute top-0 left-0 h-full w-1 bg-rose-600 lg:top-auto lg:bottom-0 lg:h-1 lg:w-full"
                     />
                     <span
                       className={classNames(
@@ -85,12 +85,12 @@ export function OnboardingProgressBar({ steps, currentStep, onStepClick }: Progr
                       )}
                     >
                       <span className="shrink-0">
-                        <span className="flex size-10 items-center justify-center rounded-full border-2 border-indigo-600">
-                          <span className="text-indigo-600">{stepIdx + 1}</span>
+                        <span className="flex size-10 items-center justify-center rounded-full border-2 border-rose-600">
+                          <span className="text-rose-600">{stepIdx + 1}</span>
                         </span>
                       </span>
                       <span className="mt-0.5 ml-4 flex min-w-0 flex-col">
-                        <span className="text-sm font-medium text-indigo-600">
+                        <span className="text-sm font-medium text-rose-600">
                           {step.name}
                           {step.required && <span className="text-red-500 ml-1">*</span>}
                         </span>

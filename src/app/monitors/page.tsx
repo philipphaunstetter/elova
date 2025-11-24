@@ -207,7 +207,7 @@ function MonitorsContent() {
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <SignalIcon className="h-6 w-6 text-blue-400" />
+                <SignalIcon className="h-6 w-6 text-rose-400" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
@@ -300,13 +300,13 @@ function MonitorsContent() {
       <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
         <div className="flex">
           <div className="flex-shrink-0">
-            <SignalIcon className="h-5 w-5 text-blue-400" />
+            <SignalIcon className="h-5 w-5 text-rose-400" />
           </div>
           <div className="ml-3">
             <h3 className="text-sm font-medium text-blue-800">
               Monitor Configuration
             </h3>
-            <div className="mt-2 text-sm text-blue-700">
+            <div className="mt-2 text-sm text-rose-700">
               <p>
                 Monitors help you track the availability and performance of your n8n instance and critical endpoints. 
                 Configure alerts to get notified when issues are detected.
@@ -314,7 +314,7 @@ function MonitorsContent() {
             </div>
             <div className="mt-4">
               <div className="-mx-2 -my-1.5 flex">
-                <Button outline className="bg-white text-blue-700 border-blue-300 hover:bg-blue-50">
+                <Button outline className="bg-white text-rose-700 border-blue-300 hover:bg-blue-50">
                   Learn more about monitoring
                 </Button>
               </div>
@@ -339,7 +339,7 @@ export default function MonitorsPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-rose-600"></div>
       </div>
     )
   }

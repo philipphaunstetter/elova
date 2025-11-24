@@ -72,7 +72,7 @@ export function BasicSettingsStep({ initialData, onNext, onBack, loading }: Basi
       <Card>
         <CardHeader className="text-center">
           <div className="flex items-center justify-center space-x-2 mb-4">
-            <Cog6ToothIcon className="h-8 w-8 text-indigo-600" />
+            <Cog6ToothIcon className="h-8 w-8 text-rose-600" />
           </div>
           <CardTitle className="text-2xl">Regional Settings</CardTitle>
           <CardDescription className="text-base">

@@ -59,7 +59,7 @@ function AnalyticsContent() {
         <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">{error}</p>
         <button
           onClick={refreshData}
-          className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-rose-600 hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500"
         >
           Try again
         </button>
@@ -88,7 +88,7 @@ function AnalyticsContent() {
               id="timeRange"
               value={timeRange} 
               onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-              className="rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+              className="rounded-md border-gray-300 text-sm focus:border-rose-500 focus:ring-rose-500"
             >
               <option value="1h">Last hour</option>
               <option value="24h">Last 24 hours</option>
@@ -101,7 +101,7 @@ function AnalyticsContent() {
           <button
             onClick={refreshData}
             disabled={refreshing || loading}
-            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white dark:bg-slate-800 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white dark:bg-slate-800 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:opacity-50"
           >
             <ArrowPathIcon className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
             {refreshing ? 'Refreshing...' : 'Refresh'}
@@ -169,7 +169,7 @@ function AnalyticsContent() {
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <ClockIcon className="h-6 w-6 text-blue-400" />
+                <ClockIcon className="h-6 w-6 text-rose-400" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
@@ -210,7 +210,7 @@ function AnalyticsContent() {
                     <div className="flex items-center space-x-4">
                       <div className="flex-shrink-0">
                         <div className="h-8 w-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                          <span className="text-sm font-medium text-indigo-600">#{index + 1}</span>
+                          <span className="text-sm font-medium text-rose-600">#{index + 1}</span>
                         </div>
                       </div>
                       <div className="flex-1 min-w-0">
@@ -290,7 +290,7 @@ export default function AnalyticsPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-rose-600"></div>
       </div>
     )
   }

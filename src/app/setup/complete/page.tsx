@@ -39,7 +39,7 @@ export default function CompletePage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <SparklesIcon className="h-5 w-5 text-indigo-600" />
+            <SparklesIcon className="h-5 w-5 text-rose-600" />
             What's Next?
           </CardTitle>
           <CardDescription>
@@ -49,10 +49,10 @@ export default function CompletePage() {
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex items-start space-x-3 p-4 bg-indigo-50 rounded-lg">
-              <CheckCircleIcon className="h-5 w-5 text-indigo-600 mt-0.5" />
+              <CheckCircleIcon className="h-5 w-5 text-rose-600 mt-0.5" />
               <div>
                 <h4 className="text-sm font-medium text-indigo-900">Access Dashboard</h4>
-                <p className="text-sm text-indigo-700">
+                <p className="text-sm text-rose-700">
                   View your workflow analytics and system status
                 </p>
               </div>
@@ -101,9 +101,9 @@ export default function CompletePage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="border-l-4 border-indigo-500 bg-indigo-50 p-4">
+            <div className="border-l-4 border-rose-500 bg-indigo-50 p-4">
               <h4 className="text-sm font-medium text-indigo-900">Connect Your First Workflow Platform</h4>
-              <p className="text-sm text-indigo-700 mt-1">
+              <p className="text-sm text-rose-700 mt-1">
                 Head to Settings → Integrations to connect n8n, Zapier, or Make.com and start monitoring your workflows.
               </p>
             </div>
