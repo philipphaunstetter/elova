@@ -142,7 +142,18 @@ async function fetchDashboardStatsFromDb(userId: string, timeRange: TimeRange): 
         executionId: execution.id,
         workflowName: (execution.metadata?.workflowName as string) || 'Unknown Workflow',
         error: execution.error?.message || 'Execution failed',
-timestamp: execution.startedAt
+        timestamp: execution.startedAt
+      }))
+
+    // Get recent activity (latest 7 executions)
+    const recentActivity = filteredExecutions
+      .slice(0, 7)
+      .map(execution => ({
+        executionId: execution.id,
+        workflowName: (execution.metadata?.workflowName as string) || 'Unknown Workflow',
+        status: execution.status,
+        timestamp: execution.startedAt,
+        workflowId: execution.workflowId
       }))
 
     // Calculate top workflows by execution count
@@ -189,7 +200,8 @@ timestamp: execution.startedAt
       totalCost,
       totalTokens,
       topWorkflows,
-      recentFailures
+      recentFailures,
+      recentActivity
     }
   } catch (error) {
     console.error('Error fetching n8n dashboard stats:', error)
@@ -234,7 +246,8 @@ export async function GET(request: NextRequest) {
         totalCost: 0,
         totalTokens: 0,
         topWorkflows: [],
-        recentFailures: []
+        recentFailures: [],
+        recentActivity: []
       }
       
       return NextResponse.json({

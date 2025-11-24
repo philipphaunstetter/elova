@@ -198,6 +198,15 @@ export interface DashboardStats {
     error: string
     timestamp: Date
   }>
+
+  // Recent activity (latest executions)
+  recentActivity?: Array<{
+    executionId: string
+    workflowName: string
+    status: ExecutionStatus
+    timestamp: Date
+    workflowId: string
+  }>
 }
 
 export interface TimeSeriesPoint {

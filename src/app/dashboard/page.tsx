@@ -8,7 +8,6 @@ import { WithN8NConnection } from '@/components/with-n8n-connection'
 import { VolumeChart } from '@/components/charts/volume-chart'
 import { StatusDistributionChart } from '@/components/charts/status-distribution-chart'
 import { CostChart } from '@/components/charts/cost-chart'
-import { RecentExecutionsTable } from '@/components/recent-executions-table'
 import { apiClient } from '@/lib/api-client'
 import { DashboardStats, TimeRange } from '@/types'
 import { ChartDataPoint } from '@/app/api/dashboard/charts/route'
@@ -88,30 +87,6 @@ function DashboardContent() {
     },
   ]
 
-  // Generate dynamic pulse text
-  const renderPulseContent = () => {
-    if (loading) {
-      return (
-        <div className="space-y-3">
-          <Skeleton className="h-6 w-3/4" />
-          <Skeleton className="h-6 w-1/2" />
-        </div>
-      )
-    }
-    
-    const errors = stats?.failedExecutions ?? 0
-    const successRate = stats?.successRate ?? 0
-    
-    const text = errors === 0
-      ? `System is healthy. ${successRate}% success rate over the last ${timeRange}.`
-      : `Attention needed. ${errors} failed executions recorded in the last ${timeRange}.`
-
-    return (
-      <p className="text-xl font-light text-gray-600 dark:text-slate-300 mb-6 leading-relaxed">
-        {text}
-      </p>
-    )
-  }
 
   if (error) {
     return (
@@ -153,37 +128,66 @@ function DashboardContent() {
         </div>
       </div>
 
-      {/* Row 1: Pulse & Volume */}
+      {/* Row 1: Recent Activity & Volume */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Pulse */}
+        {/* Left: Recent Activity */}
         <div className="lg:col-span-1 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 flex flex-col">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">System Pulse</h3>
-          <div className="flex-1 flex flex-col justify-center">
-            {renderPulseContent()}
-            <div className="space-y-4">
-              {loading ? (
-                <Skeleton className="h-20 w-full" />
-              ) : stats?.recentFailures && stats.recentFailures.length > 0 ? (
-                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">Recent Issues</h4>
-                  <ul className="space-y-2">
-                    {stats.recentFailures.slice(0, 2).map((fail, i) => (
-                      <li key={i} className="text-xs text-red-700 dark:text-red-300 flex items-start">
-                        <XCircleIcon className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="truncate">{fail.workflowName}: {fail.error}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-                  <div className="flex items-center text-green-800 dark:text-green-200">
-                    <CheckCircleIcon className="h-5 w-5 mr-2" />
-                    <span className="text-sm font-medium">All systems operational</span>
-                  </div>
-                </div>
-              )}
-            </div>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Recent Activity</h3>
+          <div className="flex-1 overflow-hidden">
+            {loading ? (
+              <div className="space-y-4">
+                 {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex items-center space-x-4">
+                      <Skeleton className="h-8 w-8 rounded-full" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
+                    </div>
+                 ))}
+              </div>
+            ) : (
+              <div className="flow-root">
+                <ul className="-my-5 divide-y divide-gray-200 dark:divide-slate-700">
+                  {stats?.recentActivity?.map((execution) => (
+                    <li key={execution.executionId} className="py-3">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex-shrink-0">
+                            {execution.status === 'success' ? (
+                              <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                            ) : execution.status === 'running' ? (
+                              <PlayIcon className="h-5 w-5 text-blue-500" />
+                            ) : (
+                              <XCircleIcon className="h-5 w-5 text-red-500" />
+                            )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                            {execution.workflowName}
+                          </p>
+                          <p className="truncate text-xs text-gray-500 dark:text-slate-400">
+                            <span className="capitalize">{execution.status}</span> <span className="mx-1">&bull;</span> {new Date(execution.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        <div>
+                          <a
+                            href={`/executions/${execution.executionId}`}
+                            className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:hover:bg-slate-600"
+                          >
+                            View
+                          </a>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                   {(!stats?.recentActivity || stats.recentActivity.length === 0) && (
+                    <li className="py-8 text-center text-sm text-gray-500 dark:text-slate-400">
+                       No recent activity found
+                    </li>
+                   )}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
 
@@ -230,10 +234,6 @@ function DashboardContent() {
         </div>
       </div>
 
-      {/* Row 4: Integrated History */}
-      <div className="pt-4">
-        <RecentExecutionsTable timeRange={timeRange} />
-      </div>
     </div>
   )
 }
