@@ -733,7 +733,7 @@ function ExecutionsContent() {
                               )}
                             </TableCell>
                             <TableCell>
-                              <span className="text-xs text-gray-400">Group</span>
+                              <span className="text-xs text-gray-400">–</span>
                             </TableCell>
                           </TableRow>
                           {isExpanded && item.executions.map((execution, idx) => {
