@@ -12,6 +12,7 @@ import { apiClient } from '@/lib/api-client'
 import { DashboardStats, TimeRange } from '@/types'
 import { ChartDataPoint } from '@/app/api/dashboard/charts/route'
 import { Skeleton } from '@/components/skeleton'
+import { Badge } from '@/components/badge'
 import { Listbox, ListboxOption, ListboxLabel } from '@/components/listbox'
 import { 
   PlayIcon,
@@ -19,8 +20,27 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   ExclamationTriangleIcon,
-  CurrencyDollarIcon
+  CurrencyDollarIcon,
+  BanknotesIcon
 } from '@heroicons/react/24/outline'
+
+const statusIcons = {
+  'success': CheckCircleIcon,
+  'error': XCircleIcon,
+  'running': PlayIcon,
+  'waiting': ClockIcon,
+  'canceled': ExclamationTriangleIcon,
+  'unknown': ClockIcon
+}
+
+const statusColors = {
+  'success': 'green',
+  'error': 'red',
+  'running': 'blue',
+  'waiting': 'yellow',
+  'canceled': 'zinc',
+  'unknown': 'zinc'
+} as const
 
 const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
   { value: '1h', label: 'Last hour' },
@@ -76,8 +96,9 @@ function DashboardContent() {
     { 
       name: 'AI Cost', 
       value: loading ? '...' : `$${(stats?.totalCost ?? 0).toFixed(2)}`,
-      icon: CurrencyDollarIcon, 
-      changeType: 'neutral' as const
+      icon: BanknotesIcon, 
+      changeType: 'neutral' as const,
+      subtext: TIME_RANGE_OPTIONS.find(o => o.value === timeRange)?.label || timeRange
     },
     { 
       name: 'Failed Executions', 
@@ -149,25 +170,22 @@ function DashboardContent() {
             ) : (
               <div className="flow-root">
                 <ul className="-my-5 divide-y divide-gray-200 dark:divide-slate-700">
-                  {stats?.recentActivity?.map((execution) => (
+                  {stats?.recentActivity?.map((execution) => {
+                    const StatusIcon = statusIcons[execution.status] || ClockIcon
+                    return (
                     <li key={execution.executionId} className="py-3">
                       <div className="flex items-center space-x-4">
-                        <div className="flex-shrink-0">
-                            {execution.status === 'success' ? (
-                              <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                            ) : execution.status === 'running' ? (
-                              <PlayIcon className="h-5 w-5 text-blue-500" />
-                            ) : (
-                              <XCircleIcon className="h-5 w-5 text-red-500" />
-                            )}
-                        </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
                             {execution.workflowName}
                           </p>
-                          <p className="truncate text-xs text-gray-500 dark:text-slate-400">
-                            <span className="capitalize">{execution.status}</span> <span className="mx-1">&bull;</span> {new Date(execution.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
+                          <div className="mt-1 flex items-center space-x-2">
+                            <Badge color={statusColors[execution.status] || 'zinc'} className="flex items-center space-x-1">
+                                <StatusIcon className="h-3 w-3" />
+                                <span className="capitalize">{execution.status}</span>
+                            </Badge>
+                            <span className="text-xs text-gray-500 dark:text-slate-400">&bull; {new Date(execution.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
                         </div>
                         <div>
                           <a
@@ -179,7 +197,8 @@ function DashboardContent() {
                         </div>
                       </div>
                     </li>
-                  ))}
+                    )
+                  })}
                    {(!stats?.recentActivity || stats.recentActivity.length === 0) && (
                     <li className="py-8 text-center text-sm text-gray-500 dark:text-slate-400">
                        No recent activity found
@@ -215,8 +234,13 @@ function DashboardContent() {
               }`} />
               {item.name}
             </dt>
-            <dd className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+            <dd className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight flex items-baseline gap-2">
               {loading ? <Skeleton className="h-9 w-24" /> : item.value}
+              {item.subtext && !loading && (
+                 <span className="text-xs font-normal text-gray-500 dark:text-slate-400">
+                   {item.subtext}
+                 </span>
+              )}
             </dd>
           </div>
         ))}

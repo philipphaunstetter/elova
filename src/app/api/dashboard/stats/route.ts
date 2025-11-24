@@ -145,9 +145,9 @@ async function fetchDashboardStatsFromDb(userId: string, timeRange: TimeRange): 
         timestamp: execution.startedAt
       }))
 
-    // Get recent activity (latest 7 executions)
+    // Get recent activity (latest 5 executions)
     const recentActivity = filteredExecutions
-      .slice(0, 7)
+      .slice(0, 5)
       .map(execution => ({
         executionId: execution.id,
         workflowName: (execution.metadata?.workflowName as string) || 'Unknown Workflow',
