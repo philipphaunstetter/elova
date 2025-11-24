@@ -669,9 +669,9 @@ function ExecutionsContent() {
                                 </Badge>
                               </div>
                             </TableCell>
-                            <TableCell className="font-mono text-sm text-gray-500">
+                            <TableCell className="font-mono text-sm text-gray-900 dark:text-white">
                               <div className="flex items-center space-x-2">
-                                <ListBulletIcon className="h-4 w-4" />
+                                <ListBulletIcon className="h-4 w-4 text-gray-500" />
                                 <span>{item.executions.length} runs</span>
                               </div>
                             </TableCell>
@@ -695,9 +695,11 @@ function ExecutionsContent() {
                               </div>
                             </TableCell>
                             <TableCell>
+                              <div className="text-sm text-gray-900 dark:text-white">
+                                {formatDate(item.executions[0].startedAt)}
+                              </div>
                               <div className="text-xs text-gray-500">
-                                <div>Last: {formatDate(item.executions[0].startedAt)}</div>
-                                <div>First: {formatDate(item.executions[item.executions.length - 1].startedAt)}</div>
+                                First: {formatDate(item.executions[item.executions.length - 1].startedAt)}
                               </div>
                             </TableCell>
                             <TableCell>
