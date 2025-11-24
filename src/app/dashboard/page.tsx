@@ -12,6 +12,7 @@ import { RecentExecutionsTable } from '@/components/recent-executions-table'
 import { apiClient } from '@/lib/api-client'
 import { DashboardStats, TimeRange } from '@/types'
 import { ChartDataPoint } from '@/app/api/dashboard/charts/route'
+import { Skeleton } from '@/components/skeleton'
 import { Listbox, ListboxOption, ListboxLabel } from '@/components/listbox'
 import { 
   PlayIcon,
@@ -88,17 +89,28 @@ function DashboardContent() {
   ]
 
   // Generate dynamic pulse text
-  const getPulseText = () => {
-    if (loading || !stats) return 'Analyzing system status...'
-    
-    const errors = stats.failedExecutions
-    const successRate = stats.successRate
-    
-    if (errors === 0) {
-      return `System is healthy. ${successRate}% success rate over the last ${timeRange}.`
-    } else {
-      return `Attention needed. ${errors} failed executions recorded in the last ${timeRange}.`
+  const renderPulseContent = () => {
+    if (loading) {
+      return (
+        <div className="space-y-3">
+          <Skeleton className="h-6 w-3/4" />
+          <Skeleton className="h-6 w-1/2" />
+        </div>
+      )
     }
+    
+    const errors = stats?.failedExecutions ?? 0
+    const successRate = stats?.successRate ?? 0
+    
+    const text = errors === 0
+      ? `System is healthy. ${successRate}% success rate over the last ${timeRange}.`
+      : `Attention needed. ${errors} failed executions recorded in the last ${timeRange}.`
+
+    return (
+      <p className="text-xl font-light text-gray-600 dark:text-slate-300 mb-6 leading-relaxed">
+        {text}
+      </p>
+    )
   }
 
   if (error) {
@@ -147,11 +159,11 @@ function DashboardContent() {
         <div className="lg:col-span-1 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 flex flex-col">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">System Pulse</h3>
           <div className="flex-1 flex flex-col justify-center">
-            <p className="text-xl font-light text-gray-600 dark:text-slate-300 mb-6 leading-relaxed">
-              {getPulseText()}
-            </p>
+            {renderPulseContent()}
             <div className="space-y-4">
-              {stats?.recentFailures && stats.recentFailures.length > 0 ? (
+              {loading ? (
+                <Skeleton className="h-20 w-full" />
+              ) : stats?.recentFailures && stats.recentFailures.length > 0 ? (
                 <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
                   <h4 className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">Recent Issues</h4>
                   <ul className="space-y-2">
@@ -178,7 +190,11 @@ function DashboardContent() {
         {/* Right: Volume Chart */}
         <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Execution Volume</h3>
-          <VolumeChart data={chartData} timeRange={timeRange} />
+          {loading ? (
+            <Skeleton className="h-[320px] w-full" />
+          ) : (
+            <VolumeChart data={chartData} timeRange={timeRange} />
+          )}
         </div>
       </div>
 
@@ -188,13 +204,16 @@ function DashboardContent() {
           <div key={item.name} className="bg-white dark:bg-slate-800 px-6 py-6 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700">
             <dt className="text-sm font-medium text-gray-500 dark:text-slate-400 truncate flex items-center mb-2">
               <item.icon className={`h-5 w-5 mr-2 ${
+                loading ? 'text-gray-300 dark:text-slate-600' :
                 item.changeType === 'positive' ? 'text-green-500' : 
                 item.changeType === 'negative' ? 'text-red-500' : 
                 'text-gray-400'
               }`} />
               {item.name}
             </dt>
-            <dd className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{item.value}</dd>
+            <dd className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+              {loading ? <Skeleton className="h-9 w-24" /> : item.value}
+            </dd>
           </div>
         ))}
       </div>
@@ -203,11 +222,11 @@ function DashboardContent() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Status Distribution</h3>
-          <StatusDistributionChart data={chartData} timeRange={timeRange} />
+          {loading ? <Skeleton className="h-[300px] w-full" /> : <StatusDistributionChart data={chartData} timeRange={timeRange} />}
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">AI Costs & Tokens</h3>
-          <CostChart data={chartData} timeRange={timeRange} />
+          {loading ? <Skeleton className="h-[300px] w-full" /> : <CostChart data={chartData} timeRange={timeRange} />}
         </div>
       </div>
 

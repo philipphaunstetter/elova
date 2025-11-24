@@ -18,6 +18,7 @@ import { Button } from '@/components/button'
 import { Input, InputGroup } from '@/components/input'
 import { Listbox, ListboxOption, ListboxLabel } from '@/components/listbox'
 import { createN8nExecutionUrl } from '@/lib/utils'
+import { Skeleton } from '@/components/skeleton'
 
 const statusIcons = {
   'success': CheckCircleIcon,
@@ -268,9 +269,22 @@ export function RecentExecutionsTable({ timeRange }: RecentExecutionsTableProps)
       {/* Executions List */}
       <div className="bg-white dark:bg-slate-800 shadow overflow-hidden sm:rounded-lg border border-gray-200 dark:border-slate-700">
         {loading && executions.length === 0 ? (
-          <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="mt-2 text-sm text-gray-500 dark:text-slate-400">Loading execution history...</p>
+          <div className="divide-y divide-gray-200 dark:divide-slate-700">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="px-4 py-4 sm:px-6 flex items-center justify-between">
+                <div className="flex items-center flex-1 space-x-4">
+                  <Skeleton className="h-5 w-5 rounded-full flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center space-x-3">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-4 w-16" />
+                    </div>
+                    <Skeleton className="h-3 w-64" />
+                  </div>
+                </div>
+                <Skeleton className="h-7 w-16 ml-4" />
+              </div>
+            ))}
           </div>
         ) : filteredAndSortedExecutions.length === 0 ? (
           <div className="p-8 text-center">
