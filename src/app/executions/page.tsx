@@ -592,8 +592,8 @@ function ExecutionsContent() {
                   <TableHeader>Mode</TableHeader>
                   <TableHeader>Tokens</TableHeader>
                   <TableHeader>
-                    <div className="flex items-center">
-                      AI Cost
+                    <div className="flex items-center gap-1">
+                      <span>AI Cost</span>
                       <AICostTooltip type="header" onToggle={() => setShowPricing(!showPricing)} />
                     </div>
                   </TableHeader>
