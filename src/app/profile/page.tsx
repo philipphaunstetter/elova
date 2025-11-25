@@ -9,7 +9,8 @@ import {
   KeyIcon,
   PencilIcon,
   CheckIcon,
-  XMarkIcon
+  XMarkIcon,
+  SparklesIcon
 } from '@heroicons/react/24/outline'
 import { Button } from '@/components/button'
 import { Input } from '@/components/input'
@@ -25,7 +26,8 @@ function ProfileContent() {
     email: '',
     currentPassword: '',
     newPassword: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    licenseKey: ''
   })
 
   useEffect(() => {
@@ -136,6 +138,37 @@ function ProfileContent() {
         type: 'error',
         title: 'Password change failed',
         message: error instanceof Error ? error.message : 'Failed to change password'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleLicenseSave = async () => {
+    if (!formData.licenseKey.trim()) {
+      showToast({
+        type: 'error',
+        title: 'Validation Error',
+        message: 'Please enter a license key'
+      })
+      return
+    }
+
+    try {
+      setLoading(true)
+      // TODO: Implement actual API call
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      showToast({
+        type: 'success',
+        title: 'License Updated',
+        message: 'Your license key has been saved successfully'
+      })
+    } catch (error) {
+      showToast({
+        type: 'error',
+        title: 'Update failed',
+        message: error instanceof Error ? error.message : 'Failed to update license key'
       })
     } finally {
       setLoading(false)
@@ -340,6 +373,50 @@ function ProfileContent() {
             )}
           </div>
         </div>
+        {/* License Settings */}
+        <div className="bg-white dark:bg-slate-800 shadow sm:rounded-lg">
+          <div className="px-4 py-5 sm:p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                <SparklesIcon className="h-5 w-5 mr-2" />
+                Licensing
+              </h3>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="licenseKey" className="block text-sm font-medium text-gray-700 dark:text-slate-300">
+                  License Key
+                </label>
+                <Input
+                  type="text"
+                  id="licenseKey"
+                  value={formData.licenseKey}
+                  onChange={(e) => setFormData(prev => ({ ...prev, licenseKey: e.target.value }))}
+                  className="mt-1"
+                  placeholder="Enter your license key"
+                />
+              </div>
+
+              <div className="flex space-x-3">
+                <Button
+                  onClick={handleLicenseSave}
+                  disabled={loading}
+                >
+                  <CheckIcon className="h-4 w-4 mr-1" />
+                  {loading ? 'Saving...' : 'Save'}
+                </Button>
+                <Button
+                  outline
+                  onClick={() => window.open('https://n8n.io/pricing', '_blank')} // Placeholder link
+                >
+                  Upgrade
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   )
