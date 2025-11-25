@@ -38,6 +38,10 @@ import { formatExecutionId, createN8nExecutionUrl } from '@/lib/utils'
 import { AICostTooltip } from '@/components/ai-cost-tooltip'
 import { PricingSidePanel } from '@/components/pricing-side-panel'
 
+import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/dropdown'
+import { Switch, SwitchField } from '@/components/switch'
+import { Label } from '@/components/fieldset'
+
 const statusIcons = {
   'success': CheckCircleIcon,
   'error': XCircleIcon,
@@ -225,6 +229,7 @@ function ExecutionsContent() {
   const [n8nUrl, setN8nUrl] = useState<string>('')
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [showPricing, setShowPricing] = useState(false)
+  const [autoRefresh, setAutoRefresh] = useState(true)
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -243,6 +248,43 @@ function ExecutionsContent() {
     setCurrentPage(1)
     fetchExecutions(1)
   }, [statusFilter, timeRange, providerFilter, debouncedSearchTerm])
+
+  useEffect(() => {
+    // Auto-refresh logic
+    let intervalId: NodeJS.Timeout
+
+    if (autoRefresh && !loading && !syncing) {
+      intervalId = setInterval(() => {
+        // Silent refresh (don't set global loading state to avoid flickering)
+        const params = new URLSearchParams()
+        if (statusFilter !== 'all') params.append('status', statusFilter)
+        if (providerFilter !== 'all') params.append('providerId', providerFilter)
+        if (debouncedSearchTerm) params.append('search', debouncedSearchTerm)
+        params.append('timeRange', timeRange)
+        params.append('page', currentPage.toString())
+        params.append('limit', itemsPerPage.toString())
+
+        apiClient.get<{
+          data: {
+            items: Execution[],
+            total: number,
+            page: number,
+            totalPages: number
+          }
+        }>(`/executions?${params}`)
+          .then(response => {
+            setExecutions(response.data.items)
+            setTotalCount(response.data.total)
+            setTotalPages(response.data.totalPages)
+          })
+          .catch(err => console.error('Auto-refresh failed:', err))
+      }, 10000) // Refresh every 10 seconds
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [autoRefresh, loading, syncing, statusFilter, providerFilter, debouncedSearchTerm, timeRange, currentPage])
 
   const fetchProviders = async () => {
     try {
@@ -463,29 +505,56 @@ function ExecutionsContent() {
                 Monitor and debug workflow execution history
               </p>
             </div>
-            <div className="flex space-x-3">
-              <Button
-                outline
-                onClick={() => syncExecutions(false)}
-                disabled={syncing || loading}
+            <div className="flex items-center space-x-4">
+              {/* Auto-refresh Toggle */}
+              <SwitchField className="flex items-center">
+                <Label className="text-sm text-gray-600 dark:text-slate-400 mr-2">Auto-refresh</Label>
+                <Switch
+                  checked={autoRefresh}
+                  onChange={setAutoRefresh}
+                  color="rose"
+                />
+              </SwitchField>
+
+              <div className="h-6 w-px bg-gray-200 dark:bg-slate-700" />
+
+              {/* Refresh Button */}
+              <Button 
+                onClick={() => fetchExecutions(currentPage)} 
+                disabled={loading}
                 className="flex items-center space-x-2"
               >
-                <ArrowPathIcon className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-                <span>{syncing ? 'Syncing...' : 'Sync'}</span>
+                <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
               </Button>
-              <Button
-                outline
-                onClick={() => syncExecutions(true)}
-                disabled={syncing || loading}
-                className="flex items-center space-x-2"
-                title="Force a full sync of all executions (slower)"
-              >
-                <ArrowPathIcon className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-                <span>Full Sync</span>
-              </Button>
-              <Button onClick={() => fetchExecutions()} disabled={loading}>
-                {loading ? 'Loading...' : 'Refresh'}
-              </Button>
+
+              {/* Sync Actions Dropdown */}
+              <Dropdown>
+                <DropdownButton outline className="flex items-center space-x-2">
+                  <span>Sync Actions</span>
+                  <ChevronDownIcon className="h-4 w-4" />
+                </DropdownButton>
+                <DropdownMenu anchor="bottom end">
+                  <DropdownItem onClick={() => syncExecutions(false)} disabled={syncing || loading}>
+                    <div className="flex items-center">
+                      <ArrowPathIcon className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                      <div>
+                        <div className="font-medium">Quick Sync</div>
+                        <div className="text-xs text-gray-500">Fetch latest executions</div>
+                      </div>
+                    </div>
+                  </DropdownItem>
+                  <DropdownItem onClick={() => syncExecutions(true)} disabled={syncing || loading}>
+                    <div className="flex items-center">
+                      <ArrowPathIcon className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                      <div>
+                        <div className="font-medium">Full Sync</div>
+                        <div className="text-xs text-gray-500">Deep synchronization (slower)</div>
+                      </div>
+                    </div>
+                  </DropdownItem>
+                </DropdownMenu>
+              </Dropdown>
             </div>
           </div>
 

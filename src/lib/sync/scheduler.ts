@@ -17,8 +17,8 @@ export class SyncScheduler {
   start() {
     console.log('🕐 Starting sync scheduler...')
 
-    // Critical: Execution sync every 1 minute for near real-time monitoring
-    this.scheduleJob('executions', this.syncExecutions.bind(this), 60 * 1000)
+    // Critical: Execution sync every 30 seconds for near real-time monitoring
+    this.scheduleJob('executions', this.syncExecutions.bind(this), 30 * 1000)
 
     // Moderate: Workflow metadata sync every 6 hours  
     this.scheduleJob('workflows', this.syncWorkflows.bind(this), 6 * 60 * 60 * 1000)
@@ -155,25 +155,3 @@ export class SyncScheduler {
 
 // Export singleton instance
 export const syncScheduler = new SyncScheduler()
-
-/**
- * Development helper: Start scheduler in development mode
- * In production, this would be handled by your deployment platform (Vercel Cron, etc.)
- */
-if (process.env.NODE_ENV === 'development' && process.env.ENABLE_SYNC_SCHEDULER === 'true') {
-  console.log('🔧 Development mode: Starting sync scheduler')
-  syncScheduler.start()
-
-  // Graceful shutdown
-  process.on('SIGINT', () => {
-    console.log('👋 Gracefully shutting down sync scheduler...')
-    syncScheduler.stop()
-    process.exit(0)
-  })
-
-  process.on('SIGTERM', () => {
-    console.log('👋 Gracefully shutting down sync scheduler...')
-    syncScheduler.stop()
-    process.exit(0)
-  })
-}

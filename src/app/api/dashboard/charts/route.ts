@@ -47,17 +47,48 @@ export interface ChartDataPoint {
   totalTokens: number
 }
 
+// Per-provider chart data for multi-instance support
+export interface ProviderChartData {
+  providerId: string
+  providerName: string
+  color: string
+  data: ChartDataPoint[]
+}
+
+export interface ChartsResponse {
+  combined: ChartDataPoint[]
+  byProvider: ProviderChartData[]
+  providers: Array<{ id: string; name: string; color: string }>
+}
+
+// Provider colors for chart lines
+const PROVIDER_COLORS = [
+  '#3b82f6', // blue
+  '#10b981', // emerald
+  '#f59e0b', // amber
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#06b6d4', // cyan
+  '#f97316', // orange
+  '#84cc16', // lime
+]
+
+interface ExecutionWithProvider extends Execution {
+  providerName?: string
+}
+
 /**
  * Aggregate execution data into time series for charts
+ * Returns both combined data and per-provider breakdown
  */
-async function generateChartData(userId: string, timeRange: TimeRange): Promise<ChartDataPoint[]> {
+async function generateChartData(userId: string, timeRange: TimeRange): Promise<ChartsResponse> {
   try {
     const db = getDb()
     
-    // Fetch executions from database
-    const allExecutions = await new Promise<Execution[]>((resolve, reject) => {
+    // Fetch executions with provider info from database
+    const allExecutions = await new Promise<ExecutionWithProvider[]>((resolve, reject) => {
       db.all(
-        `SELECT e.*, w.name as workflow_name
+        `SELECT e.*, w.name as workflow_name, p.name as provider_name, p.id as p_id
          FROM executions e
          LEFT JOIN workflows w ON e.workflow_id = w.id
          LEFT JOIN providers p ON e.provider_id = p.id
@@ -70,7 +101,7 @@ async function generateChartData(userId: string, timeRange: TimeRange): Promise<
             return
           }
           
-          const executions: Execution[] = rows.map(row => ({
+          const executions: ExecutionWithProvider[] = rows.map(row => ({
             id: row.id,
             providerId: row.provider_id,
             workflowId: row.workflow_id,
@@ -78,16 +109,16 @@ async function generateChartData(userId: string, timeRange: TimeRange): Promise<
             providerWorkflowId: row.provider_workflow_id,
             status: row.status as ExecutionStatus,
             mode: row.mode,
-            startedAt: row.started_at, // Keep as ISO string from database
-            stoppedAt: row.stopped_at || undefined, // Keep as ISO string from database
+            startedAt: row.started_at,
+            stoppedAt: row.stopped_at || undefined,
             duration: row.duration,
-            // AI Metrics
             totalTokens: row.total_tokens || 0,
             inputTokens: row.input_tokens || 0,
             outputTokens: row.output_tokens || 0,
             aiCost: row.ai_cost || 0,
             aiProvider: row.ai_provider,
             aiModel: row.ai_model,
+            providerName: row.provider_name || 'Unknown',
             metadata: {
               workflowName: row.workflow_name || 'Unknown',
               finished: Boolean(row.finished)
@@ -100,7 +131,7 @@ async function generateChartData(userId: string, timeRange: TimeRange): Promise<
     })
     
     // Apply time range filtering
-    const filteredExecutions = applyTimeRangeFilter(allExecutions, timeRange)
+    const filteredExecutions = applyTimeRangeFilter(allExecutions, timeRange) as ExecutionWithProvider[]
     
     // Determine granularity based on time range
     let granularity: 'hour' | 'day' | 'week'
@@ -160,8 +191,22 @@ async function generateChartData(userId: string, timeRange: TimeRange): Promise<
       timeBuckets.get(bucketKey)!.executions.push(execution)
     }
 
-    // Generate chart data points
-    const chartData: ChartDataPoint[] = []
+    // Get unique providers
+    const providerMap = new Map<string, string>()
+    for (const exec of filteredExecutions) {
+      if (exec.providerId && !providerMap.has(exec.providerId)) {
+        providerMap.set(exec.providerId, (exec as ExecutionWithProvider).providerName || 'Unknown')
+      }
+    }
+    
+    const providers = Array.from(providerMap.entries()).map(([id, name], index) => ({
+      id,
+      name,
+      color: PROVIDER_COLORS[index % PROVIDER_COLORS.length]
+    }))
+
+    // Generate combined chart data points
+    const combinedData: ChartDataPoint[] = []
     
     // Sort buckets chronologically
     const sortedBuckets = Array.from(timeBuckets.entries())
@@ -186,7 +231,7 @@ async function generateChartData(userId: string, timeRange: TimeRange): Promise<
         avgResponseTime = Math.round(totalDuration / completedExecutions.length)
       }
 
-      chartData.push({
+      combinedData.push({
         date: bucketKey,
         timestamp: bucket.timestamp,
         totalExecutions,
@@ -199,7 +244,96 @@ async function generateChartData(userId: string, timeRange: TimeRange): Promise<
       })
     }
 
-    return chartData
+    // Generate per-provider chart data
+    const byProvider: ProviderChartData[] = []
+    
+    for (const provider of providers) {
+      // Create time buckets for this provider only
+      const providerBuckets = new Map<string, {
+        date: string
+        timestamp: number
+        executions: Execution[]
+      }>()
+      
+      const providerExecutions = filteredExecutions.filter(e => e.providerId === provider.id)
+      
+      for (const execution of providerExecutions) {
+        const executionDate = new Date(execution.startedAt as any)
+        let bucketKey: string
+        let bucketDate: Date
+
+        if (granularity === 'hour') {
+          bucketDate = new Date(executionDate.getFullYear(), executionDate.getMonth(), 
+            executionDate.getDate(), executionDate.getHours())
+          bucketKey = bucketDate.toISOString()
+        } else if (granularity === 'day') {
+          bucketDate = new Date(executionDate.getFullYear(), executionDate.getMonth(), 
+            executionDate.getDate())
+          bucketKey = bucketDate.toISOString().split('T')[0]
+        } else {
+          const dayOfWeek = executionDate.getDay()
+          const mondayDate = new Date(executionDate)
+          mondayDate.setDate(executionDate.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+          bucketDate = new Date(mondayDate.getFullYear(), mondayDate.getMonth(), mondayDate.getDate())
+          bucketKey = bucketDate.toISOString().split('T')[0]
+        }
+
+        if (!providerBuckets.has(bucketKey)) {
+          providerBuckets.set(bucketKey, {
+            date: bucketKey,
+            timestamp: bucketDate.getTime(),
+            executions: []
+          })
+        }
+
+        providerBuckets.get(bucketKey)!.executions.push(execution)
+      }
+      
+      // Convert to chart data points
+      const providerData: ChartDataPoint[] = []
+      const sortedProviderBuckets = Array.from(providerBuckets.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+      
+      for (const [bucketKey, bucket] of sortedProviderBuckets) {
+        const totalExecutions = bucket.executions.length
+        const successfulExecutions = bucket.executions.filter(e => e.status === 'success').length
+        const failedExecutions = bucket.executions.filter(e => e.status === 'error').length
+        const successRate = totalExecutions > 0 ? Math.round((successfulExecutions / totalExecutions) * 100) : 0
+        const aiCost = bucket.executions.reduce((sum, e) => sum + (e.aiCost || 0), 0)
+        const totalTokens = bucket.executions.reduce((sum, e) => sum + (e.totalTokens || 0), 0)
+        const completedExecutions = bucket.executions.filter(e => e.duration !== undefined)
+        let avgResponseTime: number | null = null
+        if (completedExecutions.length > 0) {
+          const totalDuration = completedExecutions.reduce((sum, e) => sum + (e.duration || 0), 0)
+          avgResponseTime = Math.round(totalDuration / completedExecutions.length)
+        }
+
+        providerData.push({
+          date: bucketKey,
+          timestamp: bucket.timestamp,
+          totalExecutions,
+          successfulExecutions,
+          failedExecutions,
+          successRate,
+          avgResponseTime,
+          aiCost,
+          totalTokens
+        })
+      }
+      
+      byProvider.push({
+        providerId: provider.id,
+        providerName: provider.name,
+        color: provider.color,
+        data: providerData
+      })
+    }
+
+    return {
+      combined: combinedData,
+      byProvider,
+      providers
+    }
   } catch (error) {
     console.error('Error generating chart data:', error)
     throw error
@@ -226,9 +360,11 @@ export async function GET(request: NextRequest) {
       
       return NextResponse.json({
         success: true,
-        data: chartData,
+        data: chartData.combined, // Backward compatible: main data array
+        byProvider: chartData.byProvider,
+        providers: chartData.providers,
         timeRange,
-        count: chartData.length
+        count: chartData.combined.length
       })
     } catch (error) {
       console.error('Failed to generate chart data from database:', error)
@@ -237,6 +373,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         data: [],
+        byProvider: [],
+        providers: [],
         timeRange,
         count: 0
       })

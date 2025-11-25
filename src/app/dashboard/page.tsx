@@ -10,7 +10,7 @@ import { StatusDistributionChart } from '@/components/charts/status-distribution
 import { CostChart } from '@/components/charts/cost-chart'
 import { apiClient } from '@/lib/api-client'
 import { DashboardStats, TimeRange } from '@/types'
-import { ChartDataPoint } from '@/app/api/dashboard/charts/route'
+import { ChartDataPoint, ProviderChartData } from '@/app/api/dashboard/charts/route'
 import { Skeleton } from '@/components/skeleton'
 import { Badge } from '@/components/badge'
 import { Listbox, ListboxOption, ListboxLabel } from '@/components/listbox'
@@ -50,9 +50,17 @@ const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
   { value: '90d', label: '90 days' }
 ]
 
+interface ChartsApiResponse {
+  data: ChartDataPoint[]
+  byProvider?: ProviderChartData[]
+  providers?: Array<{ id: string; name: string; color: string }>
+}
+
 function DashboardContent() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [chartData, setChartData] = useState<ChartDataPoint[]>([])
+  const [byProvider, setByProvider] = useState<ProviderChartData[]>([])
+  const [providers, setProviders] = useState<Array<{ id: string; name: string; color: string }>>([])
   const [timeRange, setTimeRange] = useState<TimeRange>('30d')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -63,11 +71,13 @@ function DashboardContent() {
         setLoading(true)
         const [statsRes, chartsRes] = await Promise.all([
           apiClient.get<{ data: DashboardStats }>(`/dashboard/stats?timeRange=${timeRange}`),
-          apiClient.get<{ data: ChartDataPoint[] }>(`/dashboard/charts?timeRange=${timeRange}`)
+          apiClient.get<ChartsApiResponse>(`/dashboard/charts?timeRange=${timeRange}`)
         ])
         
         setStats(statsRes.data)
         setChartData(chartsRes.data)
+        setByProvider(chartsRes.byProvider || [])
+        setProviders(chartsRes.providers || [])
         setError(null)
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err)
@@ -216,7 +226,12 @@ function DashboardContent() {
           {loading ? (
             <Skeleton className="h-[320px] w-full" />
           ) : (
-            <VolumeChart data={chartData} timeRange={timeRange} />
+            <VolumeChart 
+              data={chartData} 
+              byProvider={byProvider}
+              providers={providers}
+              timeRange={timeRange} 
+            />
           )}
         </div>
       </div>
