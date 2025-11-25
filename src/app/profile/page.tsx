@@ -156,14 +156,31 @@ function ProfileContent() {
 
     try {
       setLoading(true)
-      // TODO: Implement actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const response = await fetch('/api/license/activate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('sessionToken')}`
+        },
+        body: JSON.stringify({
+          licenseKey: formData.licenseKey
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to activate license')
+      }
 
       showToast({
         type: 'success',
-        title: 'License Updated',
-        message: 'Your license key has been saved successfully'
+        title: 'License Activated',
+        message: 'Your license has been activated successfully'
       })
+      
+      // Reload to reflect new status
+      setTimeout(() => window.location.reload(), 1500)
     } catch (error) {
       showToast({
         type: 'error',
@@ -408,7 +425,7 @@ function ProfileContent() {
                 </Button>
                 <Button
                   outline
-                  onClick={() => window.open('https://n8n.io/pricing', '_blank')} // Placeholder link
+                  onClick={() => window.open('https://elova.dev/pricing', '_blank')}
                 >
                   Upgrade
                 </Button>
