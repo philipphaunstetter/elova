@@ -61,7 +61,34 @@ async function fetchDashboardStatsFromDb(userId: string, timeRange: TimeRange): 
   try {
     const db = getDb()
     
-    // Fetch executions from database
+    // Calculate time range filter for SQL query to avoid loading all data into memory
+    const now = new Date()
+    let startDate: Date
+    
+    switch (timeRange) {
+      case '1h':
+        startDate = new Date(now.getTime() - 60 * 60 * 1000)
+        break
+      case '24h':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        break
+      case '7d':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        break
+      case '30d':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        break
+      case '90d':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+        break
+      case 'custom':
+      default:
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    }
+    
+    const startDateISO = startDate.toISOString()
+    
+    // Fetch executions from database - WITH TIME FILTER
     const allExecutions = await new Promise<Execution[]>((resolve, reject) => {
       db.all(
         `SELECT e.*, w.name as workflow_name
@@ -69,8 +96,9 @@ async function fetchDashboardStatsFromDb(userId: string, timeRange: TimeRange): 
          LEFT JOIN workflows w ON e.workflow_id = w.id
          LEFT JOIN providers p ON e.provider_id = p.id
          WHERE p.user_id = ?
+         AND e.started_at >= ?
          ORDER BY e.started_at DESC`,
-        [userId],
+        [userId, startDateISO],
         (err, rows: any[]) => {
           if (err) {
             reject(err)
@@ -106,13 +134,8 @@ async function fetchDashboardStatsFromDb(userId: string, timeRange: TimeRange): 
       )
     })
     
-    // Create filters object using same structure as executions API
-    const filters: ExecutionFilters = {
-      timeRange: timeRange === 'custom' ? '24h' : timeRange // Handle 'custom' case
-    }
-    
-    // Apply filters using the same function as executions API
-    const filteredExecutions = applyExecutionFilters(allExecutions, filters)
+    // Time filtering is now done in SQL query, no need for in-memory filtering
+    const filteredExecutions = allExecutions
     
     // Calculate basic stats
     const totalExecutions = filteredExecutions.length
