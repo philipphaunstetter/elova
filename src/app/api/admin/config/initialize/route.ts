@@ -7,7 +7,7 @@ export async function POST() {
     await configManager.initialize()
     
     // Ensure the general category exists by checking if any config exists in the general category
-    const generalCategoryTest = await configManager.get('app.timezone')
+    await configManager.get('app.timezone')
     // The category will be created automatically when we upsert items with category='general'
     
     // Check if n8n URL configuration exists, if not create it

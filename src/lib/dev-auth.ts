@@ -8,45 +8,6 @@ export interface DevUser {
   role: 'admin' | 'user'
 }
 
-const DEV_USERS: Record<string, { password: string; user: DevUser }> = {
-  'admin@test.com': {
-    password: '1234',
-    user: {
-      id: 'dev-admin-001',
-      email: 'admin@test.com',
-      name: 'Admin User',
-      role: 'admin'
-    }
-  },
-  'demo@test.com': {
-    password: 'demo',
-    user: {
-      id: 'dev-demo-001', 
-      email: 'demo@test.com',
-      name: 'Demo User',
-      role: 'user'
-    }
-  },
-  // Keep backward compatibility with username-only logins
-  'admin': {
-    password: '1234',
-    user: {
-      id: 'dev-admin-001',
-      email: 'admin@test.com',
-      name: 'Admin User',
-      role: 'admin'
-    }
-  },
-  'demo': {
-    password: 'demo',
-    user: {
-      id: 'dev-demo-001', 
-      email: 'demo@test.com',
-      name: 'Demo User',
-      role: 'user'
-    }
-  }
-}
 
 /**
  * Simple development authentication

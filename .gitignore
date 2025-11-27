@@ -73,6 +73,14 @@ runtime_config.json
 *.swo
 *~
 
+# Warp AI configuration and documentation
+WARP.md
+/docs/
+
+# Development artifacts
+cookies.txt
+build_log.txt
+
 # OS generated files
 .DS_Store
 .DS_Store?
