@@ -89,7 +89,7 @@ ENV HOSTNAME="0.0.0.0"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD node healthcheck.js || exit 1
+    CMD curl -f http://localhost:3000/api/health || exit 1
 
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
