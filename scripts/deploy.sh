@@ -27,19 +27,17 @@ show_usage() {
     echo -e "${YELLOW}Commands:${NC}"
     echo "  dev          Start development environment with your real n8n instance"
     echo "  prod         Deploy production environment with Docker"
-    echo "  build        Build Docker image only"
     echo "  stop         Stop all containers"
     echo "  clean        Clean up containers and images"
     echo "  logs         Show container logs"
     echo "  help         Show this help message"
     echo ""
     echo -e "${YELLOW}Options:${NC}"
-    echo "  --build      Force rebuild Docker image (for prod command)"
     echo "  --follow     Follow logs in real-time (for logs command)"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
     echo "  $0 dev                 # Start development with real n8n data"
-    echo "  $0 prod --build        # Deploy production and rebuild image"
+    echo "  $0 prod                # Deploy production"
     echo "  $0 logs --follow       # Show and follow container logs"
 }
 
@@ -101,12 +99,6 @@ start_prod() {
         fi
     fi
     
-    # Build image if requested
-    if [[ "$1" == "--build" ]]; then
-        echo -e "${YELLOW}📦 Building Docker image...${NC}"
-        ./scripts/build-docker.sh
-    fi
-    
     # Source production environment
     set -a
     source .env.production
@@ -131,15 +123,8 @@ start_prod() {
     echo -e "${PURPLE}Use '$0 logs --follow' to monitor container logs${NC}"
 }
 
-# Function to build Docker image
-build_image() {
-    echo -e "${GREEN}🔨 Building Elova Docker Image${NC}"
-    cd "$PROJECT_ROOT"
-    ./scripts/build-docker.sh
-}
-
-# Function to stop containers
-stop_containers() {
+# Function to show logs
+show_logs() {
     echo -e "${YELLOW}🛑 Stopping Elova containers...${NC}"
     cd "$PROJECT_ROOT"
     
@@ -178,7 +163,7 @@ cleanup() {
     stop_containers
     
     # Remove images
-    docker images --format "table {{.Repository}}\t{{.Tag}}" | grep "^elova" | while read -r repo tag; do
+    docker images --format "table {{.Repository}}\t{{.Tag}}" | grep "^newflowio/elova" | while read -r repo tag; do
         if [ "$repo" != "REPOSITORY" ]; then
             echo -e "${YELLOW}Removing image: ${repo}:${tag}${NC}"
             docker rmi "${repo}:${tag}" 2>/dev/null || true
@@ -195,9 +180,6 @@ case "${1:-help}" in
         ;;
     "prod")
         start_prod "$2"
-        ;;
-    "build")
-        build_image
         ;;
     "stop")
         stop_containers

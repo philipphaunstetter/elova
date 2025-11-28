@@ -8,7 +8,7 @@ version: '3.8'
 
 services:
   elova:
-    image: ghcr.io/philipphaunstetter/n8n-analytics:latest
+    image: newflowio/elova:latest
     container_name: elova
     restart: unless-stopped
     ports:
