@@ -34,5 +34,10 @@
     "eslint-config-next": "15.5.4",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "sqlite3": {
+      "node-gyp": "^10.0.0"
+    }
   }
 }
