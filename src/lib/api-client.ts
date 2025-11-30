@@ -77,6 +77,23 @@ export class ApiClient {
     return response.json()
   }
 
+  async patch<T>(endpoint: string, data?: unknown): Promise<T> {
+    const headers = await this.getAuthHeaders()
+    
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'PATCH',
+      headers,
+      credentials: 'include', // Include cookies for session authentication
+      body: data ? JSON.stringify(data) : undefined,
+    })
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`)
+    }
+
+    return response.json()
+  }
+
   async delete<T>(endpoint: string): Promise<T> {
     const headers = await this.getAuthHeaders()
     
