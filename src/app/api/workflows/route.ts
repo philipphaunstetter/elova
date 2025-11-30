@@ -122,6 +122,7 @@ export async function GET(request: NextRequest) {
           description: '', // n8n workflows don't have descriptions
           isActive: Boolean(dbWorkflow.is_active),
           isArchived: isArchived,
+          isTracked: dbWorkflow.is_tracked !== 0, // Default to true if null/undefined (though DB default is 1)
           tags: tagNames,
           createdAt: dbWorkflow.created_at, // Keep as ISO string from database
           updatedAt: dbWorkflow.updated_at, // Keep as ISO string from database

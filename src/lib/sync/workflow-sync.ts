@@ -610,6 +610,57 @@ export class WorkflowSyncService {
   }
 
   /**
+   * Toggle tracking for a workflow
+   */
+  async toggleTracking(
+    providerWorkflowId: string,
+    isTracked: boolean,
+    deleteData: boolean = false
+  ): Promise<void> {
+    const db = this.getSQLiteClient()
+
+    return new Promise((resolve, reject) => {
+      db.serialize(() => {
+        db.run('BEGIN TRANSACTION')
+
+        // Update tracking status
+        db.run(
+          'UPDATE workflows SET is_tracked = ? WHERE provider_workflow_id = ?',
+          [isTracked ? 1 : 0, providerWorkflowId],
+          (err) => {
+            if (err) {
+              console.error(`Failed to update tracking for workflow ${providerWorkflowId}:`, err)
+            }
+          }
+        )
+
+        if (!isTracked && deleteData) {
+          console.log(`🗑️ Deleting executions for untracked workflow: ${providerWorkflowId}`)
+          db.run(
+            'DELETE FROM executions WHERE workflow_id = (SELECT id FROM workflows WHERE provider_workflow_id = ?)',
+            [providerWorkflowId],
+            (err) => {
+              if (err) {
+                console.error(`Failed to delete executions for workflow ${providerWorkflowId}:`, err)
+              }
+            }
+          )
+        }
+
+        db.run('COMMIT', (err) => {
+          if (err) {
+            console.error('Failed to commit transaction:', err)
+            db.run('ROLLBACK')
+            reject(err)
+          } else {
+            resolve()
+          }
+        })
+      })
+    })
+  }
+
+  /**
    * Extract cron schedules from workflow nodes
    * Supports both cron expressions and interval-based schedules
    */

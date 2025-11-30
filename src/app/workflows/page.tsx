@@ -22,7 +22,8 @@ import { Button } from '@/components/button'
 import { Input, InputGroup } from '@/components/input'
 import { Listbox, ListboxOption, ListboxLabel } from '@/components/listbox'
 import { showToast } from '@/components/toast'
-import { TablePagination } from '@/components/TablePagination'
+import { Dialog, DialogTitle, DialogDescription, DialogFooter, DialogButton } from '@/components/dialog'
+import { Switch } from '@/components/switch'
 
 interface Workflow {
   id: string
@@ -32,6 +33,7 @@ interface Workflow {
   description?: string
   isActive: boolean
   isArchived?: boolean
+  isTracked: boolean
   tags: string[]
   createdAt: string | Date  // Accept both for compatibility
   updatedAt: string | Date  // Accept both for compatibility
@@ -62,6 +64,8 @@ function WorkflowsContent() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
+  const [untrackModalOpen, setUntrackModalOpen] = useState(false)
+  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null)
   const itemsPerPage = 20
   const router = useRouter()
 
@@ -173,6 +177,73 @@ function WorkflowsContent() {
       })
     } finally {
       setBacking(false)
+    }
+  }
+
+  const handleTrackingToggle = async (workflow: Workflow, checked: boolean) => {
+    if (checked) {
+      // Enabling tracking - just do it
+      try {
+        await apiClient.patch(`/workflows/${workflow.id}`, {
+          action: 'toggle_tracking',
+          isTracked: true
+        })
+        
+        // Update local state
+        setWorkflows(prev => prev.map(w => 
+          w.id === workflow.id ? { ...w, isTracked: true } : w
+        ))
+        
+        showToast({
+          type: 'success',
+          title: 'Tracking enabled',
+          message: `Tracking enabled for ${workflow.name}`
+        })
+      } catch (err) {
+        console.error('Failed to enable tracking:', err)
+        showToast({
+          type: 'error',
+          title: 'Failed to enable tracking',
+          message: 'An error occurred while updating settings'
+        })
+      }
+    } else {
+      // Disabling tracking - open confirmation modal
+      setSelectedWorkflow(workflow)
+      setUntrackModalOpen(true)
+    }
+  }
+
+  const confirmUntrack = async (deleteData: boolean) => {
+    if (!selectedWorkflow) return
+
+    try {
+      await apiClient.patch(`/workflows/${selectedWorkflow.id}`, {
+        action: 'toggle_tracking',
+        isTracked: false,
+        deleteData
+      })
+      
+      // Update local state
+      setWorkflows(prev => prev.map(w => 
+        w.id === selectedWorkflow.id ? { ...w, isTracked: false } : w
+      ))
+      
+      showToast({
+        type: 'success',
+        title: 'Tracking disabled',
+        message: `Tracking disabled for ${selectedWorkflow.name}${deleteData ? ' and data deleted' : ''}`
+      })
+    } catch (err) {
+      console.error('Failed to disable tracking:', err)
+      showToast({
+        type: 'error',
+        title: 'Failed to disable tracking',
+        message: 'An error occurred while updating settings'
+      })
+    } finally {
+      setUntrackModalOpen(false)
+      setSelectedWorkflow(null)
     }
   }
 
@@ -327,13 +398,13 @@ function WorkflowsContent() {
           <TableHead>
             <TableRow>
               <TableHeader>Status</TableHeader>
+              <TableHeader>Tracking</TableHeader>
               <TableHeader>Instance</TableHeader>
               <TableHeader>Name</TableHeader>
               <TableHeader>Tags</TableHeader>
               <TableHeader>Last Execution</TableHeader>
               <TableHeader>Total Executions</TableHeader>
               <TableHeader>Updated</TableHeader>
-              <TableHeader>Actions</TableHeader>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -386,6 +457,15 @@ function WorkflowsContent() {
                           {workflow.isActive ? 'Active' : (workflow.isArchived ?? false) ? 'Archived' : 'Inactive'}
                         </span>
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <Switch
+                          checked={workflow.isTracked}
+                          onChange={(checked: boolean) => handleTrackingToggle(workflow, checked)}
+                          color="rose"
+                        />
+                      </div>
                     </TableCell>
                     <TableCell>
                       {provider ? (
@@ -442,18 +522,6 @@ function WorkflowsContent() {
                     <TableCell>
                       {formatDate(workflow.updatedAt)}
                     </TableCell>
-                    <TableCell>
-                      <Button
-                        outline
-                        className="text-sm px-3 py-1"
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation()
-                          router.push(`/workflows/${workflow.id}`)
-                        }}
-                      >
-                        View
-                      </Button>
-                    </TableCell>
                   </TableRow>
                 )
               })
@@ -472,6 +540,36 @@ function WorkflowsContent() {
           />
         )}
       </div>
+
+      <Dialog open={untrackModalOpen} onClose={setUntrackModalOpen}>
+        <DialogTitle>Stop tracking workflow?</DialogTitle>
+        <DialogDescription>
+          You are about to stop tracking <strong>{selectedWorkflow?.name}</strong>.
+          Do you want to keep the existing execution data or delete it?
+        </DialogDescription>
+        <DialogFooter>
+          <div className="flex space-x-3 justify-end w-full">
+            <Button
+              plain
+              onClick={() => setUntrackModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              outline
+              onClick={() => confirmUntrack(false)}
+            >
+              Keep Data
+            </Button>
+            <Button
+              color="red"
+              onClick={() => confirmUntrack(true)}
+            >
+              Delete Data
+            </Button>
+          </div>
+        </DialogFooter>
+      </Dialog>
     </div>
   )
 }

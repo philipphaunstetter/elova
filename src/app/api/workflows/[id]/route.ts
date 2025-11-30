@@ -139,6 +139,13 @@ export async function PATCH(
           message: `Backup ${data.backupEnabled ? 'enabled' : 'disabled'} for workflow`
         })
 
+      case 'toggle_tracking':
+        await workflowSync.toggleTracking(id, data.isTracked, data.deleteData)
+        return NextResponse.json({
+          success: true,
+          message: `Tracking ${data.isTracked ? 'enabled' : 'disabled'} for workflow`
+        })
+
       default:
         return NextResponse.json(
           { error: 'Unknown action' },
