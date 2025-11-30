@@ -42,6 +42,7 @@ function getSQLiteClient(): Database {
           name TEXT NOT NULL,
           is_active BOOLEAN DEFAULT 1,
           is_archived BOOLEAN DEFAULT 0,
+          is_tracked BOOLEAN DEFAULT 1,
           tags TEXT DEFAULT '[]',
           node_count INTEGER DEFAULT 0,
           workflow_data TEXT,
@@ -287,11 +288,15 @@ export class ExecutionSyncService {
         // Filter out executions that we don't need to update
         // We need to fetch full data ONLY if:
         // 1. The execution is NOT in our DB (new)
-        // 2. The execution IS in our DB but is NOT finished (update)
+        // 3. The execution is for a workflow that is not tracked
         const executionIds = response.data.map((e: N8nExecution) => e.id)
         const existingStatusMap = await this.getExistingExecutionsStatus(provider.id, executionIds)
+        const untrackedWorkflowIds = await this.getUntrackedWorkflowIds(provider.id)
 
         const executionsToFetch = response.data.filter((e: N8nExecution) => {
+          // Skip untracked workflows
+          if (untrackedWorkflowIds.has(e.workflowId)) return false
+
           const existingStatus = existingStatusMap.get(e.id)
           if (!existingStatus) return true // New execution
           if (existingStatus !== 'success' && existingStatus !== 'error' && existingStatus !== 'canceled') return true // Not finished
@@ -370,6 +375,26 @@ export class ExecutionSyncService {
       updated: totalUpdated,
       lastCursor: cursor
     }
+  }
+
+  /**
+   * Get set of untracked workflow IDs for a provider
+   */
+  private async getUntrackedWorkflowIds(providerId: string): Promise<Set<string>> {
+    const db = getSQLiteClient()
+    return new Promise((resolve, reject) => {
+      db.all(
+        'SELECT provider_workflow_id FROM workflows WHERE provider_id = ? AND is_tracked = 0',
+        [providerId],
+        (err, rows: { provider_workflow_id: string }[]) => {
+          if (err) reject(err)
+          else {
+            const ids = new Set(rows.map(r => r.provider_workflow_id))
+            resolve(ids)
+          }
+        }
+      )
+    })
   }
 
   /**
