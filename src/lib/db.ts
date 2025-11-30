@@ -16,7 +16,8 @@ function migrateAIMetrics(database: Database) {
       'ALTER TABLE executions ADD COLUMN ai_cost REAL DEFAULT 0.0',
       'ALTER TABLE executions ADD COLUMN ai_provider TEXT DEFAULT NULL',
       'ALTER TABLE executions ADD COLUMN ai_model TEXT DEFAULT NULL',
-      'ALTER TABLE workflows ADD COLUMN workflow_json TEXT'
+      'ALTER TABLE workflows ADD COLUMN workflow_json TEXT',
+      'ALTER TABLE workflows ADD COLUMN is_tracked BOOLEAN DEFAULT 1'
     ]
 
     migrations.forEach(sql => {
@@ -55,6 +56,7 @@ function ensureSchema(database: Database) {
         name TEXT NOT NULL,
         is_active BOOLEAN DEFAULT 1,
         is_archived BOOLEAN DEFAULT 0,
+        is_tracked BOOLEAN DEFAULT 1,
         tags TEXT DEFAULT '[]',
         node_count INTEGER DEFAULT 0,
         workflow_data TEXT,

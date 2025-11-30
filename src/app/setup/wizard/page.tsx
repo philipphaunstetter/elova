@@ -14,11 +14,13 @@ import {
   LinkIcon,
   ChartBarIcon,
   EnvelopeIcon,
-  ServerIcon
+  ServerIcon,
+  ListBulletIcon
 } from '@heroicons/react/24/outline'
 import { CheckIcon as CheckIconSolid } from '@heroicons/react/24/solid'
 import { showToast } from '@/components/toast'
 import { normalizeUrl } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
 
 interface SetupData {
   // Step 1: Admin Account
@@ -30,11 +32,14 @@ interface SetupData {
   n8nUrl: string
   n8nApiKey: string
 
-  // Step 3: Configuration
+  // Step 3: Workflow Selection
+  trackedWorkflowIds: string[]
+
+  // Step 4: Configuration
   syncInterval: string
   analyticsEnabled: boolean
 
-  // Step 4: Email Notifications (placeholder)
+  // Step 5: Email Notifications (placeholder)
   emailEnabled: boolean
   smtpHost: string
   smtpPort: string
@@ -42,11 +47,18 @@ interface SetupData {
   smtpPassword: string
 }
 
+interface DiscoveredWorkflow {
+  id: string
+  name: string
+  active: boolean
+}
+
 const steps = [
   { id: '01', name: 'Admin Account', icon: CogIcon, description: 'Create your administrator account' },
   { id: '02', name: 'n8n Integration', icon: LinkIcon, description: 'Connect to your n8n instance' },
-  { id: '03', name: 'Configuration', icon: ChartBarIcon, description: 'Set up sync and analytics' },
-  { id: '04', name: 'Notifications', icon: EnvelopeIcon, description: 'Configure email settings' },
+  { id: '03', name: 'Workflows', icon: ListBulletIcon, description: 'Choose workflows to track' },
+  { id: '04', name: 'Configuration', icon: ChartBarIcon, description: 'Set up sync and analytics' },
+  { id: '05', name: 'Notifications', icon: EnvelopeIcon, description: 'Configure email settings' },
 ]
 
 export default function SetupWizardPage() {
@@ -58,6 +70,7 @@ export default function SetupWizardPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [testingConnection, setTestingConnection] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'error'>('unknown')
+  const [discoveredWorkflows, setDiscoveredWorkflows] = useState<DiscoveredWorkflow[]>([])
 
   const [formData, setFormData] = useState<SetupData>({
     adminEmail: '',
@@ -65,6 +78,7 @@ export default function SetupWizardPage() {
     adminPasswordConfirm: '',
     n8nUrl: '',
     n8nApiKey: '',
+    trackedWorkflowIds: [],
     syncInterval: '15',
     analyticsEnabled: true,
     emailEnabled: false,
@@ -87,40 +101,21 @@ export default function SetupWizardPage() {
     setError(null)
   }
 
-  const testN8nConnection = async () => {
-    if (!formData.n8nUrl || !formData.n8nApiKey) {
-      setError('Please enter both URL and API key before testing')
-      return
-    }
+  const handleWorkflowToggle = (workflowId: string, checked: boolean) => {
+    setFormData(prev => {
+      const newTrackedIds = checked
+        ? [...prev.trackedWorkflowIds, workflowId]
+        : prev.trackedWorkflowIds.filter(id => id !== workflowId)
+      
+      return { ...prev, trackedWorkflowIds: newTrackedIds }
+    })
+  }
 
-    try {
-      setTestingConnection(true)
-      setError(null)
-
-      const response = await fetch('/api/n8n/test-connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: normalizeUrl(formData.n8nUrl),
-          apiKey: formData.n8nApiKey
-        })
-      })
-
-      const result = await response.json()
-
-      if (response.ok && result.success) {
-        setConnectionStatus('connected')
-      } else {
-        setConnectionStatus('error')
-        setError(result.error || 'Failed to connect to n8n instance')
-      }
-    } catch (error) {
-      console.error('Failed to test connection:', error)
-      setConnectionStatus('error')
-      setError('Failed to test connection')
-    } finally {
-      setTestingConnection(false)
-    }
+  const handleSelectAllWorkflows = (checked: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      trackedWorkflowIds: checked ? discoveredWorkflows.map(w => w.id) : []
+    }))
   }
 
   const validateCurrentStep = (): boolean => {
@@ -146,18 +141,81 @@ export default function SetupWizardPage() {
         }
         return true
       case 3:
-        return true // All fields are optional or have defaults
+        // Workflow selection is optional (can select none)
+        return true
       case 4:
+        return true // All fields are optional or have defaults
+      case 5:
         return true // All fields are optional (placeholder step)
       default:
         return false
     }
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     setError(null)
-    if (validateCurrentStep()) {
+    if (!validateCurrentStep()) return
+
+    // Special handling for n8n connection step
+    if (currentStep === 2) {
+      await connectAndFetchWorkflows()
+    } else {
       setCurrentStep(prev => Math.min(prev + 1, steps.length))
+    }
+  }
+
+  const connectAndFetchWorkflows = async () => {
+    if (!formData.n8nUrl || !formData.n8nApiKey) {
+      setError('Please enter both URL and API key')
+      return
+    }
+
+    try {
+      setLoading(true) // Use main loading state for the button
+      setTestingConnection(true)
+      setError(null)
+
+      const response = await fetch('/api/n8n/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: normalizeUrl(formData.n8nUrl),
+          apiKey: formData.n8nApiKey
+        })
+      })
+
+      const result = await response.json()
+
+      if (response.ok && result.success) {
+        setConnectionStatus('connected')
+        
+        // Set discovered workflows
+        if (result.workflows && Array.isArray(result.workflows)) {
+          setDiscoveredWorkflows(result.workflows)
+          // Default to tracking all active workflows
+          const activeWorkflows = result.workflows
+            .filter((w: any) => w.active)
+            .map((w: any) => w.id)
+          
+          setFormData(prev => ({
+            ...prev,
+            trackedWorkflowIds: activeWorkflows
+          }))
+        }
+        
+        // Move to next step
+        setCurrentStep(3)
+      } else {
+        setConnectionStatus('error')
+        setError(result.error || 'Failed to connect to n8n instance')
+      }
+    } catch (error) {
+      console.error('Failed to test connection:', error)
+      setConnectionStatus('error')
+      setError('Failed to test connection')
+    } finally {
+      setLoading(false)
+      setTestingConnection(false)
     }
   }
 
@@ -185,6 +243,7 @@ export default function SetupWizardPage() {
             url: normalizeUrl(formData.n8nUrl),
             apiKey: formData.n8nApiKey,
           },
+          trackedWorkflowIds: formData.trackedWorkflowIds,
           configuration: {
             syncInterval: formData.syncInterval,
             analyticsEnabled: formData.analyticsEnabled,
@@ -205,13 +264,6 @@ export default function SetupWizardPage() {
       }
 
       const result = await response.json()
-
-      // Show syncing toast
-      // Start initial sync in background (fire and forget)
-      fetch('/api/setup/initial-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      }).catch(err => console.warn('Background sync error:', err))
 
       // Show completion toast
       showToast({
@@ -328,41 +380,20 @@ export default function SetupWizardPage() {
               <p className="text-xs text-gray-500 mt-1">You can find your API key in n8n under Settings → API Keys</p>
             </div>
 
-            {/* Connection Test */}
+            {/* Connection Test - Removed, happens automatically on Next */}
             <div className="pt-4">
-              <Button
-                type="button"
-                onClick={testN8nConnection}
-                disabled={testingConnection || !formData.n8nUrl || !formData.n8nApiKey}
-                outline
-                className="w-full"
-              >
-                {testingConnection ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-rose-600 mr-2"></div>
-                    Testing Connection...
-                  </>
-                ) : (
-                  <>
-                    <ServerIcon className="h-4 w-4 mr-2" />
-                    Test Connection
-                  </>
-                )}
-              </Button>
+              <div className="text-sm text-gray-500 text-center">
+                Click Next to connect and discover workflows
+              </div>
             </div>
 
             {/* Connection Status */}
-            {connectionStatus !== 'unknown' && (
-              <div className={`p-4 rounded-md ${connectionStatus === 'connected'
-                ? 'bg-green-50 border border-green-200'
-                : 'bg-red-50 border border-red-200'
-                }`}>
+            {connectionStatus === 'error' && (
+              <div className="p-4 rounded-md bg-red-50 border border-red-200">
                 <div className="flex items-center space-x-2">
-                  <div className={`w-3 h-3 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'
-                    }`} />
-                  <span className={`text-sm font-medium ${connectionStatus === 'connected' ? 'text-green-800' : 'text-red-800'
-                    }`}>
-                    {connectionStatus === 'connected' ? 'Connected Successfully' : 'Connection Failed'}
+                  <div className="w-3 h-3 rounded-full bg-red-500" />
+                  <span className="text-sm font-medium text-red-800">
+                    Connection Failed
                   </span>
                 </div>
               </div>
@@ -371,6 +402,78 @@ export default function SetupWizardPage() {
         )
 
       case 3:
+        return (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">Discovered Workflows</h3>
+                <p className="text-sm text-gray-500">
+                  Select the workflows you want to track in Elova
+                </p>
+              </div>
+              <div className="text-sm text-gray-500">
+                {formData.trackedWorkflowIds.length} selected
+              </div>
+            </div>
+
+            <div className="border rounded-md overflow-hidden">
+              <div className="max-h-96 overflow-y-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                        <input
+                          type="checkbox"
+                          checked={discoveredWorkflows.length > 0 && formData.trackedWorkflowIds.length === discoveredWorkflows.length}
+                          onChange={(e) => handleSelectAllWorkflows(e.target.checked)}
+                          className="h-4 w-4 text-rose-600 focus:ring-rose-500 border-gray-300 rounded"
+                        />
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Workflow Name
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {discoveredWorkflows.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-4 text-center text-sm text-gray-500">
+                          No workflows found
+                        </td>
+                      </tr>
+                    ) : (
+                      discoveredWorkflows.map((workflow) => (
+                        <tr key={workflow.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              checked={formData.trackedWorkflowIds.includes(workflow.id)}
+                              onChange={(e) => handleWorkflowToggle(workflow.id, e.target.checked)}
+                              className="h-4 w-4 text-rose-600 focus:ring-rose-500 border-gray-300 rounded"
+                            />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {workflow.name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <Badge variant={workflow.active ? 'default' : 'secondary'} className={workflow.active ? 'bg-green-100 text-green-800 hover:bg-green-200' : ''}>
+                              {workflow.active ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )
+
+      case 4:
         return (
           <div className="space-y-6">
             <div>
@@ -410,7 +513,7 @@ export default function SetupWizardPage() {
           </div>
         )
 
-      case 4:
+      case 5:
         return (
           <div className="space-y-6">
             <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
@@ -597,8 +700,13 @@ export default function SetupWizardPage() {
                   )}
                 </Button>
               ) : (
-                <Button onClick={handleNext}>
-                  Next
+                <Button onClick={handleNext} disabled={loading}>
+                  {loading && currentStep === 2 ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Connecting...
+                    </>
+                  ) : 'Next'}
                 </Button>
               )}
             </div>

@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getConfigManager } from '@/lib/config/config-manager'
 import { getProviderService } from '@/lib/services/provider-service'
+import { workflowSync } from '@/lib/sync/workflow-sync'
+import { getDb } from '@/lib/db'
 import crypto from 'crypto'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { adminData, n8nConfig, configuration, emailConfig } = body
+    const { adminData, n8nConfig, configuration, emailConfig, trackedWorkflowIds } = body
 
     const config = getConfigManager()
     console.log('Setup Complete API called with body:', JSON.stringify(body, null, 2))
@@ -66,6 +68,49 @@ export async function POST(request: NextRequest) {
 
           if (connectionResult.success) {
             console.log('Provider connection tested and marked as healthy')
+
+            // Sync workflows immediately so we can set tracking preferences
+            try {
+              console.log('Syncing workflows during setup...')
+              await workflowSync.syncProvider({
+                id: provider.id,
+                name: provider.name,
+                baseUrl: provider.baseUrl,
+                apiKey: n8nConfig.apiKey // Use the raw key here as it's needed for the sync
+              })
+
+              // Update tracking status if provided
+              if (Array.isArray(trackedWorkflowIds)) {
+                const db = getDb()
+                
+                // First set all to untracked for this provider
+                await new Promise<void>((resolve, reject) => {
+                  db.run('UPDATE workflows SET is_tracked = 0 WHERE provider_id = ?', [provider.id], (err) => {
+                    if (err) reject(err)
+                    else resolve()
+                  })
+                })
+
+                // Then set tracked ones if any are selected
+                if (trackedWorkflowIds.length > 0) {
+                  const placeholders = trackedWorkflowIds.map(() => '?').join(',')
+                  await new Promise<void>((resolve, reject) => {
+                    db.run(
+                      `UPDATE workflows SET is_tracked = 1 WHERE provider_id = ? AND provider_workflow_id IN (${placeholders})`,
+                      [provider.id, ...trackedWorkflowIds],
+                      (err) => {
+                        if (err) reject(err)
+                        else resolve()
+                      }
+                    )
+                  })
+                }
+                console.log(`Updated tracking status for ${trackedWorkflowIds.length} workflows`)
+              }
+            } catch (syncError) {
+              console.error('Failed to sync workflows during setup:', syncError)
+              // Continue with setup even if sync fails
+            }
           } else {
             console.warn('Provider connection test failed:', connectionResult.error)
           }

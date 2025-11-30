@@ -85,6 +85,7 @@ export async function POST(request: Request) {
       success: true,
       message: 'Successfully connected to n8n instance',
       workflowCount: workflows.data?.length || workflows.length || 0,
+      workflows: workflows.data || workflows,
       version: instanceInfo.version,
       instanceId: instanceInfo.instanceId,
       url: cleanUrl,
