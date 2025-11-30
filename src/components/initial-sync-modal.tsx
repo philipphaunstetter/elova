@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+import { ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 
 interface InitialSyncModalProps {
   onComplete: () => void
@@ -82,14 +82,24 @@ export function InitialSyncModal({ onComplete }: InitialSyncModalProps) {
     return () => clearInterval(pollInterval)
   }, [onComplete])
 
-  if (status === 'completed' || status === 'unknown') {
+  if (status === 'unknown') {
     return null
   }
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full p-6 text-center">
-        {status === 'failed' ? (
+        {status === 'completed' ? (
+          <div className="space-y-4">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/30">
+              <CheckCircleIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Sync Complete!</h3>
+            <p className="text-sm text-gray-500 dark:text-slate-400">
+              Your data is ready.
+            </p>
+          </div>
+        ) : status === 'failed' ? (
           <div className="space-y-4">
             <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30">
               <ExclamationTriangleIcon className="h-6 w-6 text-red-600 dark:text-red-400" />
