@@ -95,25 +95,29 @@ export async function POST(request: NextRequest) {
                 if (trackedWorkflowIds.length > 0) {
                   // Ensure all IDs are strings to match database column type
                   const stringIds = trackedWorkflowIds.map(String)
-                  const placeholders = stringIds.map(() => '?').join(',')
                   
-                  console.log(`Setting is_tracked=1 for ${stringIds.length} workflows. IDs sample:`, stringIds.slice(0, 5))
+                  console.log(`Setting is_tracked=1 for ${stringIds.length} workflows individually`)
 
-                  await new Promise<void>((resolve, reject) => {
-                    db.run(
-                      `UPDATE workflows SET is_tracked = 1 WHERE provider_id = ? AND provider_workflow_id IN (${placeholders})`,
-                      [provider.id, ...stringIds],
-                      function(err) {
-                        if (err) {
-                          console.error('Failed to update tracked status:', err)
-                          reject(err)
-                        } else {
-                          console.log(`Successfully updated is_tracked=1 for ${this.changes} workflows`)
+                  // Update one by one to ensure reliability and avoid SQLite variable limits or type issues with IN clause
+                  let updatedCount = 0
+                  for (const id of stringIds) {
+                    await new Promise<void>((resolve, reject) => {
+                      db.run(
+                        'UPDATE workflows SET is_tracked = 1 WHERE provider_id = ? AND provider_workflow_id = ?',
+                        [provider.id, id],
+                        function(err) {
+                          if (err) {
+                            console.error(`Failed to update tracking for workflow ${id}:`, err)
+                            // Don't reject, just log and continue
+                          } else {
+                            if (this.changes > 0) updatedCount++
+                          }
                           resolve()
                         }
-                      }
-                    )
-                  })
+                      )
+                    })
+                  }
+                  console.log(`Successfully updated is_tracked=1 for ${updatedCount} workflows`)
                 }
                 console.log(`Updated tracking status for ${trackedWorkflowIds.length} workflows`)
               }

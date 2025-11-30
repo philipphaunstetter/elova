@@ -212,25 +212,30 @@ export class ExecutionSyncService {
         const existingStatusMap = await this.getExistingExecutionsStatus(provider.id, executionIds)
         const untrackedWorkflowIds = await this.getUntrackedWorkflowIds(provider.id)
 
-        const executionsToFetch = response.data.filter((e: N8nExecution) => {
-          // Skip untracked workflows - ensure ID comparison is string-to-string
-          if (untrackedWorkflowIds.has(String(e.workflowId))) return false
+        // 1. Filter out executions for untracked workflows
+        // We separate this step to distinguish between "ignored" and "already synced"
+        const trackedExecutions = response.data.filter((e: N8nExecution) => 
+          !untrackedWorkflowIds.has(String(e.workflowId))
+        )
 
+        // 2. Filter executions that need to be fetched (new or unfinished)
+        const executionsToFetch = trackedExecutions.filter((e: N8nExecution) => {
           const existingStatus = existingStatusMap.get(e.id)
           if (!existingStatus) return true // New execution
           if (existingStatus !== 'success' && existingStatus !== 'error' && existingStatus !== 'canceled') return true // Not finished
           return false // Already finished and in DB
         })
 
-        console.log(`📊 Batch: ${response.data.length} items. Need to fetch data for: ${executionsToFetch.length}`)
+        console.log(`📊 Batch: ${response.data.length} items. Tracked: ${trackedExecutions.length}. Need fetch: ${executionsToFetch.length}`)
 
-        // If ALL executions in this batch are already in DB and finished, we can stop
-        // This means we've reached executions we've already synced
-        // UNLESS we are doing a deep sync, in which case we continue
-        if (executionsToFetch.length === 0 && !options.deepSync) {
+        // Stop condition logic:
+        // If we found tracked executions, but we don't need any of them (all already synced), we can stop.
+        // BUT if we found 0 tracked executions (e.g. page full of untracked workflows), we MUST continue.
+        if (trackedExecutions.length > 0 && executionsToFetch.length === 0 && !options.deepSync) {
           console.log(`✅ Reached already-synced executions, stopping sync for ${provider.name}`)
           break
         }
+        // If trackedExecutions.length === 0, we continue to next page to find tracked ones.
 
         // If we have executions to update, we need their full data
         // There are two strategies:
