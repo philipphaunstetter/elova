@@ -15,7 +15,6 @@ const ALGORITHM = 'aes-256-gcm'
 function getSQLiteClient(): Database {
   return getDb()
 }
-}
 
 export interface Provider {
   id: string
