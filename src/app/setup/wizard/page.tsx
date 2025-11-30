@@ -459,7 +459,7 @@ export default function SetupWizardPage() {
                             {workflow.name}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <Badge variant={workflow.active ? 'default' : 'secondary'} className={workflow.active ? 'bg-green-100 text-green-800 hover:bg-green-200' : ''}>
+                            <Badge color={workflow.active ? 'green' : 'zinc'}>
                               {workflow.active ? 'Active' : 'Inactive'}
                             </Badge>
                           </td>
