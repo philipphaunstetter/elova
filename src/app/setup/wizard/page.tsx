@@ -585,7 +585,7 @@ export default function SetupWizardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-4xl mx-auto px-4">
+      <div className="max-w-7xl mx-auto px-4">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center space-x-2 mb-4">
@@ -607,27 +607,27 @@ export default function SetupWizardPage() {
                 <li key={step.name} className="relative md:flex md:flex-1">
                   {status === 'complete' ? (
                     <div className="group flex w-full items-center">
-                      <span className="flex items-center px-6 py-4 text-sm font-medium">
+                      <span className="flex items-center px-4 py-4 text-sm font-medium">
                         <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-rose-600">
                           <CheckIconSolid aria-hidden="true" className="size-6 text-white" />
                         </span>
-                        <span className="ml-4 text-sm font-medium text-gray-900">{step.name}</span>
+                        <span className="ml-4 text-sm font-medium text-gray-900 whitespace-nowrap">{step.name}</span>
                       </span>
                     </div>
                   ) : status === 'current' ? (
-                    <div aria-current="step" className="flex items-center px-6 py-4 text-sm font-medium">
+                    <div aria-current="step" className="flex items-center px-4 py-4 text-sm font-medium">
                       <span className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-rose-600">
                         <StepIcon className="size-5 text-rose-600" />
                       </span>
-                      <span className="ml-4 text-sm font-medium text-rose-600">{step.name}</span>
+                      <span className="ml-4 text-sm font-medium text-rose-600 whitespace-nowrap">{step.name}</span>
                     </div>
                   ) : (
                     <div className="group flex items-center">
-                      <span className="flex items-center px-6 py-4 text-sm font-medium">
+                      <span className="flex items-center px-4 py-4 text-sm font-medium">
                         <span className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-gray-300">
                           <StepIcon className="size-5 text-gray-500" />
                         </span>
-                        <span className="ml-4 text-sm font-medium text-gray-500">{step.name}</span>
+                        <span className="ml-4 text-sm font-medium text-gray-500 whitespace-nowrap">{step.name}</span>
                       </span>
                     </div>
                   )}
