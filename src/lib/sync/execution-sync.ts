@@ -2,6 +2,7 @@ import { n8nApi } from '@/lib/n8n-api'
 import type { N8nExecution, N8nWorkflow } from '@/lib/n8n-api'
 import { Database } from 'sqlite3'
 import { ConfigManager, getConfigManager } from '@/lib/config/config-manager'
+import { getDb } from '@/lib/db'
 import path from 'path'
 import crypto from 'crypto'
 import { extractAIMetrics } from '@/lib/services/ai-metrics-extractor'
@@ -10,91 +11,10 @@ import { extractAIMetrics } from '@/lib/services/ai-metrics-extractor'
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'elova-default-encryption-key-change-me'
 const ALGORITHM = 'aes-256-gcm'
 
-// SQLite database for execution storage
-let db: Database | null = null
-
+// Use the shared database connection
 function getSQLiteClient(): Database {
-  if (!db) {
-    const dbPath = ConfigManager.getDefaultDatabasePath()
-    db = new Database(dbPath)
-
-    // Initialize execution tables if they don't exist
-    db.serialize(() => {
-      db!.run(`
-        CREATE TABLE IF NOT EXISTS providers (
-          id TEXT PRIMARY KEY,
-          user_id TEXT,
-          name TEXT NOT NULL,
-          base_url TEXT NOT NULL,
-          api_key_encrypted TEXT NOT NULL,
-          is_connected BOOLEAN DEFAULT 1,
-          status TEXT DEFAULT 'healthy',
-          last_checked_at TEXT,
-          metadata TEXT DEFAULT '{}'
-        )
-      `)
-
-      db!.run(`
-        CREATE TABLE IF NOT EXISTS workflows (
-          id TEXT PRIMARY KEY,
-          provider_id TEXT,
-          provider_workflow_id TEXT,
-          name TEXT NOT NULL,
-          is_active BOOLEAN DEFAULT 1,
-          is_archived BOOLEAN DEFAULT 0,
-          is_tracked BOOLEAN DEFAULT 1,
-          tags TEXT DEFAULT '[]',
-          node_count INTEGER DEFAULT 0,
-          workflow_data TEXT,
-          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (provider_id) REFERENCES providers (id)
-        )
-      `)
-
-      db!.run(`
-        CREATE TABLE IF NOT EXISTS executions (
-          id TEXT PRIMARY KEY,
-          provider_id TEXT,
-          workflow_id TEXT,
-          provider_execution_id TEXT UNIQUE,
-          provider_workflow_id TEXT,
-          status TEXT,
-          mode TEXT,
-          started_at TEXT,
-          stopped_at TEXT,
-          duration INTEGER,
-          finished BOOLEAN,
-          retry_of TEXT,
-          retry_success_id TEXT,
-          metadata TEXT DEFAULT '{}',
-          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (provider_id) REFERENCES providers (id),
-          FOREIGN KEY (workflow_id) REFERENCES workflows (id)
-        )
-      `)
-
-      db!.run(`
-        CREATE TABLE IF NOT EXISTS sync_logs (
-          id TEXT PRIMARY KEY,
-          provider_id TEXT,
-          sync_type TEXT,
-          status TEXT,
-          completed_at TEXT,
-          records_processed INTEGER DEFAULT 0,
-          records_inserted INTEGER DEFAULT 0,
-          records_updated INTEGER DEFAULT 0,
-          error_message TEXT,
-          metadata TEXT DEFAULT '{}',
-          last_cursor TEXT,
-          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (provider_id) REFERENCES providers (id)
-        )
-      `)
-    })
-  }
-  return db
+  return getDb()
+}
 }
 
 export interface Provider {
@@ -294,8 +214,8 @@ export class ExecutionSyncService {
         const untrackedWorkflowIds = await this.getUntrackedWorkflowIds(provider.id)
 
         const executionsToFetch = response.data.filter((e: N8nExecution) => {
-          // Skip untracked workflows
-          if (untrackedWorkflowIds.has(e.workflowId)) return false
+          // Skip untracked workflows - ensure ID comparison is string-to-string
+          if (untrackedWorkflowIds.has(String(e.workflowId))) return false
 
           const existingStatus = existingStatusMap.get(e.id)
           if (!existingStatus) return true // New execution
