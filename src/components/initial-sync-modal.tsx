@@ -11,6 +11,7 @@ export function InitialSyncModal({ onComplete }: InitialSyncModalProps) {
   const [status, setStatus] = useState<'loading' | 'in_progress' | 'completed' | 'failed' | 'unknown'>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
+  const [mountTime] = useState(Date.now())
 
   useEffect(() => {
     // Simulate progress animation for better UX
@@ -47,24 +48,18 @@ export function InitialSyncModal({ onComplete }: InitialSyncModalProps) {
             setStatus('in_progress')
           } else {
             // If unknown or undefined, check if we should show it anyway
-            // In some race conditions, the status might not be set yet but we know we are in setup flow
-            // However, relying on initDone means we hide it if setup is done.
-            // Let's be more persistent: if status is unknown, keep loading for a bit instead of dismissing
-            
             if (data.initDone) {
-              // If setup is done but no sync status is found, it might be completed or never started properly.
-              // To be safe, if we are already in "in_progress" state (from previous check), stay there.
-              // If we are in "loading" state, maybe give it a grace period?
+              // If status is unknown but we just mounted (< 5s ago), assume sync might be starting/propagating
+              // and keep showing the loading state (or switch to in_progress)
+              const timeSinceMount = Date.now() - mountTime
               
-              // Current behavior: hide immediately
-              // setStatus('completed')
-              // onComplete()
-              
-              // New behavior: Wait for explicit 'completed' status if we were already tracking
-              if (status === 'in_progress') {
-                // Keep waiting
+              if (timeSinceMount < 5000) {
+                // Give it a chance to report in_progress
+                if (status === 'loading') {
+                   setStatus('in_progress') // Show modal preventively
+                }
               } else {
-                // First check and no status? Assume done.
+                // It's been 5 seconds and still unknown? Assume completed.
                 setStatus('completed')
                 onComplete()
               }
