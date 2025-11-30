@@ -265,18 +265,18 @@ export default function SetupWizardPage() {
 
       const result = await response.json()
 
-      // Show completion toast
+      // Show syncing toast
       showToast({
-        type: 'success',
-        title: 'Setup completed successfully!',
-        message: 'Redirecting to dashboard...',
-        duration: 3000
+        type: 'loading',
+        title: 'Syncing...',
+        message: 'Initial sync started. Redirecting to dashboard...',
+        duration: 2000
       })
 
       // Small delay to show the toast, then redirect
       setTimeout(() => {
         router.push('/dashboard')
-      }, 1500)
+      }, 2000)
     } catch (error) {
       console.error('Setup failed:', error)
       setError(error instanceof Error ? error.message : 'Setup failed')
