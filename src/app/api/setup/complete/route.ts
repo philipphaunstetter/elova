@@ -97,13 +97,20 @@ export async function POST(request: NextRequest) {
                   const stringIds = trackedWorkflowIds.map(String)
                   const placeholders = stringIds.map(() => '?').join(',')
                   
+                  console.log(`Setting is_tracked=1 for ${stringIds.length} workflows. IDs sample:`, stringIds.slice(0, 5))
+
                   await new Promise<void>((resolve, reject) => {
                     db.run(
                       `UPDATE workflows SET is_tracked = 1 WHERE provider_id = ? AND provider_workflow_id IN (${placeholders})`,
                       [provider.id, ...stringIds],
-                      (err) => {
-                        if (err) reject(err)
-                        else resolve()
+                      function(err) {
+                        if (err) {
+                          console.error('Failed to update tracked status:', err)
+                          reject(err)
+                        } else {
+                          console.log(`Successfully updated is_tracked=1 for ${this.changes} workflows`)
+                          resolve()
+                        }
                       }
                     )
                   })
