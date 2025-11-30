@@ -56,6 +56,8 @@ interface ChartsApiResponse {
   providers?: Array<{ id: string; name: string; color: string }>
 }
 
+import { InitialSyncModal } from '@/components/initial-sync-modal'
+
 function DashboardContent() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [chartData, setChartData] = useState<ChartDataPoint[]>([])
@@ -64,31 +66,39 @@ function DashboardContent() {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showSyncModal, setShowSyncModal] = useState(true)
+
+  const refreshData = async () => {
+    try {
+      setLoading(true)
+      const [statsRes, chartsRes] = await Promise.all([
+        apiClient.get<{ data: DashboardStats }>(`/dashboard/stats?timeRange=${timeRange}`),
+        apiClient.get<ChartsApiResponse>(`/dashboard/charts?timeRange=${timeRange}`)
+      ])
+      
+      setStats(statsRes.data)
+      setChartData(chartsRes.data)
+      setByProvider(chartsRes.byProvider || [])
+      setProviders(chartsRes.providers || [])
+      setError(null)
+    } catch (err) {
+      console.error('Failed to fetch dashboard data:', err)
+      setError('Failed to load dashboard data')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-        const [statsRes, chartsRes] = await Promise.all([
-          apiClient.get<{ data: DashboardStats }>(`/dashboard/stats?timeRange=${timeRange}`),
-          apiClient.get<ChartsApiResponse>(`/dashboard/charts?timeRange=${timeRange}`)
-        ])
-        
-        setStats(statsRes.data)
-        setChartData(chartsRes.data)
-        setByProvider(chartsRes.byProvider || [])
-        setProviders(chartsRes.providers || [])
-        setError(null)
-      } catch (err) {
-        console.error('Failed to fetch dashboard data:', err)
-        setError('Failed to load dashboard data')
-      } finally {
-        setLoading(false)
-      }
+    if (!showSyncModal) {
+      refreshData()
     }
+  }, [timeRange, showSyncModal])
 
-    fetchData()
-  }, [timeRange])
+  const handleSyncComplete = () => {
+    setShowSyncModal(false)
+    refreshData()
+  }
 
   const statsDisplay = [
     { 
@@ -137,6 +147,7 @@ function DashboardContent() {
 
   return (
     <div className="space-y-8">
+      {showSyncModal && <InitialSyncModal onComplete={handleSyncComplete} />}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

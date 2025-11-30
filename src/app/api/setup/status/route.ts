@@ -11,12 +11,21 @@ export async function GET() {
 
     // Check the explicit completion flag first (fastest)
     const initDoneFlag = await config.get<string | boolean>('app.initDone')
+    
+    // Check initial sync status
+    const initialSyncStatus = await config.get<string>('sync.initial.status')
+    const initialSyncError = await config.get<string>('sync.initial.error')
+
     if (initDoneFlag === 'true' || initDoneFlag === true) {
       return NextResponse.json({
         initDone: true,
         requiresSetup: false,
         nextStep: 'signin',
-        message: 'Setup completed (flag set)'
+        message: 'Setup completed (flag set)',
+        initialSync: {
+          status: initialSyncStatus || 'unknown',
+          error: initialSyncError
+        }
       })
     }
 

@@ -1,118 +1,130 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { ArrowPathIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
+import { useState, useEffect } from 'react'
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 
-interface SyncStatus {
-    status: 'not_started' | 'in_progress' | 'completed' | 'failed'
-    startedAt?: string
-    completedAt?: string
-    error?: string
-    isComplete: boolean
-    inProgress: boolean
+interface InitialSyncModalProps {
+  onComplete: () => void
 }
 
-export function InitialSyncModal() {
-    const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
-    const [showModal, setShowModal] = useState(false)
+export function InitialSyncModal({ onComplete }: InitialSyncModalProps) {
+  const [status, setStatus] = useState<'loading' | 'in_progress' | 'completed' | 'failed' | 'unknown'>('loading')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [progress, setProgress] = useState(0)
 
-    useEffect(() => {
-        checkSyncStatus()
+  useEffect(() => {
+    // Simulate progress animation for better UX
+    const progressInterval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 90) return prev
+        // Slow down as we get higher
+        const increment = prev < 50 ? 5 : prev < 80 ? 2 : 0.5
+        return prev + increment
+      })
+    }, 500)
 
-        // Poll every 2 seconds while sync is in progress
-        const interval = setInterval(() => {
-            if (syncStatus?.inProgress) {
-                checkSyncStatus()
+    return () => clearInterval(progressInterval)
+  }, [])
+
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout
+
+    const checkStatus = async () => {
+      try {
+        const response = await fetch('/api/setup/status')
+        if (response.ok) {
+          const data = await response.json()
+          const syncStatus = data.initialSync?.status
+
+          if (syncStatus === 'completed') {
+            setStatus('completed')
+            setProgress(100)
+            setTimeout(onComplete, 1000) // Small delay to show 100%
+          } else if (syncStatus === 'failed') {
+            setStatus('failed')
+            setErrorMessage(data.initialSync?.error || 'Unknown error occurred during sync')
+          } else if (syncStatus === 'in_progress') {
+            setStatus('in_progress')
+          } else {
+            // If unknown or undefined, assume completed or not started (pass through)
+            if (data.initDone) {
+              // If setup is done but no sync status, just proceed
+              setStatus('completed')
+              onComplete()
+            } else {
+              setStatus('unknown')
             }
-        }, 2000)
-
-        return () => clearInterval(interval)
-    }, [syncStatus?.inProgress])
-
-    const checkSyncStatus = async () => {
-        try {
-            const response = await fetch('/api/sync/status', { cache: 'no-store' })
-            const data: SyncStatus = await response.json()
-
-            setSyncStatus(data)
-
-            // Show modal if sync is in progress
-            setShowModal(data.inProgress)
-        } catch (error) {
-            console.error('Failed to check sync status:', error)
+          }
         }
+      } catch (error) {
+        console.error('Failed to check sync status:', error)
+      }
     }
 
-    if (!showModal || !syncStatus) {
-        return null
-    }
+    // Initial check
+    checkStatus()
 
-    return (
-        <div className="fixed inset-0 bg-gray-100/80 dark:bg-slate-900/80 flex items-center justify-center z-50 backdrop-blur-md transition-all duration-300">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
-                <div className="text-center">
-                    {/* Animated Icon */}
-                    <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-indigo-100 dark:bg-indigo-900 mb-4">
-                        {syncStatus.status === 'in_progress' && (
-                            <ArrowPathIcon className="h-8 w-8 text-rose-600 dark:text-rose-400 animate-spin" />
-                        )}
-                        {syncStatus.status === 'completed' && (
-                            <CheckCircleIcon className="h-8 w-8 text-green-600 dark:text-green-400" />
-                        )}
-                        {syncStatus.status === 'failed' && (
-                            <XCircleIcon className="h-8 w-8 text-red-600 dark:text-red-400" />
-                        )}
-                    </div>
+    // Poll every 2 seconds
+    pollInterval = setInterval(checkStatus, 2000)
 
-                    {/* Title */}
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                        {syncStatus.status === 'in_progress' && 'Syncing Your Data'}
-                        {syncStatus.status === 'completed' && 'Sync Complete!'}
-                        {syncStatus.status === 'failed' && 'Sync Failed'}
-                    </h3>
+    return () => clearInterval(pollInterval)
+  }, [onComplete])
 
-                    {/* Message */}
-                    <p className="text-sm text-gray-600 dark:text-slate-400 mb-6">
-                        {syncStatus.status === 'in_progress' && (
-                            <>
-                                We're importing your workflows and executions from n8n.
-                                <br />
-                                This may take a few moments...
-                            </>
-                        )}
-                        {syncStatus.status === 'completed' && 'Your data has been successfully imported!'}
-                        {syncStatus.status === 'failed' && (
-                            <>
-                                {syncStatus.error || 'An error occurred during sync.'}
-                                <br />
-                                <span className="text-xs">You can retry from the settings page.</span>
-                            </>
-                        )}
-                    </p>
+  if (status === 'completed' || status === 'unknown') {
+    return null
+  }
 
-                    {/* Progress Indicator */}
-                    {syncStatus.status === 'in_progress' && (
-                        <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 mb-4 overflow-hidden">
-                            <div className="bg-rose-600 dark:bg-rose-500 h-2 rounded-full animate-pulse" style={{ width: '60%' }} />
-                        </div>
-                    )}
-
-                    {/* Action Button (only for failed state) */}
-                    {syncStatus.status === 'failed' && (
-                        <button
-                            onClick={() => setShowModal(false)}
-                            className="mt-4 px-4 py-2 bg-rose-600 text-white rounded-md hover:bg-rose-700 transition-colors"
-                        >
-                            Continue Anyway
-                        </button>
-                    )}
-
-                    {/* Info Text */}
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-4">
-                        {syncStatus.status === 'in_progress' && 'Please do not close this window'}
-                    </p>
-                </div>
+  return (
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full p-6 text-center">
+        {status === 'failed' ? (
+          <div className="space-y-4">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30">
+              <ExclamationTriangleIcon className="h-6 w-6 text-red-600 dark:text-red-400" />
             </div>
-        </div>
-    )
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Sync Failed</h3>
+            <p className="text-sm text-gray-500 dark:text-slate-400">
+              {errorMessage || 'We encountered an issue while syncing your data.'}
+            </p>
+            <button
+              onClick={onComplete}
+              className="inline-flex justify-center rounded-md border border-transparent bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2"
+            >
+              Continue to Dashboard
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="mx-auto w-16 h-16 relative flex items-center justify-center">
+              <div className="absolute inset-0 border-4 border-gray-100 dark:border-slate-700 rounded-full"></div>
+              <div 
+                className="absolute inset-0 border-4 border-rose-600 rounded-full border-t-transparent animate-spin"
+              ></div>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                Syncing Data...
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-slate-400">
+                We're fetching your workflow execution history from n8n. This may take a moment.
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                <div 
+                  className="bg-rose-600 h-2.5 rounded-full transition-all duration-500 ease-out" 
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              <p className="text-xs text-right text-gray-400 dark:text-slate-500">
+                {Math.round(progress)}%
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
