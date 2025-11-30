@@ -147,6 +147,13 @@ export async function POST(request: NextRequest) {
     await config.upsert('app.initDone', 'true', 'boolean', 'system', 'Initialization complete flag')
     await config.upsert('setup.completed_at', new Date().toISOString(), 'string', 'setup', 'Setup completion timestamp')
 
+    // Start initial sync in background (fire and forget)
+    // This will now respect the is_tracked flag we just set
+    fetch(new URL('/api/setup/initial-sync', request.url).toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }).catch(err => console.warn('Background sync error:', err))
+
     return NextResponse.json({
       message: 'Setup completed successfully',
       redirectTo: '/dashboard'
