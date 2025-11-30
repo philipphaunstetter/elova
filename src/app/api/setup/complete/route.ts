@@ -93,11 +93,14 @@ export async function POST(request: NextRequest) {
 
                 // Then set tracked ones if any are selected
                 if (trackedWorkflowIds.length > 0) {
-                  const placeholders = trackedWorkflowIds.map(() => '?').join(',')
+                  // Ensure all IDs are strings to match database column type
+                  const stringIds = trackedWorkflowIds.map(String)
+                  const placeholders = stringIds.map(() => '?').join(',')
+                  
                   await new Promise<void>((resolve, reject) => {
                     db.run(
                       `UPDATE workflows SET is_tracked = 1 WHERE provider_id = ? AND provider_workflow_id IN (${placeholders})`,
-                      [provider.id, ...trackedWorkflowIds],
+                      [provider.id, ...stringIds],
                       (err) => {
                         if (err) reject(err)
                         else resolve()
