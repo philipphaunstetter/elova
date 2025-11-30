@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
         const userId = 'admin-001'
 
         const provider = await providerService.createProvider(userId, {
-          name: 'Primary n8n',
+          name: n8nConfig.name || 'Primary n8n',
           baseUrl: n8nConfig.url,
           apiKey: n8nConfig.apiKey,
           metadata: {

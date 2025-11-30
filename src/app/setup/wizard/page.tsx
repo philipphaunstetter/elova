@@ -29,6 +29,7 @@ interface SetupData {
   adminPasswordConfirm: string
 
   // Step 2: n8n Integration
+  n8nName: string
   n8nUrl: string
   n8nApiKey: string
 
@@ -76,6 +77,7 @@ export default function SetupWizardPage() {
     adminEmail: '',
     adminPassword: '',
     adminPasswordConfirm: '',
+    n8nName: '',
     n8nUrl: '',
     n8nApiKey: '',
     trackedWorkflowIds: [],
@@ -240,6 +242,7 @@ export default function SetupWizardPage() {
             password: formData.adminPassword,
           },
           n8nConfig: {
+            name: formData.n8nName,
             url: normalizeUrl(formData.n8nUrl),
             apiKey: formData.n8nApiKey,
           },
@@ -355,6 +358,17 @@ export default function SetupWizardPage() {
       case 2:
         return (
           <div className="space-y-6">
+            <div>
+              <Label htmlFor="n8nName">Instance Name (Optional)</Label>
+              <Input
+                id="n8nName"
+                type="text"
+                value={formData.n8nName}
+                onChange={(e) => handleInputChange('n8nName', e.target.value)}
+                placeholder="e.g. Production n8n"
+              />
+              <p className="text-xs text-gray-500 mt-1">A friendly name for this n8n instance</p>
+            </div>
             <div>
               <Label htmlFor="n8nUrl">n8n Instance URL</Label>
               <Input
