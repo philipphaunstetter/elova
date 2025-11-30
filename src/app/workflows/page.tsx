@@ -22,8 +22,9 @@ import { Button } from '@/components/button'
 import { Input, InputGroup } from '@/components/input'
 import { Listbox, ListboxOption, ListboxLabel } from '@/components/listbox'
 import { showToast } from '@/components/toast'
-import { Dialog, DialogTitle, DialogDescription, DialogFooter, DialogButton } from '@/components/dialog'
+import { Dialog, DialogTitle, DialogDescription, DialogActions } from '@/components/dialog'
 import { Switch } from '@/components/switch'
+import { TablePagination } from '@/components/TablePagination'
 
 interface Workflow {
   id: string
@@ -547,7 +548,7 @@ function WorkflowsContent() {
           You are about to stop tracking <strong>{selectedWorkflow?.name}</strong>.
           Do you want to keep the existing execution data or delete it?
         </DialogDescription>
-        <DialogFooter>
+        <DialogActions>
           <div className="flex space-x-3 justify-end w-full">
             <Button
               plain
@@ -568,7 +569,7 @@ function WorkflowsContent() {
               Delete Data
             </Button>
           </div>
-        </DialogFooter>
+        </DialogActions>
       </Dialog>
     </div>
   )
