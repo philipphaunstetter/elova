@@ -147,6 +147,10 @@ export async function POST(request: NextRequest) {
     await config.upsert('app.initDone', 'true', 'boolean', 'system', 'Initialization complete flag')
     await config.upsert('setup.completed_at', new Date().toISOString(), 'string', 'setup', 'Setup completion timestamp')
 
+    // Set sync status to in_progress synchronously so the dashboard sees it immediately
+    await config.upsert('sync.initial.status', 'in_progress', 'string', 'system', 'Initial sync status')
+    await config.upsert('sync.initial.started_at', new Date().toISOString(), 'string', 'system', 'Initial sync start time')
+
     // Start initial sync in background (fire and forget)
     // This will now respect the is_tracked flag we just set
     fetch(new URL('/api/setup/initial-sync', request.url).toString(), {
