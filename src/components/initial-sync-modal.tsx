@@ -38,9 +38,15 @@ export function InitialSyncModal({ onComplete }: InitialSyncModalProps) {
           const syncStatus = data.initialSync?.status
 
           if (syncStatus === 'completed') {
-            setStatus('completed')
-            setProgress(100)
-            setTimeout(onComplete, 1000) // Small delay to show 100%
+            // If we were in progress, show completion state
+            // If we were just loading (first check), and it's already done, don't show anything
+            if (status === 'in_progress') {
+              setStatus('completed')
+              setProgress(100)
+              setTimeout(onComplete, 1000) // Small delay to show 100%
+            } else {
+              onComplete() // Just finish immediately
+            }
           } else if (syncStatus === 'failed') {
             setStatus('failed')
             setErrorMessage(data.initialSync?.error || 'Unknown error occurred during sync')
