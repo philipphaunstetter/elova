@@ -101,11 +101,38 @@ export function normalizeModelName(model: string | null): string | null {
         'claude-3-sonnet-20240229': 'claude-3-sonnet',
         'claude-3-haiku-20240307': 'claude-3-haiku',
         'gemini-1.5-pro-latest': 'gemini-1.5-pro',
-        'gemini-1.5-flash-latest': 'gemini-1.5-flash'
+        'gemini-1.5-flash-latest': 'gemini-1.5-flash',
+        
+        // Explicit n8n <-> OpenRouter mappings
+        'claude-3-5-sonnet': 'anthropic/claude-3.5-sonnet',
+        'claude-3-5-haiku': 'anthropic/claude-3.5-haiku',
+        'gemini-1.5-pro': 'google/gemini-pro-1.5', 
+        'gemini-pro-1.5': 'google/gemini-pro-1.5',
+        'gemini-1.5-flash': 'google/gemini-flash-1.5',
+        'gemini-flash-1.5': 'google/gemini-flash-1.5',
     }
 
     const mapped = modelMappings[normalized]
-    if (mapped && AI_PRICING[mapped]) return mapped
+    if (mapped) {
+        // Check if the mapped ID actually exists in our data
+        // If not, we might want to still return it or try a fuzzy search?
+        // For now, if it exists, return it.
+        if (AI_PRICING[mapped]) return mapped
+        
+        // If mapped key not found directly, try suffix match with it
+        const mappedSuffixMatch = Object.keys(AI_PRICING).find(key => key.endsWith(`/${mapped}`))
+        if (mappedSuffixMatch) return mappedSuffixMatch
+    }
+
+    // 4. Normalized Separator Fuzzy Match (e.g. 3-5 vs 3.5)
+    // Convert n8n style (often hyphens) to potential OpenRouter style (dots for versions)
+    // e.g. claude-3-5-sonnet -> claude-3.5-sonnet
+    const dotNormalized = normalized.replace(/(\d)-(\d)/g, '$1.$2')
+    if (dotNormalized !== normalized) {
+        if (AI_PRICING[dotNormalized]) return dotNormalized
+        const dotSuffixMatch = Object.keys(AI_PRICING).find(key => key.endsWith(`/${dotNormalized}`))
+        if (dotSuffixMatch) return dotSuffixMatch
+    }
 
     return normalized
 }
