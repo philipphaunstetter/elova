@@ -44,6 +44,7 @@ export async function GET(
         e.output_tokens,
         e.ai_cost,
         e.ai_provider,
+        e.ai_metrics_json,
         w.name as workflow_name,
         w.workflow_json,
         p.name as provider_name,
@@ -76,6 +77,7 @@ export async function GET(
     let metadata: any = {}
     let executionData: any = null
     let workflowJson: any = null
+    let aiMetrics: any = null
     
     try {
       metadata = row.metadata ? JSON.parse(row.metadata) : {}
@@ -93,6 +95,12 @@ export async function GET(
       workflowJson = row.workflow_json ? JSON.parse(row.workflow_json) : null
     } catch {
       workflowJson = null
+    }
+
+    try {
+      aiMetrics = row.ai_metrics_json ? JSON.parse(row.ai_metrics_json) : null
+    } catch {
+      aiMetrics = null
     }
     
     // Build response
@@ -117,6 +125,7 @@ export async function GET(
       outputTokens: row.output_tokens || 0,
       aiCost: row.ai_cost || 0,
       aiProvider: row.ai_provider || null,
+      aiMetrics,
       
       // Metadata
       metadata: {

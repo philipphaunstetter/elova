@@ -16,6 +16,7 @@ function migrateAIMetrics(database: Database) {
       'ALTER TABLE executions ADD COLUMN ai_cost REAL DEFAULT 0.0',
       'ALTER TABLE executions ADD COLUMN ai_provider TEXT DEFAULT NULL',
       'ALTER TABLE executions ADD COLUMN ai_model TEXT DEFAULT NULL',
+      'ALTER TABLE executions ADD COLUMN ai_metrics_json TEXT DEFAULT NULL',
       'ALTER TABLE workflows ADD COLUMN workflow_json TEXT',
       'ALTER TABLE workflows ADD COLUMN is_tracked BOOLEAN DEFAULT 1'
     ]
@@ -93,6 +94,7 @@ function ensureSchema(database: Database) {
         ai_cost REAL DEFAULT 0.0,
         ai_provider TEXT DEFAULT NULL,
         ai_model TEXT DEFAULT NULL,
+        ai_metrics_json TEXT DEFAULT NULL,
         FOREIGN KEY (provider_id) REFERENCES providers (id) ON DELETE CASCADE,
         FOREIGN KEY (workflow_id) REFERENCES workflows (id) ON DELETE CASCADE
       )

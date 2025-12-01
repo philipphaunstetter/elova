@@ -44,6 +44,21 @@ interface ExecutionData {
   outputTokens: number
   aiCost: number
   aiProvider?: string | null
+  aiMetrics?: {
+    totalTokens: number
+    inputTokens: number
+    outputTokens: number
+    aiCost: number
+    aiProvider: string | null
+    aiModel: string | null
+    nodeBreakdown?: Array<{
+      nodeName: string
+      nodeType: string
+      tokens: number
+      cost: number
+      model?: string | null
+    }>
+  }
   metadata: {
     workflowName: string
     providerName: string
@@ -298,6 +313,70 @@ function ExecutionDetailContent() {
           </div>
         </div>
       </div>
+
+      {/* AI Cost Breakdown */}
+      {execution.aiMetrics?.nodeBreakdown && execution.aiMetrics.nodeBreakdown.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 shadow rounded-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-300">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">AI Cost Breakdown</h3>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+              Detailed usage and cost per node
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
+              <thead className="bg-gray-50 dark:bg-slate-900/50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Node</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Model</th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Input Tokens</th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Output Tokens</th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Cost</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                {execution.aiMetrics.nodeBreakdown.map((node, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-8 w-8 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-purple-600 dark:text-purple-400">
+                          <CpuChipIcon className="h-4 w-4" />
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">{node.nodeName}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400 capitalize">{node.nodeType}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Badge color="zinc" className="text-xs font-mono">
+                        {node.model || 'Unknown'}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500 dark:text-slate-400">
+                      {Math.round((node.tokens / 2) || 0).toLocaleString()} <span className="text-xs text-gray-400">(est)</span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500 dark:text-slate-400">
+                      {Math.round((node.tokens / 2) || 0).toLocaleString()} <span className="text-xs text-gray-400">(est)</span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900 dark:text-white">
+                      ${node.cost.toFixed(5)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-gray-50 dark:bg-slate-900/50">
+                <tr>
+                  <td colSpan={2} className="px-6 py-3 text-sm font-medium text-gray-900 dark:text-white">Total</td>
+                  <td className="px-6 py-3 text-right text-sm font-medium text-gray-900 dark:text-white">{execution.aiMetrics.inputTokens.toLocaleString()}</td>
+                  <td className="px-6 py-3 text-right text-sm font-medium text-gray-900 dark:text-white">{execution.aiMetrics.outputTokens.toLocaleString()}</td>
+                  <td className="px-6 py-3 text-right text-sm font-bold text-rose-600 dark:text-rose-400">${execution.aiMetrics.aiCost.toFixed(5)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Node Execution Timeline */}
       {nodeNames.length > 0 && (
