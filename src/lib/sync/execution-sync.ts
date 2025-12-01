@@ -6,6 +6,7 @@ import { getDb } from '@/lib/db'
 import path from 'path'
 import crypto from 'crypto'
 import { extractAIMetrics } from '@/lib/services/ai-metrics-extractor'
+import { getEffectivePricing } from '@/lib/services/ai-pricing-sync'
 
 // Encryption settings (must match provider-service.ts)
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'elova-default-encryption-key-change-me'
@@ -553,13 +554,14 @@ export class ExecutionSyncService {
    */
   private async upsertExecution(providerId: string, n8nExecution: N8nExecution, workflow: { id: string, name: string }) {
     const db = getSQLiteClient()
+    const pricingTable = await getEffectivePricing()
 
     // Extract AI metrics if execution has data
     // Debug: Check if execution has data
     if (n8nExecution.data) {
       console.log(`🔍 Execution ${n8nExecution.id} has data, attempting AI metrics extraction...`)
     }
-    const aiMetrics = n8nExecution.data ? extractAIMetrics({ data: n8nExecution.data }) : null
+    const aiMetrics = n8nExecution.data ? extractAIMetrics({ data: n8nExecution.data }, pricingTable) : null
     if (aiMetrics) {
       if (aiMetrics.totalTokens > 0) {
         console.log(`🤖 AI metrics extracted for execution ${n8nExecution.id}: ${aiMetrics.totalTokens} tokens, $${aiMetrics.aiCost.toFixed(4)} (${aiMetrics.aiProvider})`)

@@ -4,7 +4,7 @@
  * Supports: OpenAI, Anthropic, Google AI, Azure OpenAI
  */
 
-import { AI_PRICING, normalizeModelName, calculateCost } from '@/lib/ai-pricing'
+import { AI_PRICING, normalizeModelName, calculateCost, PricingTable } from '@/lib/ai-pricing'
 
 export interface AIMetrics {
   totalTokens: number
@@ -24,8 +24,10 @@ export interface AIMetrics {
 
 /**
  * Extract AI metrics from n8n execution data
+ * @param executionData The execution data JSON
+ * @param pricingTable Optional dynamic pricing table. If not provided, uses static AI_PRICING.
  */
-export function extractAIMetrics(executionData: any): AIMetrics {
+export function extractAIMetrics(executionData: any, pricingTable?: PricingTable): AIMetrics {
   const metrics: AIMetrics = {
     totalTokens: 0,
     inputTokens: 0,
@@ -50,7 +52,7 @@ export function extractAIMetrics(executionData: any): AIMetrics {
     for (const run of nodeRuns) {
       if (!run || !run.data) continue
 
-      const nodeMetrics = extractNodeMetrics(nodeName, run)
+      const nodeMetrics = extractNodeMetrics(nodeName, run, pricingTable)
 
       if (nodeMetrics) {
         metrics.totalTokens += nodeMetrics.tokens
@@ -97,7 +99,7 @@ interface NodeMetrics {
 /**
  * Extract metrics from a single node execution
  */
-function extractNodeMetrics(nodeName: string, nodeRun: any): NodeMetrics | null {
+function extractNodeMetrics(nodeName: string, nodeRun: any, pricingTable?: PricingTable): NodeMetrics | null {
   const metrics: NodeMetrics = {
     tokens: 0,
     inputTokens: 0,
@@ -132,11 +134,27 @@ function extractNodeMetrics(nodeName: string, nodeRun: any): NodeMetrics | null 
         metrics.nodeType = tokenData.nodeType
 
         // Calculate cost using shared logic
-        metrics.cost = calculateCost(
-          metrics.inputTokens,
-          metrics.outputTokens,
-          metrics.model
-        )
+        // If pricingTable is provided, we need to manually look it up or pass it to calculateCost
+        // But calculateCost currently uses the global AI_PRICING.
+        // We should update calculateCost in ai-pricing.ts to accept a table override, 
+        // OR replicate the logic here. Replicating/Updating logic is cleaner.
+        
+        if (pricingTable) {
+             // Dynamic calculation
+             metrics.cost = calculateCostWithTable(
+                metrics.inputTokens,
+                metrics.outputTokens,
+                metrics.model,
+                pricingTable
+             )
+        } else {
+             // Static fallback
+             metrics.cost = calculateCost(
+                metrics.inputTokens,
+                metrics.outputTokens,
+                metrics.model
+             )
+        }
 
         return metrics
       }
@@ -144,6 +162,41 @@ function extractNodeMetrics(nodeName: string, nodeRun: any): NodeMetrics | null 
   }
 
   return null
+}
+
+/**
+ * Calculate cost using a specific pricing table
+ */
+function calculateCostWithTable(
+    inputTokens: number,
+    outputTokens: number,
+    model: string | null,
+    table: PricingTable
+): number {
+    if (!model) {
+        // Average fallback
+        const avgPricing = { input: 0.002, output: 0.006 }
+        return (inputTokens / 1000) * avgPricing.input + (outputTokens / 1000) * avgPricing.output
+    }
+    
+    const normalized = normalizeModelName(model)
+    // Check if normalized exists in table, or if there's a suffix match in the table keys
+    let pricing = normalized ? table[normalized] : null
+    
+    if (!pricing && normalized) {
+         // Try suffix match again for the dynamic table
+         const suffixMatchKey = Object.keys(table).find(key => key.endsWith(`/${normalized}`))
+         if (suffixMatchKey) {
+             pricing = table[suffixMatchKey]
+         }
+    }
+
+    if (!pricing) {
+        const avgPricing = { input: 0.002, output: 0.006 }
+        return (inputTokens / 1000) * avgPricing.input + (outputTokens / 1000) * avgPricing.output
+    }
+
+    return (inputTokens / 1000) * pricing.input + (outputTokens / 1000) * pricing.output
 }
 
 interface TokenData {
