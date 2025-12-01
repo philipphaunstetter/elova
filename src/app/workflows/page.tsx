@@ -60,7 +60,7 @@ function WorkflowsContent() {
   const [backing, setBacking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'archived'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'archived'>('active')
   const [providerFilter, setProviderFilter] = useState<string>('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
@@ -399,13 +399,13 @@ function WorkflowsContent() {
           <TableHead>
             <TableRow>
               <TableHeader>Status</TableHeader>
-              <TableHeader>Tracking</TableHeader>
               <TableHeader>Instance</TableHeader>
               <TableHeader>Name</TableHeader>
               <TableHeader>Tags</TableHeader>
               <TableHeader>Last Execution</TableHeader>
               <TableHeader>Total Executions</TableHeader>
               <TableHeader>Updated</TableHeader>
+              <TableHeader>Tracking</TableHeader>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -458,15 +458,6 @@ function WorkflowsContent() {
                           {workflow.isActive ? 'Active' : (workflow.isArchived ?? false) ? 'Archived' : 'Inactive'}
                         </span>
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <Switch
-                          checked={workflow.isTracked}
-                          onChange={(checked: boolean) => handleTrackingToggle(workflow, checked)}
-                          color="rose"
-                        />
-                      </div>
                     </TableCell>
                     <TableCell>
                       {provider ? (
@@ -522,6 +513,15 @@ function WorkflowsContent() {
                     </TableCell>
                     <TableCell>
                       {formatDate(workflow.updatedAt)}
+                    </TableCell>
+                    <TableCell>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <Switch
+                          checked={workflow.isTracked}
+                          onChange={(checked: boolean) => handleTrackingToggle(workflow, checked)}
+                          color="rose"
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 )

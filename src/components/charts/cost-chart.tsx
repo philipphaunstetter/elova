@@ -82,13 +82,14 @@ export function CostChart({ data, timeRange }: CostChartProps) {
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <ComposedChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+      <ComposedChart data={data} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
         <XAxis
           dataKey="timestamp"
           type="number"
           scale="time"
           domain={['dataMin', 'dataMax']}
+          padding={{ left: 20, right: 20 }}
           tickFormatter={(timestamp) => formatXAxisLabel(timestamp, timeRange)}
           axisLine={false}
           tickLine={false}
