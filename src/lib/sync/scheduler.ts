@@ -6,6 +6,7 @@
  */
 
 import { executionSync } from './execution-sync'
+import { syncAIModels } from '@/lib/services/ai-pricing-sync'
 
 export class SyncScheduler {
   private intervals: Map<string, NodeJS.Timeout> = new Map()
@@ -25,6 +26,9 @@ export class SyncScheduler {
 
     // Low priority: Full workflow backups daily
     this.scheduleJob('backups', this.syncBackups.bind(this), 24 * 60 * 60 * 1000)
+
+    // Maintenance: AI Pricing sync weekly
+    this.scheduleJob('pricing', this.syncPricing.bind(this), 7 * 24 * 60 * 60 * 1000)
 
     console.log('✅ All sync jobs scheduled')
   }
@@ -114,6 +118,13 @@ export class SyncScheduler {
       syncType: 'backups',
       batchSize: 20
     })
+  }
+
+  /**
+   * Sync AI Pricing models from OpenRouter
+   */
+  private async syncPricing(): Promise<void> {
+    await syncAIModels()
   }
 
   /**
