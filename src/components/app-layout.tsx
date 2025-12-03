@@ -29,6 +29,8 @@ import { Navbar, NavbarItem, NavbarSection, NavbarSpacer } from './navbar'
 import { Dropdown, DropdownButton, DropdownItem, DropdownMenu } from './dropdown'
 import { Avatar } from './avatar'
 import { ToastContainer } from './toast'
+import { useBreadcrumbs } from '@/hooks/use-breadcrumbs'
+import { Breadcrumb } from '@/components/breadcrumb'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: DashboardIcon, current: true },
@@ -139,11 +141,18 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
+  const breadcrumbs = useBreadcrumbs()
+
   return (
     <SidebarLayout
       navbar={<AppNavbar />}
       sidebar={<AppSidebar />}
     >
+      {breadcrumbs.length > 0 && (
+        <div className="mb-6">
+          <Breadcrumb pages={breadcrumbs} />
+        </div>
+      )}
       {children}
       <ToastContainer />
     </SidebarLayout>
