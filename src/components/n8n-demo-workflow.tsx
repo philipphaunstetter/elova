@@ -164,7 +164,8 @@ export function N8nDemoWorkflow({
         minHeight: height, 
         height: height,
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        position: 'relative'
       }}
     >
       {React.createElement('n8n-demo', {
@@ -181,13 +182,15 @@ export function N8nDemoWorkflow({
           width: '100%', 
           height: '100%',
           minHeight: height,
-          display: 'block',
+          display: 'flex',
+          flexDirection: 'column',
           border: 'none',
           borderRadius: '8px',
           flex: '1 1 auto',
           // Additional CSS to ensure proper sizing
           boxSizing: 'border-box',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          position: 'relative'
         }
       })}
     </div>
