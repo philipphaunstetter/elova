@@ -40,7 +40,7 @@ export function OnboardingProgressBar({ steps, currentStep, onStepClick }: Progr
                 {step.status === 'complete' ? (
                   <button
                     onClick={() => onStepClick?.(step.id)}
-                    className="group w-full text-left"
+                    className="group w-full text-left cursor-pointer"
                     disabled={!onStepClick}
                   >
                     <span
@@ -71,7 +71,7 @@ export function OnboardingProgressBar({ steps, currentStep, onStepClick }: Progr
                   <button
                     onClick={() => onStepClick?.(step.id)}
                     aria-current="step"
-                    className="w-full text-left"
+                    className="w-full text-left cursor-pointer"
                     disabled={!onStepClick}
                   >
                     <span
@@ -101,7 +101,7 @@ export function OnboardingProgressBar({ steps, currentStep, onStepClick }: Progr
                 ) : (
                   <button
                     onClick={() => onStepClick?.(step.id)}
-                    className="group w-full text-left"
+                    className="group w-full text-left cursor-pointer"
                     disabled={!onStepClick}
                   >
                     <span
