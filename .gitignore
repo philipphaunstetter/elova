@@ -81,6 +81,9 @@ WARP.md
 cookies.txt
 build_log.txt
 
+# Local testing scripts (dev-only utilities)
+scripts/test-local.sh
+
 # OS generated files
 .DS_Store
 .DS_Store?
