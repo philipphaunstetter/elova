@@ -151,7 +151,7 @@ function Pagination({
           key={page}
           onClick={() => onPageChange(page as number)}
           aria-current={isCurrent ? 'page' : undefined}
-          className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold focus:z-20 focus:outline-offset-0 ${isCurrent
+          className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold focus:z-20 focus:outline-offset-0 cursor-pointer ${isCurrent
             ? 'z-10 bg-rose-600 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600'
             : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:text-gray-300 dark:ring-slate-600 dark:hover:bg-slate-700'
             }`}
@@ -194,7 +194,7 @@ function Pagination({
             <button
               onClick={() => onPageChange(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
-              className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed dark:ring-slate-600 dark:hover:bg-slate-700"
+              className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer dark:ring-slate-600 dark:hover:bg-slate-700"
             >
               <span className="sr-only">Previous</span>
               <ChevronLeftIcon aria-hidden="true" className="h-5 w-5" />
@@ -203,7 +203,7 @@ function Pagination({
             <button
               onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
-              className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed dark:ring-slate-600 dark:hover:bg-slate-700"
+              className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer dark:ring-slate-600 dark:hover:bg-slate-700"
             >
               <span className="sr-only">Next</span>
               <ChevronRightIcon aria-hidden="true" className="h-5 w-5" />
@@ -724,7 +724,7 @@ function ExecutionsContent() {
                             <TableCell>
                               <div className="flex items-center space-x-2">
                                 <button
-                                  className="p-1 hover:bg-gray-200 dark:hover:bg-slate-700 rounded"
+                                  className="p-1 hover:bg-gray-200 dark:hover:bg-slate-700 rounded cursor-pointer"
                                 >
                                   {isExpanded ? (
                                     <ChevronDownIcon className="h-4 w-4 text-gray-500" />

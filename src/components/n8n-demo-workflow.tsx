@@ -130,6 +130,79 @@ export function N8nDemoWorkflow({
     loadScripts()
   }, [])
 
+  // Fix height of iframe and canvas-container elements inside n8n-demo
+  useEffect(() => {
+    if (!isLoaded || !containerRef.current) return
+
+    const fixInternalHeights = () => {
+      const n8nElement = containerRef.current?.querySelector('n8n-demo')
+      if (!n8nElement) return
+
+      // Try to access shadow DOM
+      const shadowRoot = (n8nElement as any).shadowRoot
+      if (shadowRoot) {
+        // Fix elements in shadow DOM
+        const iframe = shadowRoot.querySelector('iframe') || shadowRoot.querySelector('.embedded_workflow_iframe')
+        const canvasContainer = shadowRoot.querySelector('.canvas-container')
+        
+        if (iframe) {
+          iframe.style.height = '100%'
+          iframe.style.minHeight = '100%'
+        }
+        if (canvasContainer) {
+          canvasContainer.style.height = '100%'
+          canvasContainer.style.minHeight = '100%'
+        }
+      }
+
+      // Also try to access iframe and fix its internal content
+      const iframe = n8nElement.querySelector('iframe')
+      if (iframe && iframe.contentWindow) {
+        try {
+          const iframeDoc = iframe.contentWindow.document
+          if (iframeDoc) {
+            const embeddedIframe = iframeDoc.querySelector('.embedded_workflow_iframe')
+            const canvasContainer = iframeDoc.querySelector('.canvas-container')
+            
+            if (embeddedIframe) {
+              (embeddedIframe as HTMLElement).style.height = '100%'
+              ;(embeddedIframe as HTMLElement).style.minHeight = '100%'
+            }
+            if (canvasContainer) {
+              (canvasContainer as HTMLElement).style.height = '100%'
+              ;(canvasContainer as HTMLElement).style.minHeight = '100%'
+            }
+          }
+        } catch (e) {
+          // Cross-origin iframe access might fail, that's okay
+          console.debug('Cannot access iframe content (likely cross-origin):', e)
+        }
+      }
+    }
+
+    // Try multiple times to ensure the component is fully rendered
+    const timeouts = [100, 300, 500, 1000, 2000]
+    const timeoutIds = timeouts.map(delay => 
+      setTimeout(fixInternalHeights, delay)
+    )
+
+    // Also add a MutationObserver to catch any dynamic changes
+    const observer = new MutationObserver(fixInternalHeights)
+    if (containerRef.current) {
+      observer.observe(containerRef.current, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style']
+      })
+    }
+
+    return () => {
+      timeoutIds.forEach(id => clearTimeout(id))
+      observer.disconnect()
+    }
+  }, [isLoaded])
+
   // Convert workflow object to JSON string for the web component
   const workflowJson = typeof workflow === 'string' ? workflow : JSON.stringify(workflow || {})
 
@@ -164,7 +237,8 @@ export function N8nDemoWorkflow({
         minHeight: height, 
         height: height,
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        position: 'relative'
       }}
     >
       {React.createElement('n8n-demo', {
@@ -181,13 +255,15 @@ export function N8nDemoWorkflow({
           width: '100%', 
           height: '100%',
           minHeight: height,
-          display: 'block',
+          display: 'flex',
+          flexDirection: 'column',
           border: 'none',
           borderRadius: '8px',
           flex: '1 1 auto',
           // Additional CSS to ensure proper sizing
           boxSizing: 'border-box',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          position: 'relative'
         }
       })}
     </div>

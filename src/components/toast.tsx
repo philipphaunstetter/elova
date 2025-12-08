@@ -95,7 +95,7 @@ export function Toast({ id, type, title, message, duration = 5000, onClose }: To
             </div>
             <div className="ml-4 flex-shrink-0 flex">
               <button
-                className={`rounded-md inline-flex ${textStyles[type]} hover:opacity-75 focus:outline-none`}
+                className={`rounded-md inline-flex cursor-pointer ${textStyles[type]} hover:opacity-75 focus:outline-none`}
                 onClick={() => {
                   setShow(false)
                   setTimeout(() => onClose(id), 300)

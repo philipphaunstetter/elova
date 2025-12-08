@@ -18,7 +18,7 @@ export function AICostTooltip({ type, model, inputTokens, outputTokens, cost, on
             <div className="relative inline-block ml-1">
                 <button
                     onClick={onToggle}
-                    className="focus:outline-none"
+                    className="focus:outline-none cursor-pointer"
                     title="Click to view pricing details"
                 >
                     <InformationCircleIcon

@@ -6,6 +6,7 @@ n8n-demo {
   min-height: inherit !important;
   margin: 0 !important;
   padding: 0 !important;
+  flex: 1 1 auto !important;
 }
 
 /* Style the iframe inside the n8n-demo component */
@@ -17,6 +18,7 @@ n8n-demo iframe {
   border-radius: 8px !important;
   margin: 0 !important;
   padding: 0 !important;
+  display: block !important;
 }
 
 /* Ensure proper sizing for the shadow DOM content */
@@ -26,6 +28,8 @@ n8n-demo::part(container) {
   min-height: inherit !important;
   margin: 0 !important;
   padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 /* Additional selectors to target potential internal elements */
@@ -46,6 +50,40 @@ n8n-demo #canvas-container {
   min-height: inherit !important;
   margin: 0 !important;
   padding: 0 !important;
+  flex: 1 1 auto !important;
+}
+
+/* Target the body inside the iframe */
+n8n-demo iframe html,
+n8n-demo iframe body {
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Ensure the container inside the iframe takes full height */
+n8n-demo iframe body > * {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+}
+
+/* Force override the 300px fallback for embedded_workflow_iframe and canvas-container */
+/* These classes might be inside shadow DOM or iframe */
+iframe.embedded_workflow_iframe,
+iframe .embedded_workflow_iframe,
+.embedded_workflow_iframe {
+  height: 100% !important;
+  min-height: 100% !important;
+  width: 100% !important;
+}
+
+.canvas-container {
+  height: 100% !important;
+  min-height: 100% !important;
+  width: 100% !important;
 }
 
 n8n-demo .embedded_workflow_iframe iframe {
