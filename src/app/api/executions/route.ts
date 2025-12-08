@@ -99,18 +99,18 @@ export async function GET(request: NextRequest) {
             break
           case '7d':
             startDate = new Date(now)
-            startDate.setDate(startDate.getDate() - 7)
-            startDate.setHours(0, 0, 0, 0)
+            startDate.setUTCDate(startDate.getUTCDate() - 7)
+            startDate.setUTCHours(0, 0, 0, 0)
             break
           case '30d':
             startDate = new Date(now)
-            startDate.setDate(startDate.getDate() - 30)
-            startDate.setHours(0, 0, 0, 0)
+            startDate.setUTCDate(startDate.getUTCDate() - 30)
+            startDate.setUTCHours(0, 0, 0, 0)
             break
           case '90d':
             startDate = new Date(now)
-            startDate.setDate(startDate.getDate() - 90)
-            startDate.setHours(0, 0, 0, 0)
+            startDate.setUTCDate(startDate.getUTCDate() - 90)
+            startDate.setUTCHours(0, 0, 0, 0)
             break
           default:
             startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
