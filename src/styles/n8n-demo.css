@@ -37,10 +37,19 @@ n8n-demo * {
 n8n-demo canvas,
 n8n-demo .workflow-container,
 n8n-demo .n8n-workflow,
-n8n-demo [data-test-id="canvas"] {
+n8n-demo [data-test-id="canvas"],
+n8n-demo .embedded_workflow_iframe,
+n8n-demo .canvas-container,
+n8n-demo #canvas-container {
   width: 100% !important;
   height: 100% !important;
   min-height: inherit !important;
   margin: 0 !important;
   padding: 0 !important;
+}
+
+n8n-demo .embedded_workflow_iframe iframe {
+  width: 100% !important;
+  height: 100% !important;
+  border: none !important;
 }
