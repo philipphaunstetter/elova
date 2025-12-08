@@ -12,7 +12,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 TEST_DIR="/tmp/elova-local-test"
-REPO_DIR=$(pwd)
+REPO_DIR=$(git rev-parse --show-toplevel || pwd)
 
 echo -e "${BLUE}Preparing local test environment...${NC}"
 
@@ -24,24 +24,19 @@ fi
 
 mkdir -p "$TEST_DIR"
 
+# Copy project files using rsync to include everything except ignored artifacts
+# This ensures new files or directories are automatically included
 echo "Copying files to $TEST_DIR..."
-
-# Copy essential files for build
-cp package.json package-lock.json "$TEST_DIR/"
-cp Dockerfile docker-compose.yml "$TEST_DIR/"
-cp next.config.ts tsconfig.json postcss.config.mjs tailwind.config.ts eslint.config.mjs "$TEST_DIR/"
-cp -r src "$TEST_DIR/"
-cp -r public "$TEST_DIR/"
-
-# Copy database directory if it exists (schema/migrations)
-if [ -d "database" ]; then
-    cp -r database "$TEST_DIR/"
-fi
-
-# Copy scripts directory (contains docker-init.sh)
-if [ -d "scripts" ]; then
-    cp -r scripts "$TEST_DIR/"
-fi
+rsync -av \
+    --exclude 'node_modules' \
+    --exclude '.next' \
+    --exclude '.git' \
+    --exclude '.idea' \
+    --exclude '.vscode' \
+    --exclude '*.log' \
+    --exclude '.DS_Store' \
+    --exclude 'tmp' \
+    "$REPO_DIR/" "$TEST_DIR/"
 
 # Copy .env.local if exists, otherwise .env.example, or create minimal .env
 if [ -f ".env.local" ]; then
