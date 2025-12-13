@@ -21,9 +21,20 @@ This project adheres to the **Type A: Containerized** universal standard.
 - **Staging Deploy:** Pushes `newflowio/elova:staging` on merge to `staging`.
 - **Production Deploy:** Pushes `newflowio/elova:latest` and tags on merge to `main` / tag push.
 
-#### 3. Releases
-- **Versioning:** Use `package.json` version.
-- **Process:** Create Release Branch -> Bump Version -> Squash & Merge to `main` -> Create GitHub Release (Tag).
+#### 3. Releases (Automated)
+- **Versioning:** Use `package.json` version (Semantic Versioning).
+- **Automation:** Fully automated via `scripts/release.sh` and GitHub Actions.
+- **Process:**
+  1. On `staging`: Run `npm run release`
+  2. Choose version bump type (patch/minor/major)
+  3. Script creates `release/vX.Y.Z` branch and PR to `main`
+  4. Review and merge PR
+  5. GitHub Actions automatically:
+     - Creates GitHub Release with tag `vX.Y.Z`
+     - Triggers Docker build: `newflowio/elova:latest` and `newflowio/elova:vX.Y.Z`
+     - Syncs changes back to `staging`
+     - Deletes release branch
+- **Documentation:** See `docs/RELEASES.md` for detailed process.
 
 ### ⚠️ No Development Server in Development Repo
 **Important**: This project does NOT run a development server or Docker containers directly in the development repository to maintain a clean state.
@@ -184,6 +195,17 @@ When I say "test elova", "run local test", or "start test container":
 3. Remind me to press Ctrl+C to stop
 
 **Do NOT ask for confirmation** - just run the script directly.
+
+### Create Release
+When I say "create release", "make a release", or "release":
+1. Check that we're on `staging` branch: `git rev-parse --abbrev-ref HEAD`
+2. If not on staging, switch: `git checkout staging && git pull origin staging`
+3. Run `npm run release` (interactive script)
+4. The script will guide through version selection
+5. After script completes, inform me about the PR that was created
+6. Remind me to review and merge the PR, then automation handles the rest
+
+**Ask for confirmation** before running the release script.
 
 ## Remember
 
