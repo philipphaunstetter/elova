@@ -28,15 +28,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         document.documentElement.classList.remove('dark')
       }
     } else {
-      // Optional: Check system preference
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      const initialTheme = prefersDark ? 'dark' : 'light'
+      // Default to light theme
+      const initialTheme = 'light'
       setThemeState(initialTheme)
-      if (initialTheme === 'dark') {
-        document.documentElement.classList.add('dark')
-      } else {
-        document.documentElement.classList.remove('dark')
-      }
+      document.documentElement.classList.remove('dark')
     }
   }, [])
 
