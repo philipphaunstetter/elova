@@ -13,7 +13,7 @@ export function ThemeToggle() {
     <div className="fixed bottom-6 right-6 z-50">
       <div 
         className={clsx(
-          'flex items-center gap-3 rounded-lg px-4 py-3 shadow-lg ring-1',
+          'flex items-center gap-3 rounded-lg px-4 py-3 shadow-lg ring-1 cursor-pointer',
           'bg-white ring-zinc-950/10 dark:bg-slate-800 dark:ring-white/10',
           'transition-all duration-200'
         )}
