@@ -18,6 +18,7 @@ import { TimeRange } from '@/types'
 import { ChartDataPoint, ProviderChartData } from '@/app/api/dashboard/charts/route'
 import { Switch, SwitchField } from '@/components/switch'
 import { Label } from '@/components/fieldset'
+import { getTimeDomain } from '@/lib/chart-utils'
 
 interface VolumeChartProps {
   data: ChartDataPoint[]
@@ -81,6 +82,9 @@ export function VolumeChart({ data, byProvider, providers, timeRange }: VolumeCh
   
   const gridColor = theme === 'dark' ? '#3f3f46' : '#f3f4f6'
   const textColor = theme === 'dark' ? '#94a3b8' : '#64748b'
+  
+  // Calculate the time domain based on selected time range
+  const timeDomain = getTimeDomain(timeRange)
   
   // Check if we have multiple providers
   const hasMultipleProviders = (providers?.length ?? 0) > 1
@@ -151,7 +155,7 @@ export function VolumeChart({ data, byProvider, providers, timeRange }: VolumeCh
               dataKey="timestamp"
               type="number"
               scale="time"
-              domain={['dataMin', 'dataMax']}
+              domain={timeDomain}
               tickFormatter={(timestamp) => formatXAxisLabel(timestamp, timeRange)}
               axisLine={false}
               tickLine={false}
@@ -187,7 +191,7 @@ export function VolumeChart({ data, byProvider, providers, timeRange }: VolumeCh
               dataKey="timestamp"
               type="number"
               scale="time"
-              domain={['dataMin', 'dataMax']}
+              domain={timeDomain}
               tickFormatter={(timestamp) => formatXAxisLabel(timestamp, timeRange)}
               axisLine={false}
               tickLine={false}

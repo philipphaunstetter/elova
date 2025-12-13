@@ -26,13 +26,19 @@ function applyExecutionFilters(executions: Execution[], filters: ExecutionFilter
         startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
         break
       case '7d':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        startDate = new Date(now)
+        startDate.setUTCDate(startDate.getUTCDate() - 7)
+        startDate.setUTCHours(0, 0, 0, 0)
         break
       case '30d':
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        startDate = new Date(now)
+        startDate.setUTCDate(startDate.getUTCDate() - 30)
+        startDate.setUTCHours(0, 0, 0, 0)
         break
       case '90d':
-        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+        startDate = new Date(now)
+        startDate.setUTCDate(startDate.getUTCDate() - 90)
+        startDate.setUTCHours(0, 0, 0, 0)
         break
       default:
         startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
@@ -73,13 +79,19 @@ async function fetchDashboardStatsFromDb(userId: string, timeRange: TimeRange): 
         startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
         break
       case '7d':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        startDate = new Date(now)
+        startDate.setUTCDate(startDate.getUTCDate() - 7)
+        startDate.setUTCHours(0, 0, 0, 0)
         break
       case '30d':
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        startDate = new Date(now)
+        startDate.setUTCDate(startDate.getUTCDate() - 30)
+        startDate.setUTCHours(0, 0, 0, 0)
         break
       case '90d':
-        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+        startDate = new Date(now)
+        startDate.setUTCDate(startDate.getUTCDate() - 90)
+        startDate.setUTCHours(0, 0, 0, 0)
         break
       case 'custom':
       default:
