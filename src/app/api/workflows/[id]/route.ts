@@ -63,6 +63,15 @@ export async function GET(
     let tags: any[] = []
     try {
       tags = workflow.tags ? JSON.parse(workflow.tags) : []
+      // Normalize tags to strings if they are objects
+      if (Array.isArray(tags)) {
+        tags = tags.map(tag => {
+          if (tag && typeof tag === 'object' && 'name' in tag) {
+            return tag.name
+          }
+          return tag
+        })
+      }
     } catch (e) {}
     
     const successRate = workflow.total_executions > 0 

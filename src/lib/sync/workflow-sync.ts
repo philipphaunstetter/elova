@@ -162,11 +162,18 @@ export class WorkflowSyncService {
         }
         url.searchParams.append('limit', '100')
 
+        const headers: Record<string, string> = {
+          'Accept': 'application/json'
+        }
+
+        if (provider.apiKey.startsWith('ey') && provider.apiKey.includes('.')) {
+          headers['Authorization'] = `Bearer ${provider.apiKey}`
+        } else {
+          headers['X-N8N-API-KEY'] = provider.apiKey
+        }
+
         const response = await fetch(url.toString(), {
-          headers: {
-            'Accept': 'application/json',
-            'X-N8N-API-KEY': provider.apiKey
-          }
+          headers
         })
 
         if (!response.ok) {
