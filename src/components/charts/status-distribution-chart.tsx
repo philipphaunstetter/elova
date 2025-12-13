@@ -89,7 +89,7 @@ export function StatusDistributionChart({ data, timeRange }: StatusDistributionC
     <ResponsiveContainer width="100%" height={300}>
       <BarChart 
         data={indexedData} 
-        margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+        margin={{ top: 10, right: 20, left: -20, bottom: 0 }}
       >
         <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
         <XAxis
@@ -101,6 +101,7 @@ export function StatusDistributionChart({ data, timeRange }: StatusDistributionC
           tick={{ fontSize: 11, fill: textColor }}
           dy={10}
           minTickGap={30}
+          padding={{ left: 20, right: 20 }}
         />
         <YAxis
           axisLine={false}
