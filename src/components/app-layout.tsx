@@ -143,10 +143,11 @@ function UserProfileSection() {
           </div>
         </DropdownHeader>
         
-        <DropdownItem href="https://github.com/newflowio/elova" target="_blank" rel="noopener noreferrer">
+        {/* Documentation link hidden - will be re-added when docs are ready */}
+        {/* <DropdownItem href="https://github.com/newflowio/elova" target="_blank" rel="noopener noreferrer">
           <InformationCircleIcon data-slot="icon" />
           About & Documentation
-        </DropdownItem>
+        </DropdownItem> */}
       </DropdownMenu>
     </Dropdown>
   )
