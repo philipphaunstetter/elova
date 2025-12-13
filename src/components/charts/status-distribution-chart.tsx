@@ -79,9 +79,16 @@ export function StatusDistributionChart({ data, timeRange }: StatusDistributionC
     )
   }
 
+  // Calculate bar size based on data length to ensure proper spacing
+  const barSize = Math.max(12, Math.min(40, 600 / Math.max(data.length, 1)))
+  
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+      <BarChart 
+        data={data} 
+        margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+        barCategoryGap="15%"
+      >
         <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
         <XAxis
           dataKey="timestamp"
@@ -102,8 +109,22 @@ export function StatusDistributionChart({ data, timeRange }: StatusDistributionC
         />
         <Tooltip content={<CustomTooltip />} cursor={{ fill: theme === 'dark' ? '#334155' : '#f1f5f9', opacity: 0.4 }} />
         <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-        <Bar dataKey="successfulExecutions" name="Success" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
-        <Bar dataKey="failedExecutions" name="Failed" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+        <Bar 
+          dataKey="successfulExecutions" 
+          name="Success" 
+          stackId="a" 
+          fill="#10b981" 
+          radius={[0, 0, 4, 4]}
+          maxBarSize={barSize}
+        />
+        <Bar 
+          dataKey="failedExecutions" 
+          name="Failed" 
+          stackId="a" 
+          fill="#ef4444" 
+          radius={[4, 4, 0, 0]}
+          maxBarSize={barSize}
+        />
       </BarChart>
     </ResponsiveContainer>
   )
