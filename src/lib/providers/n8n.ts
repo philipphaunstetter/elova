@@ -381,8 +381,16 @@ export class N8nAdapter extends ProviderAdapter {
   }
 
   protected getAuthHeaders(): Record<string, string> {
+    const apiKey = this.provider.apiKey || ''
+    
+    if (apiKey.startsWith('ey') && apiKey.includes('.')) {
+      return {
+        'Authorization': `Bearer ${apiKey}`
+      }
+    }
+    
     return {
-      'X-N8N-API-KEY': this.provider.apiKey || ''
+      'X-N8N-API-KEY': apiKey
     }
   }
 

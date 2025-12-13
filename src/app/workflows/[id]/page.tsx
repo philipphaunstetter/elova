@@ -58,8 +58,21 @@ function WorkflowDetailContent() {
   const fetchWorkflow = async () => {
     try {
       setLoading(true)
-      const response = await apiClient.get<{ data: WorkflowData }>(`/workflows/${workflowId}`)
-      setWorkflow(response.data)
+      const response = await apiClient.get<{ success: boolean; data: WorkflowData }>(`/workflows/${workflowId}`)
+      const workflowData = response.data
+      
+      // Convert date strings to Date objects
+      if (workflowData.createdAt && typeof workflowData.createdAt === 'string') {
+        workflowData.createdAt = new Date(workflowData.createdAt)
+      }
+      if (workflowData.updatedAt && typeof workflowData.updatedAt === 'string') {
+        workflowData.updatedAt = new Date(workflowData.updatedAt)
+      }
+      if (workflowData.lastExecutedAt && typeof workflowData.lastExecutedAt === 'string') {
+        workflowData.lastExecutedAt = new Date(workflowData.lastExecutedAt)
+      }
+      
+      setWorkflow(workflowData)
       setError(null)
     } catch (err) {
       console.error('Failed to fetch workflow:', err)
@@ -273,7 +286,7 @@ function WorkflowDetailContent() {
           <div className="flex flex-wrap gap-2">
             {workflow.tags.map((tag, index) => (
               <Badge key={index} color="zinc">
-                {tag}
+                {typeof tag === 'object' && tag !== null ? (tag as any).name : tag}
               </Badge>
             ))}
           </div>

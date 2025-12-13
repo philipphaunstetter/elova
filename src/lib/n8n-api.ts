@@ -182,7 +182,9 @@ class N8nApiClient {
     const headers = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
-      ...(apiKey && { 'X-N8N-API-KEY': apiKey }),
+      ...(apiKey && (apiKey.startsWith('ey') && apiKey.includes('.') 
+        ? { 'Authorization': `Bearer ${apiKey}` }
+        : { 'X-N8N-API-KEY': apiKey })),
       ...options?.headers,
     };
 
