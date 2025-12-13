@@ -5,6 +5,16 @@ Elova is a workflow observability platform designed to monitor and analyze n8n w
 
 ## Development Rules
 
+### CRITICAL REQUIREMENT: Always Create Pull Requests
+
+**YOU MUST NEVER PUSH DIRECTLY TO `staging` OR `main`. ALWAYS CREATE A PULL REQUEST.**
+
+After making your changes and pushing your branch:
+
+```bash
+gh pr create --base staging --title "[LINEAR-ID] Brief description" --body "Fixes LINEAR-ID"
+```
+
 ### Git & CI/CD Workflow Standards (Universal Alignment)
 
 This project adheres to the **Type A: Containerized** universal standard.
@@ -12,8 +22,8 @@ This project adheres to the **Type A: Containerized** universal standard.
 #### 1. Branching Strategy
 - **`main` (Production):** Deploys `latest` and `vX.Y.Z` (semver).
 - **`staging` (Integration):** Deploys `staging` tag. Create feature branches off this.
-- **Feature Branches:** `feature/<desc>` or `fix/<desc>`. Merge into `staging`.
-- **Release:** Merge `staging` -> `main` via Pull Request.
+- **Feature Branches:** `feature/<desc>` or `fix/<desc>`. Merge into `staging` **via Pull Request**.
+- **Release:** Merge `staging` -> `main` **via Pull Request**.
 
 #### 2. CI/CD Pipeline (`.github/workflows/docker-ci.yml`)
 - **Triggers:** `main`, `staging`, `v*` tags.
