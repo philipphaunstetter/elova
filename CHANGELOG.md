@@ -1,4 +1,15 @@
 # Changelog
+
+All notable changes to the Elova project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.3.0] - 2025-12-13
+
+### Changes
+- feat: Add About Elova section to profile dropdown (PRO-53) (#16)
+
 ## [0.2.0] - 2025-12-13
 
 ### Changes
@@ -12,19 +23,6 @@
 - Merge pull request #5 from philipphaunstetter/fix/n8n-demo-height
 - chore(ci): normalize workflow filename to docker-ci.yml
 - fix(n8n-demo): ensure full height for embedded workflow
-
-
-All notable changes to the Elova project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
-
-### Added
-- Automated release management system with version bumping
-- GitHub Actions workflow for automatic release creation and tagging
-- Release script (`scripts/release.sh`) for streamlined release process
 
 ## [0.1.0] - 2024-12-13
 

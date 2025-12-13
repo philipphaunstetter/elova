@@ -24,13 +24,14 @@ import {
   ProfileIcon,
   ToolsIcon
 } from './icons'
-import { ServerIcon, ClockIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline'
+import { ServerIcon, ClockIcon, ArrowRightOnRectangleIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 import { Navbar, NavbarItem, NavbarSection, NavbarSpacer } from './navbar'
-import { Dropdown, DropdownButton, DropdownItem, DropdownMenu } from './dropdown'
+import { Dropdown, DropdownButton, DropdownItem, DropdownMenu, DropdownDivider, DropdownHeader } from './dropdown'
 import { Avatar } from './avatar'
 import { ToastContainer } from './toast'
 import { useBreadcrumbs } from '@/hooks/use-breadcrumbs'
 import { Breadcrumb } from '@/components/breadcrumb'
+import { useState, useEffect } from 'react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: DashboardIcon, current: true },
@@ -81,6 +82,19 @@ function AppSidebar() {
 
 function UserProfileSection() {
   const { user, signOut } = useAuth()
+  const [aboutInfo, setAboutInfo] = useState<{
+    version: string
+    gitCommit: string
+    buildDate: string
+  } | null>(null)
+
+  useEffect(() => {
+    // Fetch version info from API
+    fetch('/api/about')
+      .then(res => res.json())
+      .then(data => setAboutInfo(data))
+      .catch(err => console.error('Failed to fetch about info:', err))
+  }, [])
 
   if (!user) return null
 
@@ -109,6 +123,29 @@ function UserProfileSection() {
         >
           <ArrowRightOnRectangleIcon data-slot="icon" />
           Sign out
+        </DropdownItem>
+        
+        <DropdownDivider />
+        
+        <DropdownHeader>
+          <div className="flex items-center gap-2">
+            <DashboardIcon className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold text-zinc-900 dark:text-white">
+                Elova
+              </span>
+              {aboutInfo && (
+                <span className="text-xs text-zinc-500 dark:text-slate-400">
+                  Version {aboutInfo.version}
+                </span>
+              )}
+            </div>
+          </div>
+        </DropdownHeader>
+        
+        <DropdownItem href="https://github.com/newflowio/elova" target="_blank" rel="noopener noreferrer">
+          <InformationCircleIcon data-slot="icon" />
+          About & Documentation
         </DropdownItem>
       </DropdownMenu>
     </Dropdown>
