@@ -3,6 +3,7 @@ import { authenticateRequest } from '@/lib/api-auth'
 import { TimeRange, Execution } from '@/types'
 import { getDb } from '@/lib/db'
 import { ExecutionStatus } from '@/types'
+import { generateTimeBuckets } from '@/lib/chart-utils'
 
 
 // Apply time range filters (same as other APIs)
@@ -245,43 +246,53 @@ async function generateChartData(userId: string, timeRange: TimeRange): Promise<
       color: PROVIDER_COLORS[index % PROVIDER_COLORS.length]
     }))
 
-    // Generate combined chart data points
+    // Generate complete time series with all expected buckets (including empty ones)
+    const allExpectedBuckets = generateTimeBuckets(timeRange, granularity)
     const combinedData: ChartDataPoint[] = []
-    
-    // Sort buckets chronologically
-    const sortedBuckets = Array.from(timeBuckets.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
 
-    for (const [bucketKey, bucket] of sortedBuckets) {
-      const totalExecutions = bucket.executions.length
-      const successfulExecutions = bucket.executions.filter(e => e.status === 'success').length
-      const failedExecutions = bucket.executions.filter(e => e.status === 'error').length
-      const successRate = totalExecutions > 0 ? Math.round((successfulExecutions / totalExecutions) * 100) : 0
+    for (const expectedBucket of allExpectedBuckets) {
+      const bucket = timeBuckets.get(expectedBucket.key)
+      
+      if (bucket && bucket.executions.length > 0) {
+        // Bucket has data
+        const totalExecutions = bucket.executions.length
+        const successfulExecutions = bucket.executions.filter(e => e.status === 'success').length
+        const failedExecutions = bucket.executions.filter(e => e.status === 'error').length
+        const successRate = totalExecutions > 0 ? Math.round((successfulExecutions / totalExecutions) * 100) : 0
+        const aiCost = bucket.executions.reduce((sum, e) => sum + (e.aiCost || 0), 0)
+        const totalTokens = bucket.executions.reduce((sum, e) => sum + (e.totalTokens || 0), 0)
+        const completedExecutions = bucket.executions.filter(e => e.duration !== undefined)
+        let avgResponseTime: number | null = null
+        if (completedExecutions.length > 0) {
+          const totalDuration = completedExecutions.reduce((sum, e) => sum + (e.duration || 0), 0)
+          avgResponseTime = Math.round(totalDuration / completedExecutions.length)
+        }
 
-      // Calculate AI stats for bucket
-      const aiCost = bucket.executions.reduce((sum, e) => sum + (e.aiCost || 0), 0)
-      const totalTokens = bucket.executions.reduce((sum, e) => sum + (e.totalTokens || 0), 0)
-
-      // Calculate average response time using duration from internal format
-      const completedExecutions = bucket.executions.filter(e => e.duration !== undefined)
-      let avgResponseTime: number | null = null
-
-      if (completedExecutions.length > 0) {
-        const totalDuration = completedExecutions.reduce((sum, e) => sum + (e.duration || 0), 0)
-        avgResponseTime = Math.round(totalDuration / completedExecutions.length)
+        combinedData.push({
+          date: expectedBucket.key,
+          timestamp: expectedBucket.timestamp,
+          totalExecutions,
+          successfulExecutions,
+          failedExecutions,
+          successRate,
+          avgResponseTime,
+          aiCost,
+          totalTokens
+        })
+      } else {
+        // Empty bucket - fill with zeros
+        combinedData.push({
+          date: expectedBucket.key,
+          timestamp: expectedBucket.timestamp,
+          totalExecutions: 0,
+          successfulExecutions: 0,
+          failedExecutions: 0,
+          successRate: 0,
+          avgResponseTime: null,
+          aiCost: 0,
+          totalTokens: 0
+        })
       }
-
-      combinedData.push({
-        date: bucketKey,
-        timestamp: bucket.timestamp,
-        totalExecutions,
-        successfulExecutions,
-        failedExecutions,
-        successRate,
-        avgResponseTime,
-        aiCost,
-        totalTokens
-      })
     }
 
     // Generate per-provider chart data
@@ -329,36 +340,52 @@ async function generateChartData(userId: string, timeRange: TimeRange): Promise<
         providerBuckets.get(bucketKey)!.executions.push(execution)
       }
       
-      // Convert to chart data points
+      // Generate complete time series for this provider
       const providerData: ChartDataPoint[] = []
-      const sortedProviderBuckets = Array.from(providerBuckets.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
       
-      for (const [bucketKey, bucket] of sortedProviderBuckets) {
-        const totalExecutions = bucket.executions.length
-        const successfulExecutions = bucket.executions.filter(e => e.status === 'success').length
-        const failedExecutions = bucket.executions.filter(e => e.status === 'error').length
-        const successRate = totalExecutions > 0 ? Math.round((successfulExecutions / totalExecutions) * 100) : 0
-        const aiCost = bucket.executions.reduce((sum, e) => sum + (e.aiCost || 0), 0)
-        const totalTokens = bucket.executions.reduce((sum, e) => sum + (e.totalTokens || 0), 0)
-        const completedExecutions = bucket.executions.filter(e => e.duration !== undefined)
-        let avgResponseTime: number | null = null
-        if (completedExecutions.length > 0) {
-          const totalDuration = completedExecutions.reduce((sum, e) => sum + (e.duration || 0), 0)
-          avgResponseTime = Math.round(totalDuration / completedExecutions.length)
-        }
+      for (const expectedBucket of allExpectedBuckets) {
+        const bucket = providerBuckets.get(expectedBucket.key)
+        
+        if (bucket && bucket.executions.length > 0) {
+          // Bucket has data
+          const totalExecutions = bucket.executions.length
+          const successfulExecutions = bucket.executions.filter(e => e.status === 'success').length
+          const failedExecutions = bucket.executions.filter(e => e.status === 'error').length
+          const successRate = totalExecutions > 0 ? Math.round((successfulExecutions / totalExecutions) * 100) : 0
+          const aiCost = bucket.executions.reduce((sum, e) => sum + (e.aiCost || 0), 0)
+          const totalTokens = bucket.executions.reduce((sum, e) => sum + (e.totalTokens || 0), 0)
+          const completedExecutions = bucket.executions.filter(e => e.duration !== undefined)
+          let avgResponseTime: number | null = null
+          if (completedExecutions.length > 0) {
+            const totalDuration = completedExecutions.reduce((sum, e) => sum + (e.duration || 0), 0)
+            avgResponseTime = Math.round(totalDuration / completedExecutions.length)
+          }
 
-        providerData.push({
-          date: bucketKey,
-          timestamp: bucket.timestamp,
-          totalExecutions,
-          successfulExecutions,
-          failedExecutions,
-          successRate,
-          avgResponseTime,
-          aiCost,
-          totalTokens
-        })
+          providerData.push({
+            date: expectedBucket.key,
+            timestamp: expectedBucket.timestamp,
+            totalExecutions,
+            successfulExecutions,
+            failedExecutions,
+            successRate,
+            avgResponseTime,
+            aiCost,
+            totalTokens
+          })
+        } else {
+          // Empty bucket
+          providerData.push({
+            date: expectedBucket.key,
+            timestamp: expectedBucket.timestamp,
+            totalExecutions: 0,
+            successfulExecutions: 0,
+            failedExecutions: 0,
+            successRate: 0,
+            avgResponseTime: null,
+            aiCost: 0,
+            totalTokens: 0
+          })
+        }
       }
       
       byProvider.push({
