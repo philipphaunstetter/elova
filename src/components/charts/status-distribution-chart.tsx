@@ -79,23 +79,23 @@ export function StatusDistributionChart({ data, timeRange }: StatusDistributionC
     )
   }
 
-  // Calculate bar size based on data length to ensure proper spacing
-  const barSize = Math.max(12, Math.min(40, 600 / Math.max(data.length, 1)))
+  // Add index to each data point for categorical scale
+  const indexedData = data.map((point, index) => ({
+    ...point,
+    index
+  }))
   
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart 
-        data={data} 
+        data={indexedData} 
         margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-        barCategoryGap="15%"
       >
         <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
         <XAxis
-          dataKey="timestamp"
-          type="number"
-          scale="time"
-          domain={['dataMin', 'dataMax']}
-          tickFormatter={(timestamp) => formatXAxisLabel(timestamp, timeRange)}
+          dataKey="index"
+          type="category"
+          tickFormatter={(index) => formatXAxisLabel(data[index].timestamp, timeRange)}
           axisLine={false}
           tickLine={false}
           tick={{ fontSize: 11, fill: textColor }}
@@ -115,7 +115,6 @@ export function StatusDistributionChart({ data, timeRange }: StatusDistributionC
           stackId="a" 
           fill="#10b981" 
           radius={[0, 0, 4, 4]}
-          maxBarSize={barSize}
         />
         <Bar 
           dataKey="failedExecutions" 
@@ -123,7 +122,6 @@ export function StatusDistributionChart({ data, timeRange }: StatusDistributionC
           stackId="a" 
           fill="#ef4444" 
           radius={[4, 4, 0, 0]}
-          maxBarSize={barSize}
         />
       </BarChart>
     </ResponsiveContainer>
