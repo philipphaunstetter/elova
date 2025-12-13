@@ -1,0 +1,172 @@
+name: Release Management
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.2.3)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-release:
+    name: Auto-create GitHub Release
+    runs-on: ubuntu-latest
+    # Only run if:
+    # 1. PR was merged (not just closed)
+    # 2. PR head branch starts with "release/"
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       startsWith(github.event.pull_request.head.ref, 'release/'))
+    
+    steps:
+    - name: Checkout main branch
+      uses: actions/checkout@v4
+      with:
+        ref: main
+        fetch-depth: 0
+
+    - name: Extract version from PR or input
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          # Extract from branch name: release/v1.2.3 -> 1.2.3
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          VERSION=$(echo "$BRANCH" | sed 's/release\/v//')
+        fi
+        
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+        
+        echo "Extracted version: $VERSION"
+        echo "Git tag will be: v$VERSION"
+
+    - name: Get version from package.json
+      id: package_version
+      run: |
+        PACKAGE_VERSION=$(node -p "require('./package.json').version")
+        echo "package_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+        echo "Package.json version: $PACKAGE_VERSION"
+
+    - name: Verify version match
+      run: |
+        if [ "${{ steps.version.outputs.version }}" != "${{ steps.package_version.outputs.package_version }}" ]; then
+          echo "ERROR: Version mismatch!"
+          echo "  Release version: ${{ steps.version.outputs.version }}"
+          echo "  Package.json version: ${{ steps.package_version.outputs.package_version }}"
+          exit 1
+        fi
+        echo "✓ Versions match: ${{ steps.version.outputs.version }}"
+
+    - name: Extract changelog for this version
+      id: changelog
+      run: |
+        if [ -f "CHANGELOG.md" ]; then
+          # Extract the section for this version
+          VERSION="${{ steps.version.outputs.version }}"
+          
+          # Get lines between this version header and the next version header (or end)
+          NOTES=$(awk "/## \[$VERSION\]/,/## \[/" CHANGELOG.md | sed '$d' | tail -n +2)
+          
+          if [ -z "$NOTES" ]; then
+            NOTES="Release $VERSION - See commit history for details"
+          fi
+        else
+          NOTES="Release ${{ steps.version.outputs.version }}"
+        fi
+        
+        # Save to file for multiline support
+        echo "$NOTES" > release_notes.md
+        echo "Release notes prepared"
+
+    - name: Check if tag exists
+      id: check_tag
+      run: |
+        if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "⚠️  Tag ${{ steps.version.outputs.tag }} already exists"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "✓ Tag ${{ steps.version.outputs.tag }} does not exist yet"
+        fi
+
+    - name: Create GitHub Release
+      if: steps.check_tag.outputs.exists == 'false'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release create "${{ steps.version.outputs.tag }}" \
+          --title "Release ${{ steps.version.outputs.tag }}" \
+          --notes-file release_notes.md \
+          --target main
+
+        echo "✓ GitHub Release created: ${{ steps.version.outputs.tag }}"
+
+    - name: Sync main back to staging
+      if: steps.check_tag.outputs.exists == 'false'
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Fetch staging
+        git fetch origin staging:staging
+        
+        # Checkout staging and merge main
+        git checkout staging
+        git merge main --no-edit -m "chore: sync main back to staging after release ${{ steps.version.outputs.tag }}"
+        
+        # Push to staging
+        git push origin staging
+        
+        echo "✓ Synced main back to staging"
+
+    - name: Comment on PR
+      if: github.event_name == 'pull_request' && steps.check_tag.outputs.exists == 'false'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh pr comment ${{ github.event.pull_request.number }} --body \
+          "✅ **Release ${{ steps.version.outputs.tag }} Published**
+          
+          - GitHub Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }}
+          - Docker Images:
+            - \`newflowio/elova:latest\`
+            - \`newflowio/elova:${{ steps.version.outputs.tag }}\`
+          - Changes synced back to \`staging\`
+          
+          The CI/CD pipeline will now build and publish the Docker images."
+
+  cleanup-release-branch:
+    name: Delete release branch
+    runs-on: ubuntu-latest
+    needs: auto-release
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release/')
+    
+    steps:
+    - name: Delete release branch
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        BRANCH="${{ github.event.pull_request.head.ref }}"
+        echo "Deleting release branch: $BRANCH"
+        
+        gh api \
+          --method DELETE \
+          -H "Accept: application/vnd.github+json" \
+          "/repos/${{ github.repository }}/git/refs/heads/$BRANCH" \
+          || echo "Branch may already be deleted"
+        
+        echo "✓ Release branch cleaned up"

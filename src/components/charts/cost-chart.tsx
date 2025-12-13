@@ -14,6 +14,7 @@ import {
 } from 'recharts'
 import { ChartDataPoint } from '@/app/api/dashboard/charts/route'
 import { TimeRange } from '@/types'
+import { getTimeDomain } from '@/lib/chart-utils'
 
 interface CostChartProps {
   data: ChartDataPoint[]
@@ -71,6 +72,9 @@ export function CostChart({ data, timeRange }: CostChartProps) {
   
   const gridColor = theme === 'dark' ? '#3f3f46' : '#f3f4f6'
   const textColor = theme === 'dark' ? '#94a3b8' : '#64748b'
+  
+  // Calculate the time domain based on selected time range
+  const timeDomain = getTimeDomain(timeRange)
 
   if (data.length === 0) {
     return (
@@ -88,7 +92,7 @@ export function CostChart({ data, timeRange }: CostChartProps) {
           dataKey="timestamp"
           type="number"
           scale="time"
-          domain={['dataMin', 'dataMax']}
+          domain={timeDomain}
           padding={{ left: 20, right: 20 }}
           tickFormatter={(timestamp) => formatXAxisLabel(timestamp, timeRange)}
           axisLine={false}

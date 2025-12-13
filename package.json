@@ -1,13 +1,14 @@
 {
   "name": "elova",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "test:local": "./scripts/test-local.sh",
-    "lint": "eslint"
+    "lint": "eslint",
+    "release": "./scripts/release.sh"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
