@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Merge pull request #5 from philipphaunstetter/fix/n8n-demo-height
 - chore(ci): normalize workflow filename to docker-ci.yml
 - fix(n8n-demo): ensure full height for embedded workflow
+## [Unreleased]
+
+### Added
+- About Elova section in profile dropdown with version information (PRO-53)
+- API endpoint `/api/about` for retrieving application metadata
+- Automated release management system with version bumping
+- GitHub Actions workflow for automatic release creation and tagging
+- Release script (`scripts/release.sh`) for streamlined release process
 
 ## [0.1.0] - 2024-12-13
 
