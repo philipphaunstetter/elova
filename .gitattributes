@@ -1,0 +1,5 @@
+# Git attributes for handling merge conflicts
+
+# Use union merge strategy for CHANGELOG.md to combine both branches
+# This will append changes from both branches, reducing manual conflict resolution
+CHANGELOG.md merge=union

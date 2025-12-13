@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- About Elova section in profile dropdown with version information (PRO-53)
+- API endpoint `/api/about` for retrieving application metadata
 - Automated release management system with version bumping
 - GitHub Actions workflow for automatic release creation and tagging
 - Release script (`scripts/release.sh`) for streamlined release process
