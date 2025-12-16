@@ -340,13 +340,23 @@ export class ProviderService {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
 
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'application/json',
-          'X-N8N-API-KEY': apiKey
-        },
+      let effectiveApiKey = apiKey.trim()
+      if (effectiveApiKey.startsWith('xeyJ')) {
+        effectiveApiKey = effectiveApiKey.substring(1)
+      }
+
+      const tryFetch = (headers: Record<string, string>) => fetch(url, {
+        headers: { 'Accept': 'application/json', ...headers },
         signal: controller.signal
       })
+
+      // Strategy 1: Try X-N8N-API-KEY
+      let response = await tryFetch({ 'X-N8N-API-KEY': effectiveApiKey })
+
+      // Strategy 2: Try Bearer if 401 and looks like JWT
+      if (response.status === 401 && effectiveApiKey.startsWith('ey') && effectiveApiKey.includes('.')) {
+        response = await tryFetch({ 'Authorization': `Bearer ${effectiveApiKey}` })
+      }
 
       clearTimeout(timeoutId)
 
@@ -361,11 +371,18 @@ export class ProviderService {
       let version = 'unknown'
       try {
         const versionUrl = `${baseUrl.replace(/\/$/, '')}/api/v1/executions`
-        const versionResponse = await fetch(versionUrl, {
-          headers: {
-            'Accept': 'application/json',
-            'X-N8N-API-KEY': apiKey
+        const versionHeaders: Record<string, string> = {
+            'Accept': 'application/json'
           }
+  
+          if (apiKey.startsWith('ey') && apiKey.includes('.')) {
+            versionHeaders['Authorization'] = `Bearer ${apiKey}`
+          } else {
+            versionHeaders['X-N8N-API-KEY'] = apiKey
+          }
+
+        const versionResponse = await fetch(versionUrl, {
+          headers: versionHeaders
         })
         if (versionResponse.ok) {
           version = 'connected'

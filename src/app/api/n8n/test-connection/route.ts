@@ -18,14 +18,22 @@ export async function POST(request: Request) {
 
     // Test the connection
     const cleanUrl = n8nUrl.replace(/\/$/, '')
-    const testResponse = await fetch(`${cleanUrl}/api/v1/workflows`, {
-      method: 'GET',
-      headers: {
-        'X-N8N-API-KEY': n8nApiKey,
-        'Accept': 'application/json'
-      },
-      signal: AbortSignal.timeout(15000) // 15 second timeout for manual tests
+    let effectiveApiKey = n8nApiKey.trim()
+    if (effectiveApiKey.startsWith('xeyJ')) {
+        effectiveApiKey = effectiveApiKey.substring(1)
+    }
+
+    const tryFetch = (headers: Record<string, string>) => fetch(`${cleanUrl}/api/v1/workflows`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json', ...headers },
+        signal: AbortSignal.timeout(15000)
     })
+
+    let testResponse = await tryFetch({ 'X-N8N-API-KEY': effectiveApiKey })
+
+    if (testResponse.status === 401 && effectiveApiKey.startsWith('ey') && effectiveApiKey.includes('.')) {
+        testResponse = await tryFetch({ 'Authorization': `Bearer ${effectiveApiKey}` })
+    }
 
     if (!testResponse.ok) {
       let errorMessage = 'Connection failed'
@@ -62,12 +70,19 @@ export async function POST(request: Request) {
     }
 
     try {
+      const infoHeaders: Record<string, string> = {
+        'Accept': 'application/json'
+      }
+
+      if (n8nApiKey.startsWith('ey') && n8nApiKey.includes('.')) {
+        infoHeaders['Authorization'] = `Bearer ${n8nApiKey}`
+      } else {
+        infoHeaders['X-N8N-API-KEY'] = n8nApiKey
+      }
+
       const infoResponse = await fetch(`${cleanUrl}/api/v1/owner`, {
         method: 'GET',
-        headers: {
-          'X-N8N-API-KEY': n8nApiKey,
-          'Accept': 'application/json'
-        },
+        headers: infoHeaders,
         signal: AbortSignal.timeout(5000)
       })
 

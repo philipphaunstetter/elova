@@ -2,13 +2,16 @@
 
 ## When Tagging @Warp in Linear
 
+**IMPORTANT:** Always include PR creation instructions!
+
 ### Elova Sales Website Project
 **Target Repos:** `elova-sales` OR `elova-documentation`
 
 ```
 @Warp [your task] - work in elova-sales
-@Warp [your task] - work in elova-documentation
-@Warp [your task] - update elova-sales and elova-documentation
+
+After completing changes, create a PR to staging:
+gh pr create --base staging --title "[LINEAR-ID] Description" --body "Fixes LINEAR-ID"
 ```
 
 **Examples:**
@@ -23,8 +26,9 @@
 
 ```
 @Warp [your task] - work in elova
-@Warp [your task] - work in elova-validation
-@Warp [your task] - update elova and elova-validation
+
+After completing changes, create a PR to staging:
+gh pr create --base staging --title "[LINEAR-ID] Description" --body "Fixes LINEAR-ID"
 ```
 
 **Examples:**

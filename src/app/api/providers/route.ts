@@ -40,7 +40,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, baseUrl, apiKey, metadata } = body
+    let { name, baseUrl, apiKey, metadata } = body
+
+    // Clean up API key if needed
+    if (apiKey && typeof apiKey === 'string') {
+      apiKey = apiKey.trim()
+      if (apiKey.startsWith('xeyJ')) {
+        apiKey = apiKey.substring(1)
+      }
+    }
 
     // Validation
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
