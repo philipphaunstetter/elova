@@ -132,7 +132,12 @@ export default function ConnectPage() {
               <input
                 type="url"
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onChange={(e) => {
+                  setUrl(e.target.value)
+                  if (connectionStatus === 'error' || connectionStatus === 'success') {
+                    setConnectionStatus('idle')
+                  }
+                }}
                 placeholder="https://your-n8n-instance.com"
                 className={`w-full px-3 py-2 border rounded-lg shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none ${
                   connectionStatus === 'error'
@@ -151,7 +156,12 @@ export default function ConnectPage() {
                 <input
                   type={showApiKey ? 'text' : 'password'}
                   value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
+                  onChange={(e) => {
+                    setApiKey(e.target.value)
+                    if (connectionStatus === 'error' || connectionStatus === 'success') {
+                      setConnectionStatus('idle')
+                    }
+                  }}
                   placeholder="Enter your n8n API key"
                   className={`w-full px-3 py-2 pr-10 border rounded-lg shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none ${
                     connectionStatus === 'error'
