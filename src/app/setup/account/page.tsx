@@ -61,7 +61,7 @@ export default function AccountPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@example.com"
-                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#94a3b8] focus:shadow-[0_0_0_3px_#cbd5e1] dark:focus:border-slate-500 dark:focus:shadow-[0_0_0_3px_rgba(148,163,184,0.3)]"
               />
             </div>
 
@@ -76,7 +76,7 @@ export default function AccountPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter a secure password (min. 6 characters)"
-                  className="w-full px-3 py-2 pr-10 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100"
+                  className="w-full px-3 py-2 pr-10 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#94a3b8] focus:shadow-[0_0_0_3px_#cbd5e1] dark:focus:border-slate-500 dark:focus:shadow-[0_0_0_3px_rgba(148,163,184,0.3)]"
                 />
                 <button
                   type="button"
@@ -99,7 +99,7 @@ export default function AccountPage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm your password"
-                  className="w-full px-3 py-2 pr-10 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100"
+                  className="w-full px-3 py-2 pr-10 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#94a3b8] focus:shadow-[0_0_0_3px_#cbd5e1] dark:focus:border-slate-500 dark:focus:shadow-[0_0_0_3px_rgba(148,163,184,0.3)]"
                 />
                 <button
                   type="button"
@@ -117,7 +117,7 @@ export default function AccountPage() {
             <button
               onClick={handleNext}
               disabled={!email || !password || password !== confirmPassword || password.length < 6}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-900 dark:bg-slate-100 text-slate-100 dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <span>Next</span>
               <ChevronRight className="w-3.5 h-3.5" />
