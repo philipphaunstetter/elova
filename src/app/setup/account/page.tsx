@@ -185,10 +185,14 @@ export default function AccountPage() {
             <button
               onClick={handleNext}
               disabled={!email || !allRequirementsMet || password !== confirmPassword}
-              className="flex items-center gap-2 px-4 py-2 bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              className="group flex items-center gap-2 px-4 py-2 bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
             >
               <span>Next</span>
-              <ChevronRight className="w-3.5 h-3.5" />
+              <motion.div
+                className="group-hover:translate-x-1 transition-transform duration-200"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </motion.div>
             </button>
           </div>
         </div>
