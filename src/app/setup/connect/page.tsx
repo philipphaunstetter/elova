@@ -35,12 +35,32 @@ export default function ConnectPage() {
       }
     })
     
-    // TODO: Implement connection test logic
-    // For now, just simulate a successful connection
     setConnectionStatus('testing')
-    setTimeout(() => {
-      setConnectionStatus('success')
-    }, 1500)
+    
+    try {
+      const response = await fetch('/api/setup/test-connection', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url,
+          apiKey
+        })
+      })
+      
+      const result = await response.json()
+      
+      if (result.success) {
+        setConnectionStatus('success')
+      } else {
+        setConnectionStatus('error')
+        console.error('Connection test failed:', result.error)
+      }
+    } catch (error) {
+      setConnectionStatus('error')
+      console.error('Connection test error:', error)
+    }
   }
 
   const handleNext = () => {
