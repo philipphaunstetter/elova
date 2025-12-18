@@ -60,6 +60,10 @@ export default function ConnectPage() {
       
       if (result.success) {
         setConnectionStatus('success')
+        // Auto-navigate to next step after showing success
+        setTimeout(() => {
+          handleNext()
+        }, 1500)
       } else {
         setConnectionStatus('error')
         console.error('Connection test failed:', result.error)
@@ -182,11 +186,13 @@ export default function ConnectPage() {
 
           {/* Test Connection Button */}
           <div className="flex items-center justify-between">
-            {connectionStatus === 'error' && (
-              <p className="text-xs text-red-500 tracking-[0.18px]">
-                Please check your settings and try again.
-              </p>
-            )}
+            <div className="flex-1">
+              {connectionStatus === 'error' && (
+                <p className="text-xs text-red-500 tracking-[0.18px]">
+                  Please check your settings and try again.
+                </p>
+              )}
+            </div>
             <button
               onClick={handleTestConnection}
               disabled={!url || !apiKey || connectionStatus === 'testing'}
