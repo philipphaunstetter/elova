@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 // Step 1: Account Creation
 export default function AccountPage() {
   const router = useRouter()
-  const { setupData, updateSetupData } = useSetup()
+  const { setupData, updateSetupData, markStepComplete } = useSetup()
   
   const [email, setEmail] = useState(setupData.account?.email || '')
   const [password, setPassword] = useState(setupData.account?.password || '')
@@ -42,6 +42,8 @@ export default function AccountPage() {
         password
       }
     })
+    // Mark step 1 as complete
+    markStepComplete(1)
     router.push('/setup/connect')
   }
 

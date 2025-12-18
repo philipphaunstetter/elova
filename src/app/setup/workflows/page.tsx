@@ -1,10 +1,20 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSetup } from '@/contexts/SetupContext'
 
 // Step 3: Workflow Selection
 export default function WorkflowsPage() {
   const router = useRouter()
+  const { isStepAccessible } = useSetup()
+  
+  // Route guard: redirect if step 2 not completed
+  useEffect(() => {
+    if (!isStepAccessible(3)) {
+      router.push('/setup/connect')
+    }
+  }, [isStepAccessible, router])
 
   return (
     <div className="min-h-screen flex items-center justify-center">

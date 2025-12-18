@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSetup } from '@/contexts/SetupContext'
 import { EyeOff, Eye, ChevronRight } from 'lucide-react'
@@ -10,7 +10,14 @@ import { motion } from 'framer-motion'
 // Step 2: Connect n8n Instance
 export default function ConnectPage() {
   const router = useRouter()
-  const { setupData, updateSetupData } = useSetup()
+  const { setupData, updateSetupData, isStepAccessible, markStepComplete } = useSetup()
+  
+  // Route guard: redirect if step 1 not completed
+  useEffect(() => {
+    if (!isStepAccessible(2)) {
+      router.push('/setup/account')
+    }
+  }, [isStepAccessible, router])
   
   const [name, setName] = useState(setupData.n8nConfig?.name || '')
   const [url, setUrl] = useState(setupData.n8nConfig?.url || '')
@@ -44,6 +51,8 @@ export default function ConnectPage() {
         apiKey
       }
     })
+    // Mark step 2 as complete
+    markStepComplete(2)
     router.push('/setup/workflows')
   }
 

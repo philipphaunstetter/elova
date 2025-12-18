@@ -1,10 +1,20 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSetup } from '@/contexts/SetupContext'
 
 // Step 4: Final Setup Overview/Summary
 export default function SummaryPage() {
   const router = useRouter()
+  const { isStepAccessible } = useSetup()
+  
+  // Route guard: redirect if step 3 not completed
+  useEffect(() => {
+    if (!isStepAccessible(4)) {
+      router.push('/setup/workflows')
+    }
+  }, [isStepAccessible, router])
 
   return (
     <div className="min-h-screen flex items-center justify-center">
