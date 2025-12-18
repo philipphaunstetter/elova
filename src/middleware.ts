@@ -11,9 +11,13 @@ const PUBLIC_ROUTES = [
   '/robots.txt'
 ]
 
-// Setup routes (currently only main setup page exists)
+// Setup routes - 4-step onboarding flow
 const SETUP_ROUTES = [
-  '/setup'
+  '/setup',
+  '/setup/account',    // Step 1: Account Creation
+  '/setup/connect',    // Step 2: Connect n8n Instance
+  '/setup/workflows',  // Step 3: Workflow Selection
+  '/setup/summary'     // Step 4: Final Summary
 ]
 
 // Admin/app routes that require setup completion
