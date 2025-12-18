@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSetup } from '@/contexts/SetupContext'
-import { EyeOff, Eye, ChevronRight, Loader2, Check } from 'lucide-react'
+import { EyeOff, Eye, ChevronRight, Loader2, Check, X } from 'lucide-react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
 
@@ -134,7 +134,11 @@ export default function ConnectPage() {
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://your-n8n-instance.com"
-                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#94a3b8] focus:shadow-[0_0_0_3px_#cbd5e1] dark:focus:border-slate-500 dark:focus:shadow-[0_0_0_3px_rgba(148,163,184,0.3)]"
+                className={`w-full px-3 py-2 border rounded-lg shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none ${
+                  connectionStatus === 'error'
+                    ? 'border-red-500'
+                    : 'border-slate-200 dark:border-slate-700 focus:border-[#94a3b8] focus:shadow-[0_0_0_3px_#cbd5e1] dark:focus:border-slate-500 dark:focus:shadow-[0_0_0_3px_rgba(148,163,184,0.3)]'
+                }`}
               />
             </div>
 
@@ -149,7 +153,11 @@ export default function ConnectPage() {
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="Enter your n8n API key"
-                  className="w-full px-3 py-2 pr-10 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#94a3b8] focus:shadow-[0_0_0_3px_#cbd5e1] dark:focus:border-slate-500 dark:focus:shadow-[0_0_0_3px_rgba(148,163,184,0.3)]"
+                  className={`w-full px-3 py-2 pr-10 border rounded-lg shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none ${
+                    connectionStatus === 'error'
+                      ? 'border-red-500'
+                      : 'border-slate-200 dark:border-slate-700 focus:border-[#94a3b8] focus:shadow-[0_0_0_3px_#cbd5e1] dark:focus:border-slate-500 dark:focus:shadow-[0_0_0_3px_rgba(148,163,184,0.3)]'
+                  }`}
                 />
                 <button
                   type="button"
@@ -163,7 +171,12 @@ export default function ConnectPage() {
           </div>
 
           {/* Test Connection Button */}
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            {connectionStatus === 'error' && (
+              <p className="text-xs text-red-500 tracking-[0.18px]">
+                Please check your settings and try again.
+              </p>
+            )}
             <button
               onClick={handleTestConnection}
               disabled={!url || !apiKey || connectionStatus === 'testing'}
@@ -172,6 +185,8 @@ export default function ConnectPage() {
                   ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 cursor-not-allowed'
                   : connectionStatus === 'success'
                   ? 'bg-green-600 text-white cursor-default'
+                  : connectionStatus === 'error'
+                  ? 'bg-red-600 text-white cursor-pointer hover:bg-red-700'
                   : 'bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer'
               }`}
             >
@@ -180,6 +195,8 @@ export default function ConnectPage() {
                   ? 'Testing' 
                   : connectionStatus === 'success'
                   ? 'Successful'
+                  : connectionStatus === 'error'
+                  ? 'Failed'
                   : 'Test Connection'
                 }
               </span>
@@ -187,6 +204,8 @@ export default function ConnectPage() {
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : connectionStatus === 'success' ? (
                 <Check className="w-3.5 h-3.5" />
+              ) : connectionStatus === 'error' ? (
+                <X className="w-3.5 h-3.5" />
               ) : (
                 <motion.div
                   className="group-hover:translate-x-1 transition-transform duration-200"
