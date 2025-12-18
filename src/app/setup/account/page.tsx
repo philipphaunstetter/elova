@@ -52,7 +52,7 @@ export default function AccountPage() {
         <div className="flex flex-col gap-16 mb-16">
           <div className="relative h-[42px] w-[100px]">
             <Image
-              src="/elova-logo.png"
+              src="/elova-brand.svg"
               alt="Elova"
               width={100}
               height={42}
