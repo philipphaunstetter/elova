@@ -11,20 +11,19 @@ const PUBLIC_ROUTES = [
   '/robots.txt'
 ]
 
-// Setup wizard routes
+// Setup routes - 4-step onboarding flow
 const SETUP_ROUTES = [
-  '/setup/wizard',
-  '/setup/database',
-  '/setup/integrations',
-  '/setup/complete'
+  '/setup',
+  '/setup/account',    // Step 1: Account Creation
+  '/setup/connect',    // Step 2: Connect n8n Instance
+  '/setup/workflows',  // Step 3: Workflow Selection
+  '/setup/summary'     // Step 4: Final Summary
 ]
 
-// Admin routes that require setup completion
-const ADMIN_ROUTES = [
-  '/admin',
-  '/dashboard',
-  '/workflows',
-  '/analytics'
+// Admin/app routes that require setup completion
+// NOTE: Currently cleaned - will be rebuilt in v2
+const ADMIN_ROUTES: string[] = [
+  // Routes will be added as they're rebuilt
 ]
 
 export async function middleware(request: NextRequest) {
@@ -52,7 +51,7 @@ export async function middleware(request: NextRequest) {
     if (!setupResponse.ok) {
       console.error('Failed to check setup status:', setupResponse.statusText)
       // On error, redirect to setup to be safe
-      return NextResponse.redirect(new URL('/setup/wizard', request.url))
+      return NextResponse.redirect(new URL('/setup', request.url))
     }
 
     const setupStatus = await setupResponse.json()
@@ -60,36 +59,38 @@ export async function middleware(request: NextRequest) {
     // Handle root path specifically
     if (pathname === '/') {
       if (!setupStatus.initDone) {
-        // Setup not complete, redirect to admin setup
-        return NextResponse.redirect(new URL('/setup/wizard', request.url))
+        // Setup not complete, redirect to setup
+        return NextResponse.redirect(new URL('/setup', request.url))
       } else {
-        // Setup complete, redirect to dashboard
-        return NextResponse.redirect(new URL('/dashboard', request.url))
+        // Setup complete - for now redirect back to setup since no dashboard exists yet
+        // TODO: Change this to '/dashboard' once dashboard is rebuilt
+        return NextResponse.redirect(new URL('/setup', request.url))
       }
     }
 
     // If setup is required and user is not on a setup page
     if (!setupStatus.initDone && !SETUP_ROUTES.some(route => pathname.startsWith(route))) {
       // Redirect to admin setup
-      return NextResponse.redirect(new URL('/setup/wizard', request.url))
+      return NextResponse.redirect(new URL('/setup', request.url))
     }
 
     // If setup is complete and user is on setup pages
     if (setupStatus.initDone && SETUP_ROUTES.some(route => pathname.startsWith(route))) {
-      // Redirect to dashboard or main app
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+      // For now, allow access to setup page since no other routes exist
+      // TODO: Redirect to '/dashboard' once dashboard is rebuilt
+      return NextResponse.next()
     }
 
     // If user tries to access admin routes without setup completion
     if (!setupStatus.initDone && ADMIN_ROUTES.some(route => pathname.startsWith(route))) {
-      return NextResponse.redirect(new URL('/setup/wizard', request.url))
+      return NextResponse.redirect(new URL('/setup', request.url))
     }
 
   } catch (error) {
     console.error('Setup middleware error:', error)
     // On error, redirect to admin setup to be safe
     if (!SETUP_ROUTES.some(route => pathname.startsWith(route))) {
-      return NextResponse.redirect(new URL('/setup/wizard', request.url))
+      return NextResponse.redirect(new URL('/setup', request.url))
     }
   }
 
