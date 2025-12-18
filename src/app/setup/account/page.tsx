@@ -182,14 +182,23 @@ export default function AccountPage() {
 
           {/* Next Button */}
           <div className="flex justify-end">
-            <button
+            <motion.button
               onClick={handleNext}
               disabled={!email || !allRequirementsMet || password !== confirmPassword}
-              className="flex items-center gap-2 px-4 py-2 bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              className="group flex items-center gap-2 px-4 py-2 bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
               <span>Next</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+              <motion.div
+                initial={{ x: 0 }}
+                animate={{ x: 0 }}
+                transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                className="group-hover:translate-x-1 transition-transform"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </motion.div>
+            </motion.button>
           </div>
         </div>
       </div>
