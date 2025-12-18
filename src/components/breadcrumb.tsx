@@ -1,4 +1,4 @@
-import { HomeIcon } from '@heroicons/react/20/solid'
+import { Home } from 'lucide-react'
 import Link from 'next/link'
 
 export interface BreadcrumbItem {
@@ -22,7 +22,7 @@ export function Breadcrumb({ pages, className = '' }: BreadcrumbProps) {
               href="/dashboard" 
               className="text-gray-400 hover:text-gray-500 dark:text-slate-500 dark:hover:text-slate-400"
             >
-              <HomeIcon aria-hidden="true" className="size-5 shrink-0" />
+              <Home aria-hidden="true" className="size-5 shrink-0" />
               <span className="sr-only">Home</span>
             </Link>
           </div>

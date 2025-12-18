@@ -1,6 +1,6 @@
 'use client'
 
-import { InformationCircleIcon } from '@heroicons/react/24/outline'
+import { Info } from 'lucide-react'
 import { getModelPricing } from '@/lib/ai-pricing'
 
 interface AICostTooltipProps {
@@ -21,7 +21,7 @@ export function AICostTooltip({ type, model, inputTokens, outputTokens, cost, on
                     className="focus:outline-none cursor-pointer"
                     title="Click to view pricing details"
                 >
-                    <InformationCircleIcon
+                    <Info
                         className="h-4 w-4 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 cursor-pointer"
                     />
                 </button>

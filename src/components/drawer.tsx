@@ -1,7 +1,7 @@
 'use client'
 
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
+import { X } from 'lucide-react'
 import { ReactNode } from 'react'
 
 interface DrawerProps {
@@ -38,7 +38,7 @@ export function Drawer({ isOpen, onClose, title, children, description }: Drawer
                                             >
                                                 <span className="absolute -inset-2.5" />
                                                 <span className="sr-only">Close panel</span>
-                                                <XMarkIcon aria-hidden="true" className="h-6 w-6" />
+                                                <X aria-hidden="true" className="h-6 w-6" />
                                             </button>
                                         </div>
                                     </div>
