@@ -3,12 +3,12 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Transition } from '@headlessui/react'
 import {
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  InformationCircleIcon,
-  XMarkIcon,
-  ArrowPathIcon
-} from '@heroicons/react/24/outline'
+  CheckCircle,
+  AlertTriangle,
+  Info,
+  X,
+  Loader2
+} from 'lucide-react'
 
 export type ToastType = 'success' | 'error' | 'info' | 'loading'
 
@@ -43,10 +43,10 @@ const textStyles = {
 }
 
 const icons = {
-  success: CheckCircleIcon,
-  error: ExclamationTriangleIcon,
-  info: InformationCircleIcon,
-  loading: ArrowPathIcon,
+  success: CheckCircle,
+  error: AlertTriangle,
+  info: Info,
+  loading: Loader2,
 }
 
 export function Toast({ id, type, title, message, duration = 5000, onClose }: ToastProps) {
@@ -101,7 +101,7 @@ export function Toast({ id, type, title, message, duration = 5000, onClose }: To
                   setTimeout(() => onClose(id), 300)
                 }}
               >
-                <XMarkIcon className="h-5 w-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
           </div>

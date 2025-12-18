@@ -5,9 +5,20 @@ Elova is a workflow observability platform designed to monitor and analyze n8n w
 
 ## Development Rules
 
+### 🚀 Elova 2.0 (v2-develop) Workflow [ACTIVE]
+**We are currently building Elova 2.0 on the `v2-develop` branch.**
+
+- **Base Branch:** `v2-develop` (NOT `staging` or `main` for now).
+- **Feature Branches:** Create off `v2-develop`. Name: `feature/<desc>`.
+- **Pull Requests:** Open against `v2-develop`.
+- **CI/CD:**
+  - **Github Actions:** Runs Lint & Build checks only (no Docker Push).
+  - **Local Testing:** Use `npm run test:local` (Builds/Runs local Docker container).
+- **Legacy Changes:** Only touch `main` or `staging` if explicitly instructed for v1 maintenance.
+
 ### CRITICAL REQUIREMENT: Always Create Pull Requests
 
-**YOU MUST NEVER PUSH DIRECTLY TO `staging` OR `main`. ALWAYS CREATE A PULL REQUEST.**
+**YOU MUST NEVER PUSH DIRECTLY TO `staging`, `main`, OR `v2-develop`. ALWAYS CREATE A PULL REQUEST.**
 
 After making your changes and pushing your branch:
 
