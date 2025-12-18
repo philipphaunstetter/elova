@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSetup } from '@/contexts/SetupContext'
-import { EyeOff, Eye, ChevronRight, Loader2 } from 'lucide-react'
+import { EyeOff, Eye, ChevronRight, Loader2, Check } from 'lucide-react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
 
@@ -167,15 +167,26 @@ export default function ConnectPage() {
             <button
               onClick={handleTestConnection}
               disabled={!url || !apiKey || connectionStatus === 'testing'}
-              className={`group flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold disabled:cursor-not-allowed cursor-pointer transition-colors ${
+              className={`group flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
                 connectionStatus === 'testing'
-                  ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
-                  : 'bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50'
+                  ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 cursor-not-allowed'
+                  : connectionStatus === 'success'
+                  ? 'bg-green-600 text-white cursor-default'
+                  : 'bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer'
               }`}
             >
-              <span>{connectionStatus === 'testing' ? 'Testing' : 'Test Connection'}</span>
+              <span>
+                {connectionStatus === 'testing' 
+                  ? 'Testing' 
+                  : connectionStatus === 'success'
+                  ? 'Successful'
+                  : 'Test Connection'
+                }
+              </span>
               {connectionStatus === 'testing' ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : connectionStatus === 'success' ? (
+                <Check className="w-3.5 h-3.5" />
               ) : (
                 <motion.div
                   className="group-hover:translate-x-1 transition-transform duration-200"
