@@ -24,7 +24,8 @@ export default function SummaryPage() {
   const { setupData, isStepAccessible } = useSetup()
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [loading, setLoading] = useState(false)
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle')
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'completed' | 'error'>('idle')
+  const [loggingIn, setLoggingIn] = useState(false)
   
   // Route guard: redirect if step 3 not completed
   useEffect(() => {
@@ -72,37 +73,103 @@ export default function SummaryPage() {
 
   const handleComplete = async () => {
     setSyncStatus('syncing')
-    const startTime = Date.now()
     
     try {
+      // Call setup complete which triggers initial sync in background
       const response = await fetch('/api/setup/complete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(setupData)
+        body: JSON.stringify({
+          adminData: setupData.account,
+          n8nConfig: setupData.n8nConfig,
+          trackedWorkflowIds: setupData.trackedWorkflowIds,
+          configuration: setupData.configuration
+        })
       })
 
       const result = await response.json()
-      
-      // Ensure minimum 3 second delay for better UX
-      const elapsed = Date.now() - startTime
-      const remainingTime = Math.max(0, 3000 - elapsed)
-      await new Promise(resolve => setTimeout(resolve, remainingTime))
 
-      if (result.success) {
-        setSyncStatus('success')
-        // Show success state briefly before redirecting
-        setTimeout(() => {
-          router.push('/')
-        }, 1500)
-      } else {
-        setSyncStatus('error')
+      if (!response.ok) {
         throw new Error(result.error || 'Setup completion failed')
       }
+
+      // Start polling sync status
+      pollSyncStatus()
     } catch (error) {
       console.error('Failed to complete setup:', error)
       setSyncStatus('error')
+    }
+  }
+
+  const pollSyncStatus = async () => {
+    const maxAttempts = 120 // Poll for up to 2 minutes (2s intervals)
+    let attempts = 0
+
+    const poll = async () => {
+      try {
+        const response = await fetch('/api/setup/status')
+        const status = await response.json()
+
+        if (status.initialSync?.status === 'completed') {
+          setSyncStatus('completed')
+          return
+        } else if (status.initialSync?.status === 'failed') {
+          setSyncStatus('error')
+          return
+        }
+
+        // Continue polling if still in progress
+        attempts++
+        if (attempts < maxAttempts && syncStatus === 'syncing') {
+          setTimeout(poll, 2000) // Poll every 2 seconds
+        } else if (attempts >= maxAttempts) {
+          // Timeout - assume completed anyway
+          setSyncStatus('completed')
+        }
+      } catch (error) {
+        console.error('Failed to poll sync status:', error)
+        // On error, retry
+        attempts++
+        if (attempts < maxAttempts && syncStatus === 'syncing') {
+          setTimeout(poll, 2000)
+        }
+      }
+    }
+
+    poll()
+  }
+
+  const handleLogin = async () => {
+    setLoggingIn(true)
+
+    try {
+      // Create session with the admin credentials
+      const response = await fetch('/api/auth/setup-login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: setupData.account?.email,
+          password: setupData.account?.password
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // Redirect to dashboard
+        router.push('/')
+      } else {
+        throw new Error(result.error || 'Login failed')
+      }
+    } catch (error) {
+      console.error('Failed to log in:', error)
+      alert('Failed to log in. Please try again.')
+    } finally {
+      setLoggingIn(false)
     }
   }
 
@@ -185,45 +252,58 @@ export default function SummaryPage() {
             </div>
           </div>
 
-          {/* Complete Button */}
+          {/* Complete / Log In Button */}
           <div className="flex justify-end w-full">
-            <button
-              onClick={handleComplete}
-              disabled={syncStatus === 'syncing'}
-              className={`group flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
-                syncStatus === 'syncing'
-                  ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 cursor-not-allowed'
-                  : syncStatus === 'success'
-                  ? 'bg-green-600 text-white cursor-default'
-                  : syncStatus === 'error'
-                  ? 'bg-red-600 text-white cursor-pointer hover:bg-red-700'
-                  : 'bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 hover:bg-[#1e293b] dark:hover:bg-slate-200 cursor-pointer'
-              }`}
-            >
-              <span>
-                {syncStatus === 'syncing'
-                  ? 'Syncing'
-                  : syncStatus === 'success'
-                  ? 'Success'
-                  : syncStatus === 'error'
-                  ? 'Failed'
-                  : 'Complete'
-                }
-              </span>
-              {syncStatus === 'syncing' ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : syncStatus === 'success' ? (
-                <ChevronRight className="w-3.5 h-3.5" />
-              ) : syncStatus === 'error' ? (
-                <ChevronRight className="w-3.5 h-3.5" />
-              ) : (
-                <motion.div
-                  className="group-hover:translate-x-1 transition-transform duration-200"
-                >
+            {syncStatus === 'completed' ? (
+              <button
+                onClick={handleLogin}
+                disabled={loggingIn}
+                className="group flex items-center gap-2 px-4 py-2 bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                <span>{loggingIn ? 'Logging in...' : 'Log In'}</span>
+                {loggingIn ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                    <polyline points="10 17 15 12 10 7" />
+                    <line x1="15" y1="12" x2="3" y2="12" />
+                  </svg>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={handleComplete}
+                disabled={syncStatus === 'syncing'}
+                className={`group flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                  syncStatus === 'syncing'
+                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 cursor-not-allowed'
+                    : syncStatus === 'error'
+                    ? 'bg-red-600 text-white cursor-pointer hover:bg-red-700'
+                    : 'bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 hover:bg-[#1e293b] dark:hover:bg-slate-200 cursor-pointer'
+                }`}
+              >
+                <span>
+                  {syncStatus === 'syncing'
+                    ? 'Syncing'
+                    : syncStatus === 'error'
+                    ? 'Failed'
+                    : 'Complete'
+                  }
+                </span>
+                {syncStatus === 'syncing' ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : syncStatus === 'error' ? (
                   <ChevronRight className="w-3.5 h-3.5" />
-                </motion.div>
-              )}
-            </button>
+                ) : (
+                  <motion.div
+                    className="group-hover:translate-x-1 transition-transform duration-200"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </motion.div>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
