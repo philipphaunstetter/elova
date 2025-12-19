@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { executionSync } from '@/lib/sync/execution-sync'
 import { getConfigManager } from '@/lib/config/config-manager'
+import { getDb } from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   const config = getConfigManager()
@@ -18,6 +19,85 @@ export async function POST(request: NextRequest) {
     console.log('Starting unified initial sync...')
     const syncResult = await executionSync.syncAllProviders({ syncType: 'full' })
     console.log('Initial sync result:', syncResult)
+    
+    // Apply tracking flags AFTER workflows are synced
+    const trackedWorkflowIdsJson = await config.get<string>('setup.tracked_workflow_ids')
+    if (trackedWorkflowIdsJson) {
+      try {
+        const trackedWorkflowIds = JSON.parse(trackedWorkflowIdsJson) as string[]
+        console.log(`🔍 Applying tracking flags for ${trackedWorkflowIds.length} workflows after initial sync`)
+        
+        const db = getDb()
+        
+        // Get all providers (should be just one during setup, but handle multiple)
+        const providers = await new Promise<Array<{id: string, name: string}>>((resolve, reject) => {
+          db.all(
+            'SELECT id, name FROM providers WHERE is_connected = 1',
+            (err, rows: Array<{id: string, name: string}>) => {
+              if (err) reject(err)
+              else resolve(rows || [])
+            }
+          )
+        })
+        
+        for (const provider of providers) {
+          // First set all to untracked for this provider
+          await new Promise<void>((resolve, reject) => {
+            db.run('UPDATE workflows SET is_tracked = 0 WHERE provider_id = ?', [provider.id], function(err) {
+              if (err) reject(err)
+              else {
+                console.log(`✅ Set ${this.changes} workflows to is_tracked=0 for provider ${provider.name}`)
+                resolve()
+              }
+            })
+          })
+          
+          // Then set tracked ones
+          if (trackedWorkflowIds.length > 0) {
+            let updatedCount = 0
+            for (const workflowId of trackedWorkflowIds) {
+              await new Promise<void>((resolve) => {
+                db.run(
+                  'UPDATE workflows SET is_tracked = 1 WHERE provider_id = ? AND provider_workflow_id = ?',
+                  [provider.id, String(workflowId)],
+                  function(err) {
+                    if (err) {
+                      console.error(`❌ Failed to mark workflow ${workflowId} as tracked:`, err)
+                    } else if (this.changes > 0) {
+                      updatedCount++
+                    }
+                    resolve()
+                  }
+                )
+              })
+            }
+            console.log(`✅ Marked ${updatedCount}/${trackedWorkflowIds.length} workflows as tracked for ${provider.name}`)
+          }
+          
+          // Verify
+          const verifyTracking = await new Promise<{tracked: number, untracked: number}>((resolve, reject) => {
+            db.all(
+              'SELECT is_tracked, COUNT(*) as count FROM workflows WHERE provider_id = ? GROUP BY is_tracked',
+              [provider.id],
+              (err, rows: Array<{is_tracked: number, count: number}>) => {
+                if (err) reject(err)
+                else {
+                  const result = { tracked: 0, untracked: 0 }
+                  rows?.forEach(row => {
+                    if (row.is_tracked === 1) result.tracked = row.count
+                    else result.untracked = row.count
+                  })
+                  resolve(result)
+                }
+              }
+            )
+          })
+          console.log(`✅ Tracking status verified for ${provider.name}: ${verifyTracking.tracked} tracked, ${verifyTracking.untracked} untracked`)
+        }
+      } catch (err) {
+        console.error('❌ Failed to apply tracking flags after initial sync:', err)
+      }
+    }
 
     // Mark sync as completed
     await config.upsert('sync.initial.status', 'completed', 'string', 'system', 'Initial sync status')

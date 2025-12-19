@@ -201,6 +201,13 @@ export async function POST(request: NextRequest) {
     // Set default configuration values
     await config.upsert('app.timezone', 'UTC', 'string', 'system', 'Application timezone')
     await config.upsert('app.demoMode', 'false', 'boolean', 'system', 'Demo mode flag')
+    
+    // Store tracked workflow IDs in config for initial sync to use
+    // This ensures tracking preferences are set even if workflow sync fails during setup
+    if (trackedWorkflowIds && Array.isArray(trackedWorkflowIds)) {
+      await config.upsert('setup.tracked_workflow_ids', JSON.stringify(trackedWorkflowIds), 'string', 'setup', 'Workflow IDs selected for tracking')
+      console.log(`💾 Stored ${trackedWorkflowIds.length} tracked workflow IDs in config for initial sync`)
+    }
 
     // Mark setup as complete by setting the initDone flag
     await config.upsert('app.initDone', 'true', 'boolean', 'system', 'Initialization complete flag')
