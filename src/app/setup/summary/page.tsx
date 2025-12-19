@@ -290,7 +290,7 @@ export default function SummaryPage() {
                 </motion.p>
               </motion.div>
             ) : (
-              <div /> {/* Empty spacer when not syncing */}
+              <div />
             )}
             
             {/* Button - Right Side */}
