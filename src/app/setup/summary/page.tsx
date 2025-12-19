@@ -106,34 +106,46 @@ export default function SummaryPage() {
   const pollSyncStatus = async () => {
     const maxAttempts = 120 // Poll for up to 2 minutes (2s intervals)
     let attempts = 0
+    let shouldContinue = true
 
     const poll = async () => {
+      if (!shouldContinue) return
+
       try {
         const response = await fetch('/api/setup/status')
         const status = await response.json()
 
+        console.log('Sync status poll:', status.initialSync?.status)
+
         if (status.initialSync?.status === 'completed') {
           setSyncStatus('completed')
+          shouldContinue = false
           return
         } else if (status.initialSync?.status === 'failed') {
           setSyncStatus('error')
+          shouldContinue = false
           return
         }
 
         // Continue polling if still in progress
         attempts++
-        if (attempts < maxAttempts && syncStatus === 'syncing') {
+        if (attempts < maxAttempts) {
           setTimeout(poll, 2000) // Poll every 2 seconds
-        } else if (attempts >= maxAttempts) {
+        } else {
           // Timeout - assume completed anyway
+          console.warn('Sync polling timeout after', attempts, 'attempts')
           setSyncStatus('completed')
+          shouldContinue = false
         }
       } catch (error) {
         console.error('Failed to poll sync status:', error)
         // On error, retry
         attempts++
-        if (attempts < maxAttempts && syncStatus === 'syncing') {
+        if (attempts < maxAttempts) {
           setTimeout(poll, 2000)
+        } else {
+          setSyncStatus('error')
+          shouldContinue = false
         }
       }
     }
