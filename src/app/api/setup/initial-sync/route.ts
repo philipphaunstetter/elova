@@ -15,12 +15,12 @@ export async function POST(request: NextRequest) {
     await config.upsert('sync.initial.started_at', new Date().toISOString(), 'string', 'system', 'Initial sync start time')
     await config.upsert('sync.initial.error', '', 'string', 'system', 'Initial sync error message')
 
-    // Perform unified sync (workflows + executions) using enhanced execution sync service
-    console.log('Starting unified initial sync...')
-    const syncResult = await executionSync.syncAllProviders({ syncType: 'full' })
-    console.log('Initial sync result:', syncResult)
+    // STEP 1: Sync workflows first (creates all workflows in database)
+    console.log('Step 1: Syncing workflows...')
+    await executionSync.syncAllProviders({ syncType: 'workflows' })
     
-    // Apply tracking flags AFTER workflows are synced
+    // STEP 2: Apply tracking flags (now that workflows exist in database)
+    console.log('Step 2: Applying tracking flags...')
     const trackedWorkflowIdsJson = await config.get<string>('setup.tracked_workflow_ids')
     if (trackedWorkflowIdsJson) {
       try {
@@ -95,9 +95,21 @@ export async function POST(request: NextRequest) {
           console.log(`✅ Tracking status verified for ${provider.name}: ${verifyTracking.tracked} tracked, ${verifyTracking.untracked} untracked`)
         }
       } catch (err) {
-        console.error('❌ Failed to apply tracking flags after initial sync:', err)
+        console.error('❌ Failed to apply tracking flags:', err)
       }
+    } else {
+      console.log('⚠️ No tracked workflow IDs found in config, skipping tracking flag setup')
     }
+    
+    // STEP 3: Sync executions and backups (now that tracking flags are set)
+    console.log('Step 3: Syncing executions and backups...')
+    const syncResult = await executionSync.syncAllProviders({ syncType: 'executions' })
+    
+    // Also trigger backup sync
+    console.log('Step 4: Creating workflow backups...')
+    await executionSync.syncAllProviders({ syncType: 'backups' })
+    
+    console.log('Initial sync completed:', syncResult)
 
     // Mark sync as completed
     await config.upsert('sync.initial.status', 'completed', 'string', 'system', 'Initial sync status')

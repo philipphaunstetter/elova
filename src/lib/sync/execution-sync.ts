@@ -468,21 +468,31 @@ export class ExecutionSyncService {
   }
 
   /**
-   * Full sync: executions + workflows + backups
+   * Full sync: workflows first (for tracking flags), then executions + backups in parallel
+   * NOTE: During initial setup, tracking flags need to be applied AFTER workflows are synced
+   *       but BEFORE executions are synced. This is handled in initial-sync route.
    */
   private async syncFull(provider: Provider, options: SyncOptions) {
     console.log(`🔄 Performing full sync for ${provider.name}`)
 
-    const [executions, workflows, backups] = await Promise.allSettled([
+    // Sync workflows FIRST so they exist in database
+    let workflows
+    try {
+      workflows = await this.syncWorkflows(provider, options)
+    } catch (error) {
+      workflows = { status: 'rejected', reason: error }
+    }
+
+    // Then sync executions and backups in parallel
+    const [executions, backups] = await Promise.allSettled([
       this.syncExecutions(provider, options),
-      this.syncWorkflows(provider, options),
       this.syncWorkflowBackups(provider, options)
     ])
 
     return {
       type: 'full',
       executions: executions.status === 'fulfilled' ? executions.value : { error: executions.reason },
-      workflows: workflows.status === 'fulfilled' ? workflows.value : { error: workflows.reason },
+      workflows: workflows,
       backups: backups.status === 'fulfilled' ? backups.value : { error: backups.reason }
     }
   }
