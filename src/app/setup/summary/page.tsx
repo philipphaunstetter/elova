@@ -173,7 +173,7 @@ export default function SummaryPage() {
 
       if (result.success) {
         // Redirect to dashboard
-        router.push('/')
+        router.push('/dashboard')
       } else {
         throw new Error(result.error || 'Login failed')
       }
