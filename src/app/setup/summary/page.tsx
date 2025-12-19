@@ -272,42 +272,45 @@ export default function SummaryPage() {
           </div>
 
           {/* Complete / Log In Button */}
-          <div className="flex justify-end w-full">
-            {syncStatus === 'completed' ? (
-              <button
-                onClick={handleLogin}
-                disabled={loggingIn}
-                className="group flex items-center gap-2 px-4 py-2 bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+          <div className="flex items-center justify-between w-full">
+            {/* Progress Percentage - Left Side */}
+            {syncStatus === 'syncing' && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="text-xs leading-4 tracking-[0.18px] font-medium text-slate-500 dark:text-slate-400"
               >
-                <span>{loggingIn ? 'Logging in...' : 'Log In'}</span>
-                {loggingIn ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-                    <polyline points="10 17 15 12 10 7" />
-                    <line x1="15" y1="12" x2="3" y2="12" />
-                  </svg>
-                )}
-              </button>
-            ) : (
-              <div className="flex flex-col items-end gap-2">
-                {syncStatus === 'syncing' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-xs leading-4 tracking-[0.18px] font-medium text-slate-500 dark:text-slate-400"
-                  >
-                    <motion.span
-                      key={syncProgress}
-                      initial={{ opacity: 0.7, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, ease: "easeOut" }}
-                    >
-                      {Math.round(syncProgress)}%
-                    </motion.span>
-                  </motion.div>
-                )}
+                <motion.span
+                  key={syncProgress}
+                  initial={{ opacity: 0.7, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                >
+                  {Math.round(syncProgress)}%
+                </motion.span>
+              </motion.div>
+            )}
+            
+            {/* Button - Right Side */}
+            <div className="ml-auto">
+              {syncStatus === 'completed' ? (
+                <button
+                  onClick={handleLogin}
+                  disabled={loggingIn}
+                  className="group flex items-center gap-2 px-4 py-2 bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                >
+                  <span>{loggingIn ? 'Logging in...' : 'Log In'}</span>
+                  {loggingIn ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                      <polyline points="10 17 15 12 10 7" />
+                      <line x1="15" y1="12" x2="3" y2="12" />
+                    </svg>
+                  )}
+                </button>
+              ) : (
                 <button
                   onClick={handleComplete}
                   disabled={syncStatus === 'syncing'}
@@ -339,8 +342,8 @@ export default function SummaryPage() {
                     </motion.div>
                   )}
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
