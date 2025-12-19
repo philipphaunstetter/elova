@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { ChevronRight, Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -19,7 +19,8 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const response = await fetch('/api/auth/login', {
+      // Start the login request
+      const loginPromise = fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -27,6 +28,11 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password })
       })
 
+      // Minimum delay to show the animation (2 seconds)
+      const delayPromise = new Promise(resolve => setTimeout(resolve, 2000))
+
+      // Wait for both the login and the minimum delay
+      const [response] = await Promise.all([loginPromise, delayPromise])
       const result = await response.json()
 
       if (result.success) {
@@ -56,9 +62,9 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Login Form Container */}
-      <div className="flex items-center justify-center min-h-screen pt-[293px]">
-        <div className="border border-slate-200 dark:border-slate-700 rounded-xl px-8 pt-12 pb-12 flex flex-col gap-10 max-w-[546px] w-full">
+      {/* Login Form Container - Centered wrapper */}
+      <div className="flex items-center justify-center min-h-screen p-[10px]">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-xl px-8 py-12 flex flex-col gap-10 min-w-[546px]">
           {/* Title */}
           <div className="flex flex-col gap-0">
             <h1 className="text-2xl font-medium leading-[28.8px] tracking-[-0.5px] text-slate-900 dark:text-slate-100">
@@ -80,7 +86,8 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@example.com"
-                  className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-[7.5px] min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100"
+                  disabled={loading}
+                  className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-[7.5px] min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
                   required
                 />
               </div>
@@ -96,7 +103,8 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
-                    className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-[7.5px] pr-10 min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 w-full"
+                    disabled={loading}
+                    className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-[7.5px] pr-10 min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     required
                   />
                   <button
@@ -134,8 +142,16 @@ export default function LoginPage() {
                 disabled={loading}
                 className="group flex items-center gap-2 px-4 py-[7.5px] bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[36px]"
               >
-                <span>Log In</span>
-                <ChevronRight className="w-[13.25px] h-[13.25px]" />
+                <span>{loading ? 'Logging In' : 'Log In'}</span>
+                {loading ? (
+                  <Loader2 className="w-[13.25px] h-[13.25px] animate-spin" />
+                ) : (
+                  <svg className="w-[13.25px] h-[13.25px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                    <polyline points="10 17 15 12 10 7" />
+                    <line x1="15" y1="12" x2="3" y2="12" />
+                  </svg>
+                )}
               </button>
             </div>
           </form>
