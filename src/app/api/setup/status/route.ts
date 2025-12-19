@@ -15,6 +15,8 @@ export async function GET() {
     // Check initial sync status
     const initialSyncStatus = await config.get<string>('sync.initial.status')
     const initialSyncError = await config.get<string>('sync.initial.error')
+    const initialSyncProgress = await config.get<number>('sync.initial.progress') || 0
+    const initialSyncStep = await config.get<string>('sync.initial.step') || 'Initializing'
 
     if (initDoneFlag === 'true' || initDoneFlag === true) {
       return NextResponse.json({
@@ -24,7 +26,9 @@ export async function GET() {
         message: 'Setup completed (flag set)',
         initialSync: {
           status: initialSyncStatus || 'unknown',
-          error: initialSyncError
+          error: initialSyncError,
+          progress: initialSyncProgress,
+          step: initialSyncStep
         }
       })
     }

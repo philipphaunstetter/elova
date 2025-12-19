@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useSetup } from '@/contexts/SetupContext'
 import { ChevronRight, Loader2 } from 'lucide-react'
 import Image from 'next/image'
-import { motion } from 'framer-motion'
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import {
   Tooltip,
   TooltipContent,
@@ -25,7 +25,12 @@ export default function SummaryPage() {
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [loading, setLoading] = useState(false)
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'completed' | 'error'>('idle')
+  const [syncProgress, setSyncProgress] = useState(0)
   const [loggingIn, setLoggingIn] = useState(false)
+  
+  // Animated counter for smooth percentage transitions
+  const animatedProgress = useMotionValue(0)
+  const displayProgress = useTransform(animatedProgress, Math.round)
   
   // Route guard: redirect if step 3 not completed
   useEffect(() => {
@@ -115,10 +120,28 @@ export default function SummaryPage() {
         const response = await fetch('/api/setup/status')
         const status = await response.json()
 
-        console.log('Sync status poll:', status.initialSync?.status)
+        console.log('Sync status poll:', status.initialSync?.status, 'Progress:', status.initialSync?.progress)
+
+        // Update progress with animated counter
+        if (status.initialSync?.progress !== undefined) {
+          const newProgress = status.initialSync.progress
+          setSyncProgress(newProgress)
+          
+          // Calculate animation duration based on the gap
+          const gap = Math.abs(newProgress - animatedProgress.get())
+          // Smaller gaps = slower (0.5s), larger gaps = faster (2s max)
+          const duration = Math.min(Math.max(gap * 0.05, 0.5), 2)
+          
+          // Animate to the new value
+          animate(animatedProgress, newProgress, {
+            duration,
+            ease: "easeInOut"
+          })
+        }
 
         if (status.initialSync?.status === 'completed') {
           setSyncStatus('completed')
+          setSyncProgress(100)
           shouldContinue = false
           return
         } else if (status.initialSync?.status === 'failed') {
@@ -265,57 +288,74 @@ export default function SummaryPage() {
           </div>
 
           {/* Complete / Log In Button */}
-          <div className="flex justify-end w-full">
-            {syncStatus === 'completed' ? (
-              <button
-                onClick={handleLogin}
-                disabled={loggingIn}
-                className="group flex items-center gap-2 px-4 py-2 bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+          <div className="flex items-center justify-between w-full">
+            {/* Progress Percentage - Left Side (only during syncing) */}
+            {syncStatus === 'syncing' ? (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="text-xs leading-4 tracking-[0.18px] font-medium text-slate-500 dark:text-slate-400 text-center whitespace-nowrap"
               >
-                <span>{loggingIn ? 'Logging in...' : 'Log In'}</span>
-                {loggingIn ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-                    <polyline points="10 17 15 12 10 7" />
-                    <line x1="15" y1="12" x2="3" y2="12" />
-                  </svg>
-                )}
-              </button>
+                <p className="inline-flex items-center gap-1">
+                  <motion.span>{displayProgress}</motion.span>
+                  <span>%</span>
+                </p>
+              </motion.div>
             ) : (
-              <button
-                onClick={handleComplete}
-                disabled={syncStatus === 'syncing'}
-                className={`group flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
-                  syncStatus === 'syncing'
-                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 cursor-not-allowed'
-                    : syncStatus === 'error'
-                    ? 'bg-red-600 text-white cursor-pointer hover:bg-red-700'
-                    : 'bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 hover:bg-[#1e293b] dark:hover:bg-slate-200 cursor-pointer'
-                }`}
-              >
-                <span>
-                  {syncStatus === 'syncing'
-                    ? 'Syncing'
-                    : syncStatus === 'error'
-                    ? 'Failed'
-                    : 'Complete'
-                  }
-                </span>
-                {syncStatus === 'syncing' ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : syncStatus === 'error' ? (
-                  <ChevronRight className="w-3.5 h-3.5" />
-                ) : (
-                  <motion.div
-                    className="group-hover:translate-x-1 transition-transform duration-200"
-                  >
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </motion.div>
-                )}
-              </button>
+              <div />
             )}
+            
+            {/* Button - Right Side */}
+            {syncStatus === 'completed' ? (
+                <button
+                  onClick={handleLogin}
+                  disabled={loggingIn}
+                  className="group flex items-center gap-2 px-4 py-2 bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                >
+                  <span>{loggingIn ? 'Logging in...' : 'Log In'}</span>
+                  {loggingIn ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                      <polyline points="10 17 15 12 10 7" />
+                      <line x1="15" y1="12" x2="3" y2="12" />
+                    </svg>
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={handleComplete}
+                  disabled={syncStatus === 'syncing'}
+                  className={`group flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                    syncStatus === 'syncing'
+                      ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 cursor-not-allowed'
+                      : syncStatus === 'error'
+                      ? 'bg-red-600 text-white cursor-pointer hover:bg-red-700'
+                      : 'bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 hover:bg-[#1e293b] dark:hover:bg-slate-200 cursor-pointer'
+                  }`}
+                >
+                  <span>
+                    {syncStatus === 'syncing'
+                      ? 'Syncing'
+                      : syncStatus === 'error'
+                      ? 'Failed'
+                      : 'Complete'
+                    }
+                  </span>
+                  {syncStatus === 'syncing' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : syncStatus === 'error' ? (
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  ) : (
+                    <motion.div
+                      className="group-hover:translate-x-1 transition-transform duration-200"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </motion.div>
+                  )}
+                </button>
+              )}
           </div>
         </div>
       </div>

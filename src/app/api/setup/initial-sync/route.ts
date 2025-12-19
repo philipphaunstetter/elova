@@ -17,10 +17,15 @@ export async function POST(request: NextRequest) {
 
     // STEP 1: Sync workflows first (creates all workflows in database)
     console.log('Step 1: Syncing workflows...')
+    await config.upsert('sync.initial.progress', 10, 'number', 'system', 'Initial sync progress')
+    await config.upsert('sync.initial.step', 'Syncing workflows', 'string', 'system', 'Initial sync current step')
     await executionSync.syncAllProviders({ syncType: 'workflows' })
+    await config.upsert('sync.initial.progress', 25, 'number', 'system', 'Initial sync progress')
     
     // STEP 2: Apply tracking flags (now that workflows exist in database)
     console.log('Step 2: Applying tracking flags...')
+    await config.upsert('sync.initial.progress', 30, 'number', 'system', 'Initial sync progress')
+    await config.upsert('sync.initial.step', 'Applying tracking preferences', 'string', 'system', 'Initial sync current step')
     const trackedWorkflowIdsJson = await config.get<string>('setup.tracked_workflow_ids')
     if (trackedWorkflowIdsJson) {
       try {
@@ -103,15 +108,23 @@ export async function POST(request: NextRequest) {
     
     // STEP 3: Sync executions and backups (now that tracking flags are set)
     console.log('Step 3: Syncing executions and backups...')
+    await config.upsert('sync.initial.progress', 40, 'number', 'system', 'Initial sync progress')
+    await config.upsert('sync.initial.step', 'Syncing executions', 'string', 'system', 'Initial sync current step')
     const syncResult = await executionSync.syncAllProviders({ syncType: 'executions' })
+    await config.upsert('sync.initial.progress', 80, 'number', 'system', 'Initial sync progress')
     
     // Also trigger backup sync
     console.log('Step 4: Creating workflow backups...')
+    await config.upsert('sync.initial.progress', 85, 'number', 'system', 'Initial sync progress')
+    await config.upsert('sync.initial.step', 'Creating backups', 'string', 'system', 'Initial sync current step')
     await executionSync.syncAllProviders({ syncType: 'backups' })
+    await config.upsert('sync.initial.progress', 95, 'number', 'system', 'Initial sync progress')
     
     console.log('Initial sync completed:', syncResult)
 
     // Mark sync as completed
+    await config.upsert('sync.initial.progress', 100, 'number', 'system', 'Initial sync progress')
+    await config.upsert('sync.initial.step', 'Completed', 'string', 'system', 'Initial sync current step')
     await config.upsert('sync.initial.status', 'completed', 'string', 'system', 'Initial sync status')
     await config.upsert('sync.initial.completed_at', new Date().toISOString(), 'string', 'system', 'Initial sync completion time')
 
