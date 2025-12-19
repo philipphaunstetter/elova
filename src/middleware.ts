@@ -5,7 +5,9 @@ import type { NextRequest } from 'next/server'
 const PUBLIC_ROUTES = [
   '/api/health',
   '/api/setup',
+  '/api/auth',
   '/setup',
+  '/login',
   '/_next',
   '/favicon.ico',
   '/robots.txt'
@@ -56,16 +58,10 @@ export async function middleware(request: NextRequest) {
 
     const setupStatus = await setupResponse.json()
 
-    // Handle root path specifically
+    // Handle root path specifically - let client-side logic handle the redirect
+    // The root page checks both setup status AND session to decide where to go
     if (pathname === '/') {
-      if (!setupStatus.initDone) {
-        // Setup not complete, redirect to setup
-        return NextResponse.redirect(new URL('/setup', request.url))
-      } else {
-        // Setup complete - for now redirect back to setup since no dashboard exists yet
-        // TODO: Change this to '/dashboard' once dashboard is rebuilt
-        return NextResponse.redirect(new URL('/setup', request.url))
-      }
+      return NextResponse.next()
     }
 
     // If setup is required and user is not on a setup page
@@ -74,11 +70,10 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/setup', request.url))
     }
 
-    // If setup is complete and user is on setup pages
+    // If setup is complete and user is on setup pages, redirect to root
+    // Root will handle the proper redirect based on session state
     if (setupStatus.initDone && SETUP_ROUTES.some(route => pathname.startsWith(route))) {
-      // For now, allow access to setup page since no other routes exist
-      // TODO: Redirect to '/dashboard' once dashboard is rebuilt
-      return NextResponse.next()
+      return NextResponse.redirect(new URL('/', request.url))
     }
 
     // If user tries to access admin routes without setup completion
