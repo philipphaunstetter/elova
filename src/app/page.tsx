@@ -14,8 +14,15 @@ export default function RootPage() {
         const status = await response.json()
 
         if (status.initDone) {
-          // Setup is complete, redirect to dashboard
-          router.replace('/dashboard')
+          // Setup is complete, check if user has active session
+          const sessionResponse = await fetch('/api/auth/session')
+          const sessionData = await sessionResponse.json()
+
+          if (sessionData.authenticated) {
+            router.replace('/dashboard')
+          } else {
+            router.replace('/login')
+          }
         } else {
           // Setup required, redirect to setup wizard
           router.replace('/setup')
