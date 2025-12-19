@@ -272,28 +272,29 @@ export default function SummaryPage() {
           </div>
 
           {/* Complete / Log In Button */}
-          <div className="flex justify-end w-full">
-            <div className="flex flex-col items-end gap-2">
-              {/* Progress Percentage - Above Button */}
-              {syncStatus === 'syncing' && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
+          <div className="flex items-center justify-between w-full">
+            {/* Progress Percentage - Left Side (only during syncing) */}
+            {syncStatus === 'syncing' ? (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="text-xs leading-4 tracking-[0.18px] font-medium text-slate-500 dark:text-slate-400 text-center whitespace-nowrap"
+              >
+                <motion.p
+                  key={syncProgress}
+                  initial={{ opacity: 0.7, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="text-xs leading-4 tracking-[0.18px] font-medium text-slate-500 dark:text-slate-400"
+                  transition={{ duration: 0.3, ease: "easeOut" }}
                 >
-                  <motion.span
-                    key={syncProgress}
-                    initial={{ opacity: 0.7, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
-                  >
-                    {Math.round(syncProgress)}%
-                  </motion.span>
-                </motion.div>
-              )}
-              
-              {/* Button */}
-              {syncStatus === 'completed' ? (
+                  {Math.round(syncProgress)} %
+                </motion.p>
+              </motion.div>
+            ) : (
+              <div /> {/* Empty spacer when not syncing */}
+            )}
+            
+            {/* Button - Right Side */}
+            {syncStatus === 'completed' ? (
                 <button
                   onClick={handleLogin}
                   disabled={loggingIn}
@@ -343,7 +344,6 @@ export default function SummaryPage() {
                   )}
                 </button>
               )}
-            </div>
           </div>
         </div>
       </div>
