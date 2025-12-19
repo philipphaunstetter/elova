@@ -25,6 +25,7 @@ export default function SummaryPage() {
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [loading, setLoading] = useState(false)
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'completed' | 'error'>('idle')
+  const [syncProgress, setSyncProgress] = useState(0)
   const [loggingIn, setLoggingIn] = useState(false)
   
   // Route guard: redirect if step 3 not completed
@@ -115,10 +116,16 @@ export default function SummaryPage() {
         const response = await fetch('/api/setup/status')
         const status = await response.json()
 
-        console.log('Sync status poll:', status.initialSync?.status)
+        console.log('Sync status poll:', status.initialSync?.status, 'Progress:', status.initialSync?.progress)
+
+        // Update progress
+        if (status.initialSync?.progress !== undefined) {
+          setSyncProgress(status.initialSync.progress)
+        }
 
         if (status.initialSync?.status === 'completed') {
           setSyncStatus('completed')
+          setSyncProgress(100)
           shouldContinue = false
           return
         } else if (status.initialSync?.status === 'failed') {
@@ -284,37 +291,55 @@ export default function SummaryPage() {
                 )}
               </button>
             ) : (
-              <button
-                onClick={handleComplete}
-                disabled={syncStatus === 'syncing'}
-                className={`group flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
-                  syncStatus === 'syncing'
-                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 cursor-not-allowed'
-                    : syncStatus === 'error'
-                    ? 'bg-red-600 text-white cursor-pointer hover:bg-red-700'
-                    : 'bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 hover:bg-[#1e293b] dark:hover:bg-slate-200 cursor-pointer'
-                }`}
-              >
-                <span>
-                  {syncStatus === 'syncing'
-                    ? 'Syncing'
-                    : syncStatus === 'error'
-                    ? 'Failed'
-                    : 'Complete'
-                  }
-                </span>
-                {syncStatus === 'syncing' ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : syncStatus === 'error' ? (
-                  <ChevronRight className="w-3.5 h-3.5" />
-                ) : (
+              <div className="flex flex-col items-end gap-2">
+                {syncStatus === 'syncing' && (
                   <motion.div
-                    className="group-hover:translate-x-1 transition-transform duration-200"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-xs leading-4 tracking-[0.18px] font-medium text-slate-500 dark:text-slate-400"
                   >
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    <motion.span
+                      key={syncProgress}
+                      initial={{ opacity: 0.7, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, ease: "easeOut" }}
+                    >
+                      {Math.round(syncProgress)}%
+                    </motion.span>
                   </motion.div>
                 )}
-              </button>
+                <button
+                  onClick={handleComplete}
+                  disabled={syncStatus === 'syncing'}
+                  className={`group flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                    syncStatus === 'syncing'
+                      ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 cursor-not-allowed'
+                      : syncStatus === 'error'
+                      ? 'bg-red-600 text-white cursor-pointer hover:bg-red-700'
+                      : 'bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 hover:bg-[#1e293b] dark:hover:bg-slate-200 cursor-pointer'
+                  }`}
+                >
+                  <span>
+                    {syncStatus === 'syncing'
+                      ? 'Syncing'
+                      : syncStatus === 'error'
+                      ? 'Failed'
+                      : 'Complete'
+                    }
+                  </span>
+                  {syncStatus === 'syncing' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : syncStatus === 'error' ? (
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  ) : (
+                    <motion.div
+                      className="group-hover:translate-x-1 transition-transform duration-200"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </motion.div>
+                  )}
+                </button>
+              </div>
             )}
           </div>
         </div>
