@@ -118,7 +118,29 @@ export async function POST(request: NextRequest) {
                     })
                   }
                   console.log(`Successfully updated is_tracked=1 for ${updatedCount} workflows`)
+                } else {
+                  console.log('No workflows selected for tracking - all workflows will be untracked')
                 }
+                
+                // Verify tracking status was set correctly
+                const verifyTracking = await new Promise<{tracked: number, untracked: number}>((resolve, reject) => {
+                  db.all(
+                    'SELECT is_tracked, COUNT(*) as count FROM workflows WHERE provider_id = ? GROUP BY is_tracked',
+                    [provider.id],
+                    (err, rows: Array<{is_tracked: number, count: number}>) => {
+                      if (err) reject(err)
+                      else {
+                        const result = { tracked: 0, untracked: 0 }
+                        rows?.forEach(row => {
+                          if (row.is_tracked === 1) result.tracked = row.count
+                          else result.untracked = row.count
+                        })
+                        resolve(result)
+                      }
+                    }
+                  )
+                })
+                console.log(`✅ Tracking status verified: ${verifyTracking.tracked} tracked, ${verifyTracking.untracked} untracked`)
                 console.log(`Updated tracking status for ${trackedWorkflowIds.length} workflows`)
               }
             } catch (syncError) {

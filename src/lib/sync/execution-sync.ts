@@ -315,7 +315,28 @@ export class ExecutionSyncService {
           if (err) reject(err)
           else {
             const ids = new Set(rows.map(r => r.provider_workflow_id))
+            console.log(`📊 Untracked workflows for provider ${providerId}: ${ids.size}`)
             resolve(ids)
+          }
+        }
+      )
+    })
+  }
+
+  /**
+   * Get list of tracked workflows for a provider
+   */
+  private async getTrackedWorkflows(providerId: string): Promise<Array<{ provider_workflow_id: string, name: string }>> {
+    const db = getSQLiteClient()
+    return new Promise((resolve, reject) => {
+      db.all(
+        'SELECT provider_workflow_id, name FROM workflows WHERE provider_id = ? AND is_tracked = 1',
+        [providerId],
+        (err, rows: { provider_workflow_id: string, name: string }[]) => {
+          if (err) reject(err)
+          else {
+            console.log(`📊 Tracked workflows for provider ${providerId}: ${rows?.length || 0}`)
+            resolve(rows || [])
           }
         }
       )
@@ -408,6 +429,7 @@ export class ExecutionSyncService {
 
   /**
    * Sync full workflow definitions for backup
+   * NOTE: Backups ALL workflows regardless of tracking status (for disaster recovery)
    */
   private async syncWorkflowBackups(provider: Provider, options: SyncOptions) {
     // Use provider configuration directly
@@ -416,9 +438,9 @@ export class ExecutionSyncService {
 
     const n8nClient = this.createN8nClient(host, apiKey)
 
-    console.log(`💾 Creating workflow backups for ${provider.name}`)
+    console.log(`💾 Creating workflow backups for ${provider.name} (all workflows)`)
 
-    // Get workflow list first
+    // Get workflow list from n8n
     const workflows = await n8nClient.getWorkflows()
     let backedUp = 0
 
@@ -435,6 +457,8 @@ export class ExecutionSyncService {
         console.error(`❌ Failed to backup workflow ${workflow.name}:`, error)
       }
     }
+
+    console.log(`💾 Backup complete: ${backedUp}/${workflows.length} workflows backed up`)
 
     return {
       type: 'backups',
