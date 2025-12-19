@@ -280,14 +280,17 @@ export default function SummaryPage() {
                 animate={{ opacity: 1, x: 0 }}
                 className="text-xs leading-4 tracking-[0.18px] font-medium text-slate-500 dark:text-slate-400 text-center whitespace-nowrap"
               >
-                <motion.p
-                  key={syncProgress}
-                  initial={{ opacity: 0.7, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                >
-                  {Math.round(syncProgress)} %
-                </motion.p>
+                <p className="inline-flex items-center gap-1">
+                  <motion.span
+                    key={syncProgress}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, ease: "easeInOut" }}
+                  >
+                    {Math.round(syncProgress)}
+                  </motion.span>
+                  <span>%</span>
+                </p>
               </motion.div>
             ) : (
               <div />
