@@ -7,7 +7,6 @@ const PUBLIC_ROUTES = [
   '/api/setup',
   '/api/auth',
   '/setup',
-  '/login',
   '/_next',
   '/favicon.ico',
   '/robots.txt'
@@ -67,6 +66,11 @@ export async function middleware(request: NextRequest) {
     // If setup is required and user is not on a setup page
     if (!setupStatus.initDone && !SETUP_ROUTES.some(route => pathname.startsWith(route))) {
       // Redirect to admin setup
+      return NextResponse.redirect(new URL('/setup', request.url))
+    }
+
+    // Login page requires setup completion
+    if (pathname === '/login' && !setupStatus.initDone) {
       return NextResponse.redirect(new URL('/setup', request.url))
     }
 
