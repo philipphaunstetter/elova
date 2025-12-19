@@ -272,27 +272,27 @@ export default function SummaryPage() {
           </div>
 
           {/* Complete / Log In Button */}
-          <div className="flex items-center justify-between w-full">
-            {/* Progress Percentage - Left Side */}
-            {syncStatus === 'syncing' && (
-              <motion.div
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="text-xs leading-4 tracking-[0.18px] font-medium text-slate-500 dark:text-slate-400"
-              >
-                <motion.span
-                  key={syncProgress}
-                  initial={{ opacity: 0.7, y: 5 }}
+          <div className="flex justify-end w-full">
+            <div className="flex flex-col items-end gap-2">
+              {/* Progress Percentage - Above Button */}
+              {syncStatus === 'syncing' && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  className="text-xs leading-4 tracking-[0.18px] font-medium text-slate-500 dark:text-slate-400"
                 >
-                  {Math.round(syncProgress)}%
-                </motion.span>
-              </motion.div>
-            )}
-            
-            {/* Button - Right Side */}
-            <div className="ml-auto">
+                  <motion.span
+                    key={syncProgress}
+                    initial={{ opacity: 0.7, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                  >
+                    {Math.round(syncProgress)}%
+                  </motion.span>
+                </motion.div>
+              )}
+              
+              {/* Button */}
               {syncStatus === 'completed' ? (
                 <button
                   onClick={handleLogin}
