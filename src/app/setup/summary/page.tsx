@@ -24,7 +24,7 @@ export default function SummaryPage() {
   const { setupData, isStepAccessible } = useSetup()
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [loading, setLoading] = useState(false)
-  const [completing, setCompleting] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle')
   
   // Route guard: redirect if step 3 not completed
   useEffect(() => {
@@ -71,7 +71,8 @@ export default function SummaryPage() {
   }, [isStepAccessible, router, setupData.n8nConfig, setupData.trackedWorkflowIds])
 
   const handleComplete = async () => {
-    setCompleting(true)
+    setSyncStatus('syncing')
+    const startTime = Date.now()
     
     try {
       const response = await fetch('/api/setup/complete', {
@@ -83,18 +84,25 @@ export default function SummaryPage() {
       })
 
       const result = await response.json()
+      
+      // Ensure minimum 3 second delay for better UX
+      const elapsed = Date.now() - startTime
+      const remainingTime = Math.max(0, 3000 - elapsed)
+      await new Promise(resolve => setTimeout(resolve, remainingTime))
 
       if (result.success) {
-        // Redirect to dashboard or home
-        router.push('/')
+        setSyncStatus('success')
+        // Show success state briefly before redirecting
+        setTimeout(() => {
+          router.push('/')
+        }, 1500)
       } else {
+        setSyncStatus('error')
         throw new Error(result.error || 'Setup completion failed')
       }
     } catch (error) {
       console.error('Failed to complete setup:', error)
-      alert('Failed to complete setup. Please try again.')
-    } finally {
-      setCompleting(false)
+      setSyncStatus('error')
     }
   }
 
@@ -181,23 +189,39 @@ export default function SummaryPage() {
           <div className="flex justify-end w-full">
             <button
               onClick={handleComplete}
-              disabled={completing}
-              className="group flex items-center gap-2 px-4 py-2 bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              disabled={syncStatus === 'syncing'}
+              className={`group flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                syncStatus === 'syncing'
+                  ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 cursor-not-allowed'
+                  : syncStatus === 'success'
+                  ? 'bg-green-600 text-white cursor-default'
+                  : syncStatus === 'error'
+                  ? 'bg-red-600 text-white cursor-pointer hover:bg-red-700'
+                  : 'bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 hover:bg-[#1e293b] dark:hover:bg-slate-200 cursor-pointer'
+              }`}
             >
-              {completing ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Completing...</span>
-                </>
+              <span>
+                {syncStatus === 'syncing'
+                  ? 'Syncing'
+                  : syncStatus === 'success'
+                  ? 'Success'
+                  : syncStatus === 'error'
+                  ? 'Failed'
+                  : 'Complete'
+                }
+              </span>
+              {syncStatus === 'syncing' ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : syncStatus === 'success' ? (
+                <ChevronRight className="w-3.5 h-3.5" />
+              ) : syncStatus === 'error' ? (
+                <ChevronRight className="w-3.5 h-3.5" />
               ) : (
-                <>
-                  <span>Complete</span>
-                  <motion.div
-                    className="group-hover:translate-x-1 transition-transform duration-200"
-                  >
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </motion.div>
-                </>
+                <motion.div
+                  className="group-hover:translate-x-1 transition-transform duration-200"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </motion.div>
               )}
             </button>
           </div>
