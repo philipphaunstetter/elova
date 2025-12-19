@@ -85,9 +85,12 @@ export async function POST(request: NextRequest) {
                 
                 // First set all to untracked for this provider
                 await new Promise<void>((resolve, reject) => {
-                  db.run('UPDATE workflows SET is_tracked = 0 WHERE provider_id = ?', [provider.id], (err) => {
+                  db.run('UPDATE workflows SET is_tracked = 0 WHERE provider_id = ?', [provider.id], function(err) {
                     if (err) reject(err)
-                    else resolve()
+                    else {
+                      console.log(`✅ Set ${this.changes} workflows to is_tracked=0 for provider ${provider.id}`)
+                      resolve()
+                    }
                   })
                 })
 
@@ -100,6 +103,21 @@ export async function POST(request: NextRequest) {
 
                   // Update one by one to ensure reliability and avoid SQLite variable limits or type issues with IN clause
                   let updatedCount = 0
+                  console.log(`🔍 Attempting to mark these workflow IDs as tracked: [${stringIds.join(', ')}]`)
+                  
+                  // First, let's see what workflow IDs actually exist in the database
+                  const existingWorkflows = await new Promise<Array<{provider_workflow_id: string, name: string}>>((resolve, reject) => {
+                    db.all(
+                      'SELECT provider_workflow_id, name FROM workflows WHERE provider_id = ?',
+                      [provider.id],
+                      (err, rows: Array<{provider_workflow_id: string, name: string}>) => {
+                        if (err) reject(err)
+                        else resolve(rows || [])
+                      }
+                    )
+                  })
+                  console.log(`📊 Existing workflow IDs in database: [${existingWorkflows.map(w => `${w.provider_workflow_id} (${w.name})`).join(', ')}]`)
+                  
                   for (const id of stringIds) {
                     await new Promise<void>((resolve, reject) => {
                       db.run(
@@ -107,10 +125,15 @@ export async function POST(request: NextRequest) {
                         [provider.id, id],
                         function(err) {
                           if (err) {
-                            console.error(`Failed to update tracking for workflow ${id}:`, err)
+                            console.error(`❌ Failed to update tracking for workflow ${id}:`, err)
                             // Don't reject, just log and continue
                           } else {
-                            if (this.changes > 0) updatedCount++
+                            if (this.changes > 0) {
+                              updatedCount++
+                              console.log(`✅ Successfully marked workflow ${id} as tracked (${this.changes} row updated)`)
+                            } else {
+                              console.warn(`⚠️ Workflow ${id} not found in database - no rows updated`)
+                            }
                           }
                           resolve()
                         }
@@ -118,7 +141,29 @@ export async function POST(request: NextRequest) {
                     })
                   }
                   console.log(`Successfully updated is_tracked=1 for ${updatedCount} workflows`)
+                } else {
+                  console.log('No workflows selected for tracking - all workflows will be untracked')
                 }
+                
+                // Verify tracking status was set correctly
+                const verifyTracking = await new Promise<{tracked: number, untracked: number}>((resolve, reject) => {
+                  db.all(
+                    'SELECT is_tracked, COUNT(*) as count FROM workflows WHERE provider_id = ? GROUP BY is_tracked',
+                    [provider.id],
+                    (err, rows: Array<{is_tracked: number, count: number}>) => {
+                      if (err) reject(err)
+                      else {
+                        const result = { tracked: 0, untracked: 0 }
+                        rows?.forEach(row => {
+                          if (row.is_tracked === 1) result.tracked = row.count
+                          else result.untracked = row.count
+                        })
+                        resolve(result)
+                      }
+                    }
+                  )
+                })
+                console.log(`✅ Tracking status verified: ${verifyTracking.tracked} tracked, ${verifyTracking.untracked} untracked`)
                 console.log(`Updated tracking status for ${trackedWorkflowIds.length} workflows`)
               }
             } catch (syncError) {
@@ -156,6 +201,13 @@ export async function POST(request: NextRequest) {
     // Set default configuration values
     await config.upsert('app.timezone', 'UTC', 'string', 'system', 'Application timezone')
     await config.upsert('app.demoMode', 'false', 'boolean', 'system', 'Demo mode flag')
+    
+    // Store tracked workflow IDs in config for initial sync to use
+    // This ensures tracking preferences are set even if workflow sync fails during setup
+    if (trackedWorkflowIds && Array.isArray(trackedWorkflowIds)) {
+      await config.upsert('setup.tracked_workflow_ids', JSON.stringify(trackedWorkflowIds), 'string', 'setup', 'Workflow IDs selected for tracking')
+      console.log(`💾 Stored ${trackedWorkflowIds.length} tracked workflow IDs in config for initial sync`)
+    }
 
     // Mark setup as complete by setting the initDone flag
     await config.upsert('app.initDone', 'true', 'boolean', 'system', 'Initialization complete flag')

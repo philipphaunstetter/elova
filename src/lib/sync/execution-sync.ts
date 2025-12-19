@@ -315,7 +315,28 @@ export class ExecutionSyncService {
           if (err) reject(err)
           else {
             const ids = new Set(rows.map(r => r.provider_workflow_id))
+            console.log(`📊 Untracked workflows for provider ${providerId}: ${ids.size}`)
             resolve(ids)
+          }
+        }
+      )
+    })
+  }
+
+  /**
+   * Get list of tracked workflows for a provider
+   */
+  private async getTrackedWorkflows(providerId: string): Promise<Array<{ provider_workflow_id: string, name: string }>> {
+    const db = getSQLiteClient()
+    return new Promise((resolve, reject) => {
+      db.all(
+        'SELECT provider_workflow_id, name FROM workflows WHERE provider_id = ? AND is_tracked = 1',
+        [providerId],
+        (err, rows: { provider_workflow_id: string, name: string }[]) => {
+          if (err) reject(err)
+          else {
+            console.log(`📊 Tracked workflows for provider ${providerId}: ${rows?.length || 0}`)
+            resolve(rows || [])
           }
         }
       )
@@ -408,6 +429,7 @@ export class ExecutionSyncService {
 
   /**
    * Sync full workflow definitions for backup
+   * NOTE: Backups ALL workflows regardless of tracking status (for disaster recovery)
    */
   private async syncWorkflowBackups(provider: Provider, options: SyncOptions) {
     // Use provider configuration directly
@@ -416,9 +438,9 @@ export class ExecutionSyncService {
 
     const n8nClient = this.createN8nClient(host, apiKey)
 
-    console.log(`💾 Creating workflow backups for ${provider.name}`)
+    console.log(`💾 Creating workflow backups for ${provider.name} (all workflows)`)
 
-    // Get workflow list first
+    // Get workflow list from n8n
     const workflows = await n8nClient.getWorkflows()
     let backedUp = 0
 
@@ -436,6 +458,8 @@ export class ExecutionSyncService {
       }
     }
 
+    console.log(`💾 Backup complete: ${backedUp}/${workflows.length} workflows backed up`)
+
     return {
       type: 'backups',
       processed: workflows.length,
@@ -444,21 +468,31 @@ export class ExecutionSyncService {
   }
 
   /**
-   * Full sync: executions + workflows + backups
+   * Full sync: workflows first (for tracking flags), then executions + backups in parallel
+   * NOTE: During initial setup, tracking flags need to be applied AFTER workflows are synced
+   *       but BEFORE executions are synced. This is handled in initial-sync route.
    */
   private async syncFull(provider: Provider, options: SyncOptions) {
     console.log(`🔄 Performing full sync for ${provider.name}`)
 
-    const [executions, workflows, backups] = await Promise.allSettled([
+    // Sync workflows FIRST so they exist in database
+    let workflows
+    try {
+      workflows = await this.syncWorkflows(provider, options)
+    } catch (error) {
+      workflows = { status: 'rejected', reason: error }
+    }
+
+    // Then sync executions and backups in parallel
+    const [executions, backups] = await Promise.allSettled([
       this.syncExecutions(provider, options),
-      this.syncWorkflows(provider, options),
       this.syncWorkflowBackups(provider, options)
     ])
 
     return {
       type: 'full',
       executions: executions.status === 'fulfilled' ? executions.value : { error: executions.reason },
-      workflows: workflows.status === 'fulfilled' ? workflows.value : { error: workflows.reason },
+      workflows: workflows,
       backups: backups.status === 'fulfilled' ? backups.value : { error: backups.reason }
     }
   }

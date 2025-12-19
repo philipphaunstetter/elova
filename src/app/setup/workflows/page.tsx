@@ -61,11 +61,19 @@ export default function WorkflowsPage() {
         const fetchedWorkflows = result.data || []
         setWorkflows(fetchedWorkflows)
         
-        // Auto-select all active workflows
-        const activeWorkflowIds = fetchedWorkflows
-          .filter((wf: Workflow) => wf.isActive)
-          .map((wf: Workflow) => wf.id)
-        setSelectedIds(new Set(activeWorkflowIds))
+        console.log('🔍 Workflow page: trackedWorkflowIds from context:', setupData.trackedWorkflowIds)
+        console.log('🔍 Workflow page: current selectedIds:', Array.from(selectedIds))
+        
+        // Auto-select all active workflows ONLY if no previous selection exists
+        if (!setupData.trackedWorkflowIds || setupData.trackedWorkflowIds.length === 0) {
+          const activeWorkflowIds = fetchedWorkflows
+            .filter((wf: Workflow) => wf.isActive)
+            .map((wf: Workflow) => wf.id)
+          console.log('✅ Auto-selecting active workflows:', activeWorkflowIds)
+          setSelectedIds(new Set(activeWorkflowIds))
+        } else {
+          console.log('ℹ️ Using existing selection from context, not auto-selecting')
+        }
       } catch (err) {
         console.error('Failed to fetch workflows:', err)
         setError(err instanceof Error ? err.message : 'Failed to fetch workflows')
@@ -99,8 +107,10 @@ export default function WorkflowsPage() {
   }
   
   const handleNext = () => {
+    const selectedArray = Array.from(selectedIds)
+    console.log('🚀 Workflow page: saving selection:', selectedArray)
     updateSetupData({
-      trackedWorkflowIds: Array.from(selectedIds)
+      trackedWorkflowIds: selectedArray
     })
     markStepComplete(3)
     router.push('/setup/summary')
