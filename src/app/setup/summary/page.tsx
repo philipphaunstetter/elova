@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useSetup } from '@/contexts/SetupContext'
 import { ChevronRight, Loader2 } from 'lucide-react'
 import Image from 'next/image'
-import { motion } from 'framer-motion'
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import {
   Tooltip,
   TooltipContent,
@@ -27,6 +27,10 @@ export default function SummaryPage() {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'completed' | 'error'>('idle')
   const [syncProgress, setSyncProgress] = useState(0)
   const [loggingIn, setLoggingIn] = useState(false)
+  
+  // Animated counter for smooth percentage transitions
+  const animatedProgress = useMotionValue(0)
+  const displayProgress = useTransform(animatedProgress, Math.round)
   
   // Route guard: redirect if step 3 not completed
   useEffect(() => {
@@ -118,9 +122,21 @@ export default function SummaryPage() {
 
         console.log('Sync status poll:', status.initialSync?.status, 'Progress:', status.initialSync?.progress)
 
-        // Update progress
+        // Update progress with animated counter
         if (status.initialSync?.progress !== undefined) {
-          setSyncProgress(status.initialSync.progress)
+          const newProgress = status.initialSync.progress
+          setSyncProgress(newProgress)
+          
+          // Calculate animation duration based on the gap
+          const gap = Math.abs(newProgress - animatedProgress.get())
+          // Smaller gaps = slower (0.5s), larger gaps = faster (2s max)
+          const duration = Math.min(Math.max(gap * 0.05, 0.5), 2)
+          
+          // Animate to the new value
+          animate(animatedProgress, newProgress, {
+            duration,
+            ease: "easeInOut"
+          })
         }
 
         if (status.initialSync?.status === 'completed') {
@@ -281,14 +297,7 @@ export default function SummaryPage() {
                 className="text-xs leading-4 tracking-[0.18px] font-medium text-slate-500 dark:text-slate-400 text-center whitespace-nowrap"
               >
                 <p className="inline-flex items-center gap-1">
-                  <motion.span
-                    key={syncProgress}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, ease: "easeInOut" }}
-                  >
-                    {Math.round(syncProgress)}
-                  </motion.span>
+                  <motion.span>{displayProgress}</motion.span>
                   <span>%</span>
                 </p>
               </motion.div>
