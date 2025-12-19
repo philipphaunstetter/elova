@@ -61,11 +61,13 @@ export default function WorkflowsPage() {
         const fetchedWorkflows = result.data || []
         setWorkflows(fetchedWorkflows)
         
-        // Auto-select all active workflows
-        const activeWorkflowIds = fetchedWorkflows
-          .filter((wf: Workflow) => wf.isActive)
-          .map((wf: Workflow) => wf.id)
-        setSelectedIds(new Set(activeWorkflowIds))
+        // Auto-select all active workflows ONLY if no previous selection exists
+        if (!setupData.trackedWorkflowIds || setupData.trackedWorkflowIds.length === 0) {
+          const activeWorkflowIds = fetchedWorkflows
+            .filter((wf: Workflow) => wf.isActive)
+            .map((wf: Workflow) => wf.id)
+          setSelectedIds(new Set(activeWorkflowIds))
+        }
       } catch (err) {
         console.error('Failed to fetch workflows:', err)
         setError(err instanceof Error ? err.message : 'Failed to fetch workflows')
