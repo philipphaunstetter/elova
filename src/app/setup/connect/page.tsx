@@ -178,7 +178,7 @@ export default function ConnectPage() {
                   onClick={() => setShowApiKey(!showApiKey)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
                 >
-                  {showApiKey ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                  {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
