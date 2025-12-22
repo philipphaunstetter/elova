@@ -13,6 +13,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Check if form is valid (both fields have values)
+  const isFormValid = email.trim() !== '' && password.trim() !== ''
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -84,10 +87,16 @@ export default function LoginPage() {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    if (error) setError(null) // Clear error on input change
+                  }}
                   placeholder="admin@example.com"
                   disabled={loading}
-                  className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-[7.5px] min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={error
+                    ? 'bg-white dark:bg-slate-800 border border-red-500 rounded-full px-3 py-[7.5px] min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed'
+                    : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-full px-3 py-[7.5px] min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 disabled:opacity-50 disabled:cursor-not-allowed'
+                  }
                   required
                 />
               </div>
@@ -101,10 +110,16 @@ export default function LoginPage() {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value)
+                      if (error) setError(null) // Clear error on input change
+                    }}
                     placeholder="Enter your password"
                     disabled={loading}
-                    className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-[7.5px] pr-10 min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={error
+                      ? 'bg-white dark:bg-slate-800 border border-red-500 rounded-full px-3 py-[7.5px] pr-10 min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-red-500 w-full disabled:opacity-50 disabled:cursor-not-allowed'
+                      : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-full px-3 py-[7.5px] pr-10 min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 w-full disabled:opacity-50 disabled:cursor-not-allowed'
+                    }
                     required
                   />
                   <button
@@ -119,28 +134,33 @@ export default function LoginPage() {
                     )}
                   </button>
                 </div>
-                <a
-                  href="#"
-                  className="text-xs leading-4 tracking-[0.18px] text-slate-500 dark:text-slate-400 underline decoration-solid text-left"
-                >
-                  Forgot password?
-                </a>
+                
+                {/* Error Message - Below Password Field */}
+                {error ? (
+                  <p className="text-xs leading-4 tracking-[0.18px] text-red-500 text-center break-words">
+                    We couldn't log you in. Please check your email and password and try again. You can reset your password{' '}
+                    <a href="#" className="underline hover:text-red-600">
+                      here
+                    </a>
+                    .
+                  </p>
+                ) : (
+                  <a
+                    href="#"
+                    className="text-xs leading-4 tracking-[0.18px] text-slate-500 dark:text-slate-400 underline decoration-solid text-left"
+                  >
+                    Forgot password?
+                  </a>
+                )}
               </div>
-
-              {/* Error Message */}
-              {error && (
-                <div className="text-sm text-red-600 dark:text-red-400">
-                  {error}
-                </div>
-              )}
             </div>
 
             {/* Submit Button */}
             <div className="flex items-center justify-end w-full">
               <button
                 type="submit"
-                disabled={loading}
-                className="group flex items-center gap-2 px-4 py-[7.5px] bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-lg text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[36px]"
+                disabled={loading || !isFormValid}
+                className="group flex items-center gap-2 px-4 py-[7.5px] bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-full text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[36px]"
               >
                 <span>{loading ? 'Logging In' : 'Log In'}</span>
                 {loading ? (
