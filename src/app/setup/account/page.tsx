@@ -12,6 +12,8 @@ export default function AccountPage() {
   const router = useRouter()
   const { setupData, updateSetupData, markStepComplete } = useSetup()
   
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState(setupData.account?.email || '')
   const [password, setPassword] = useState(setupData.account?.password || '')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -35,10 +37,11 @@ export default function AccountPage() {
 
   const handleNext = () => {
     // Save account data to context
+    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim()
     updateSetupData({
       account: {
         email,
-        name: email.split('@')[0] || 'Admin',
+        name: fullName || email.split('@')[0] || 'Admin',
         password
       }
     })
@@ -69,6 +72,29 @@ export default function AccountPage() {
         {/* Form Fields */}
         <div className="flex flex-col gap-16">
           <div className="flex flex-col gap-4 w-full">
+            {/* Name Fields */}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-slate-900 dark:text-slate-100 tracking-[0.07px]">
+                Name
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="First name"
+                  className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#94a3b8] focus:shadow-[0_0_0_3px_#cbd5e1] dark:focus:border-slate-500 dark:focus:shadow-[0_0_0_3px_rgba(148,163,184,0.3)]"
+                />
+                <input
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Last name"
+                  className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#94a3b8] focus:shadow-[0_0_0_3px_#cbd5e1] dark:focus:border-slate-500 dark:focus:shadow-[0_0_0_3px_rgba(148,163,184,0.3)]"
+                />
+              </div>
+            </div>
+
             {/* Email Field */}
             <div className="flex flex-col gap-2">
               <label className="text-sm text-slate-900 dark:text-slate-100 tracking-[0.07px]">
@@ -186,7 +212,7 @@ export default function AccountPage() {
           <div className="flex justify-end">
             <button
               onClick={handleNext}
-              disabled={!email || !allRequirementsMet || password !== confirmPassword}
+              disabled={!firstName || !lastName || !email || !allRequirementsMet || password !== confirmPassword}
               className="group flex items-center gap-2 px-4 py-2 bg-[#0f172a] dark:bg-slate-100 text-[#f8fafc] dark:text-slate-900 rounded-full text-sm font-bold hover:bg-[#1e293b] dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
             >
               <span>Next</span>
