@@ -124,7 +124,7 @@ export default function ConnectPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Production n8n"
-                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#94a3b8] focus:shadow-[0_0_0_3px_#cbd5e1] dark:focus:border-slate-500 dark:focus:shadow-[0_0_0_3px_rgba(148,163,184,0.3)]"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-full text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#94a3b8] focus:shadow-[0_0_0_3px_#cbd5e1] dark:focus:border-slate-500 dark:focus:shadow-[0_0_0_3px_rgba(148,163,184,0.3)]"
               />
             </div>
 
@@ -143,7 +143,7 @@ export default function ConnectPage() {
                   }
                 }}
                 placeholder="https://your-n8n-instance.com"
-                className={`w-full px-3 py-2 border rounded-full shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none ${
+                className={`w-full px-3 py-2 border rounded-full text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none ${
                   connectionStatus === 'error'
                     ? 'border-red-500'
                     : 'border-slate-200 dark:border-slate-700 focus:border-[#94a3b8] focus:shadow-[0_0_0_3px_#cbd5e1] dark:focus:border-slate-500 dark:focus:shadow-[0_0_0_3px_rgba(148,163,184,0.3)]'
@@ -167,7 +167,7 @@ export default function ConnectPage() {
                     }
                   }}
                   placeholder="Enter your n8n API key"
-                  className={`w-full px-3 py-2 pr-10 border rounded-full shadow-sm text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none ${
+                  className={`w-full px-3 py-2 pr-10 border rounded-full text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none ${
                     connectionStatus === 'error'
                       ? 'border-red-500'
                       : 'border-slate-200 dark:border-slate-700 focus:border-[#94a3b8] focus:shadow-[0_0_0_3px_#cbd5e1] dark:focus:border-slate-500 dark:focus:shadow-[0_0_0_3px_rgba(148,163,184,0.3)]'
