@@ -94,8 +94,8 @@ export default function LoginPage() {
                   placeholder="admin@example.com"
                   disabled={loading}
                   className={error
-                    ? 'bg-white dark:bg-slate-800 border border-red-500 rounded-full px-3 py-[7.5px] min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed'
-                    : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-full px-3 py-[7.5px] min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 disabled:opacity-50 disabled:cursor-not-allowed'
+                    ? 'bg-white dark:bg-slate-800 border border-red-500 rounded-full px-3 py-[7.5px] min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed'
+                    : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-full px-3 py-[7.5px] min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 disabled:opacity-50 disabled:cursor-not-allowed'
                   }
                   required
                 />
@@ -117,8 +117,8 @@ export default function LoginPage() {
                     placeholder="Enter your password"
                     disabled={loading}
                     className={error
-                      ? 'bg-white dark:bg-slate-800 border border-red-500 rounded-full px-3 py-[7.5px] pr-10 min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-red-500 w-full disabled:opacity-50 disabled:cursor-not-allowed'
-                      : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-full px-3 py-[7.5px] pr-10 min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 w-full disabled:opacity-50 disabled:cursor-not-allowed'
+                      ? 'bg-white dark:bg-slate-800 border border-red-500 rounded-full px-3 py-[7.5px] pr-10 min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 w-full disabled:opacity-50 disabled:cursor-not-allowed'
+                      : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-full px-3 py-[7.5px] pr-10 min-h-[36px] text-sm leading-[21px] tracking-[0.07px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 w-full disabled:opacity-50 disabled:cursor-not-allowed'
                     }
                     required
                   />
