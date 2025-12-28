@@ -12,9 +12,10 @@ export function DashboardTabs() {
             <div className="flex flex-col items-start p-2.5 border-b-[0.5px] border-slate-900">
               <button
                 className={`
-                  font-sans text-sm font-medium outline-none
+                  text-sm outline-none
                   ${selected ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'}
                 `}
+                style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 500 }}
               >
                 For you
               </button>
@@ -26,9 +27,10 @@ export function DashboardTabs() {
             <div className="flex flex-col items-start p-2.5">
               <button
                 className={`
-                  font-sans text-sm font-normal outline-none
+                  text-sm outline-none
                   ${selected ? 'text-slate-900' : 'text-slate-900 hover:text-slate-700'}
                 `}
+                style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400 }}
               >
                 Insights
               </button>
@@ -42,18 +44,18 @@ export function DashboardTabs() {
             {/* Recent Activities Card */}
             <div className="border border-slate-200 rounded-lg p-4 w-full">
               <div className="mb-4">
-                <h3 className="text-sm font-medium text-slate-900">Change Log</h3>
-                <p className="text-xs text-slate-500">Recent workflow modifications and publish notes.</p>
+                <h3 className="text-base leading-6 text-black" style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0px' }}>Change Log</h3>
+                <p className="text-sm leading-[21px] text-[#64748b]" style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0.07px' }}>Recent workflow modifications and publish notes.</p>
               </div>
               
-              <div className="space-y-3">
+              <div className="flex flex-col gap-2.5">
                 {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-md transition-colors">
-                    <div>
-                      <p className="text-xs font-medium text-slate-900">Lead Generation 2.0</p>
-                      <p className="text-[10px] text-slate-500">11:23 PM</p>
+                  <div key={i} className="flex items-center justify-between px-4 py-1 rounded-lg hover:bg-slate-50 transition-colors">
+                    <div className="flex flex-col">
+                      <p className="text-sm leading-[21px] text-[#020617]" style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0.07px' }}>Lead Generation 2.0</p>
+                      <p className="text-xs leading-4 text-[#64748b]" style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0.18px' }}>11:23 PM</p>
                     </div>
-                    <span className="bg-slate-900 text-slate-50 text-[10px] font-bold px-2 py-0.5 rounded">
+                    <span className="bg-[#0f172a] text-[#f8fafc] text-sm leading-[21px] min-h-[24px] px-2 py-[3px] rounded-lg" style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 700, letterSpacing: '0.07px' }}>
                       Label
                     </span>
                   </div>
@@ -63,7 +65,7 @@ export function DashboardTabs() {
           </div>
         </Tab.Panel>
         <Tab.Panel>
-          <div className="p-4 border border-slate-200 rounded-lg border-dashed text-center text-slate-500 text-sm">
+          <div className="p-4 border border-slate-200 rounded-lg border-dashed text-center text-slate-500 text-sm" style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400 }}>
             Insights content coming soon.
           </div>
         </Tab.Panel>

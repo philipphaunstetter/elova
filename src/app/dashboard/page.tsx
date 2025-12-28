@@ -15,21 +15,21 @@ export default function DashboardPage() {
         </div>
         
         {/* Progress Example */}
-        <div className="flex items-center gap-4">
-          <span className="text-xs font-medium text-slate-500 tracking-wide">$ 232.23</span>
-          <div className="w-[200px] h-1 bg-purple-100 rounded-full overflow-hidden relative">
-            <div className="absolute top-0 left-0 h-full w-1/4 bg-purple-800 rounded-full" />
+        <div className="flex items-center gap-1">
+          <span className="text-sm leading-[21px] text-[#64748b]" style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 500, letterSpacing: '0.07px' }}>$ 232.23</span>
+          <div className="w-[200px] h-1 bg-purple-100 rounded-xl overflow-hidden relative">
+            <div className="absolute top-0 left-0 h-full w-1/4 bg-purple-900 rounded-xl" />
           </div>
-          <span className="text-xs font-medium text-slate-500 tracking-wide">$ 500</span>
+          <span className="text-sm leading-[21px] text-[#64748b]" style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 500, letterSpacing: '0.07px' }}>$ 500</span>
         </div>
       </div>
 
       {/* Greeting */}
       <div className="mb-8">
-        <h1 className="text-3xl font-medium text-purple-900 tracking-tight mb-2">
+        <h1 className="text-3xl text-purple-900 tracking-tight mb-2" style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 500 }}>
           Up late, Max. ✌
         </h1>
-        <p className="text-slate-500">
+        <p className="text-slate-500" style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400 }}>
           Here's what's been happening.
         </p>
       </div>

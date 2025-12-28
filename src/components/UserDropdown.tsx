@@ -53,7 +53,12 @@ export function UserDropdown({ user }: UserDropdownProps) {
 
       {/* Username */}
       <div className="flex-1 px-4">
-        <span className="font-sans text-sm font-bold text-slate-900">
+        <span className="text-sm leading-[21px]" style={{ 
+          fontFamily: 'var(--font-match-variable)', 
+          fontWeight: 400,
+          color: '#020617',
+          letterSpacing: '0.07px'
+        }}>
           {user?.name || 'User'}
         </span>
       </div>

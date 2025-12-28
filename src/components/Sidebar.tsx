@@ -21,7 +21,7 @@ export function Sidebar() {
       <div className="flex flex-col">
         <div className="flex items-center justify-between px-5 py-4">
           {/* Logo */}
-          <div className="w-[60px] h-[25.3px] relative">
+          <div className="w-[75px] h-[31.614px] relative">
             <img 
               src="/elova-brand.svg" 
               alt="Elova" 
@@ -54,11 +54,12 @@ export function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
-              className={`flex items-center gap-2 min-h-[32px] px-2 text-sm transition-colors ${
+              className={`flex items-center gap-2 min-h-[32px] px-2 text-base leading-6 transition-colors ${
                 isActive
                   ? 'bg-purple-100 text-purple-900 rounded-full'
                   : 'text-purple-900 hover:bg-slate-50 rounded-md'
               }`}
+              style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400 }}
             >
               <item.icon className="w-5 h-5 text-purple-900" />
               {item.name}
@@ -68,8 +69,8 @@ export function Sidebar() {
       </div>
 
       {/* User Area */}
-      <div className="border-t border-transparent">
-        <UserDropdown 
+      <div>
+        <UserDropdown
           user={{
             name: 'Max Mustermann', // Placeholder, ideally fetch from context
             image: '' 
