@@ -61,7 +61,7 @@ export function UserDropdown({ user }: UserDropdownProps) {
       {/* Action Buttons */}
       <div className="flex items-center gap-1">
         <Menu as="div" className="relative inline-block text-left">
-          <Menu.Button className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+          <Menu.Button className="p-1 rounded hover:bg-slate-100 text-purple-300 hover:text-purple-500 transition-colors">
             <MoreHorizontal className="w-[13px] h-[13px]" />
           </Menu.Button>
           <Transition
@@ -120,7 +120,7 @@ export function UserDropdown({ user }: UserDropdownProps) {
           </Transition>
         </Menu>
 
-        <button className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+        <button className="p-1 rounded hover:bg-slate-100 text-purple-300 hover:text-purple-500 transition-colors">
           <Bell className="w-[13px] h-[13px]" />
         </button>
       </div>

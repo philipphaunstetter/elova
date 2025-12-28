@@ -30,10 +30,10 @@ export function Sidebar() {
         
         {/* Icon Buttons */}
         <div className="flex gap-1 items-center">
-          <button className="flex items-center justify-center min-w-[24px] min-h-[24px] p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+          <button className="flex items-center justify-center min-w-[24px] min-h-[24px] p-1 rounded hover:bg-slate-100 text-purple-300 hover:text-purple-500 transition-colors">
             <Sun className="w-[13.25px] h-[13.25px]" />
           </button>
-          <button className="flex items-center justify-center min-w-[24px] min-h-[24px] p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+          <button className="flex items-center justify-center min-w-[24px] min-h-[24px] p-1 rounded hover:bg-slate-100 text-purple-300 hover:text-purple-500 transition-colors">
             <PanelLeftClose className="w-[13.25px] h-[13.25px]" />
           </button>
         </div>
@@ -45,23 +45,22 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <div className="flex-1 px-2 pt-4 flex flex-col">
+      <div className="flex-1 px-2 pt-4 flex flex-col font-sans">
         {navItems.map((item) => {
           const isActive = pathname === item.href
           return (
-            <div key={item.name} className={isActive ? '' : 'px-2'}>
-              <Link
-                href={item.href}
-                className={`flex items-center gap-2 min-h-[32px] px-2 text-sm transition-colors ${
-                  isActive
-                    ? 'bg-purple-100 text-purple-900 rounded-full'
-                    : 'text-purple-900 hover:bg-slate-50 rounded-md'
-                }`}
-              >
-                <item.icon className="w-5 h-5 text-purple-900" />
-                {item.name}
-              </Link>
-            </div>
+            <Link
+              key={item.name}
+              href={item.href}
+              className={`flex items-center gap-2 min-h-[32px] px-2 text-sm transition-colors ${
+                isActive
+                  ? 'bg-purple-100 text-purple-900 rounded-full'
+                  : 'text-purple-900 hover:bg-slate-50 rounded-md'
+              }`}
+            >
+              <item.icon className="w-5 h-5 text-purple-900" />
+              {item.name}
+            </Link>
           )
         })}
       </div>
