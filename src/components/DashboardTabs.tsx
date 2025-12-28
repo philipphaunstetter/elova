@@ -34,9 +34,9 @@ export function DashboardTabs() {
       </Tab.List>
       <Tab.Panels>
         <Tab.Panel>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="flex flex-col gap-6 w-full">
             {/* Recent Activities Card */}
-            <div className="border border-slate-200 rounded-lg p-4">
+            <div className="border border-slate-200 rounded-lg p-4 w-full">
               <div className="mb-4">
                 <h3 className="text-sm font-medium text-slate-900">Change Log</h3>
                 <p className="text-xs text-slate-500">Recent workflow modifications and publish notes.</p>

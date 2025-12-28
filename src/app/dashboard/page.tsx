@@ -5,7 +5,7 @@ import { DashboardTabs } from '@/components/DashboardTabs'
 
 export default function DashboardPage() {
   return (
-    <div className="p-12 max-w-[1200px]">
+    <div className="p-12 w-full">
       {/* Top Bar */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center">
