@@ -30,12 +30,12 @@ export function Sidebar() {
           </div>
           
           {/* Icon Buttons */}
-          <div className="flex gap-1 items-center">
-            <button className="flex items-center justify-center min-w-[24px] min-h-[24px] p-1 rounded hover:bg-slate-100 text-purple-300 hover:text-purple-500 transition-colors">
-              <Sun className="w-[13.25px] h-[13.25px]" />
+          <div className="flex items-center">
+            <button className="flex items-center justify-center min-w-[36px] min-h-[36px] p-2 rounded-lg hover:bg-slate-100 text-purple-300 hover:text-purple-500 transition-colors">
+              <Sun className="w-[16.25px] h-[16.25px]" />
             </button>
-            <button className="flex items-center justify-center min-w-[24px] min-h-[24px] p-1 rounded hover:bg-slate-100 text-purple-300 hover:text-purple-500 transition-colors">
-              <PanelLeftClose className="w-[13.25px] h-[13.25px]" />
+            <button className="flex items-center justify-center min-w-[36px] min-h-[36px] p-2 rounded-lg hover:bg-slate-100 text-purple-300 hover:text-purple-500 transition-colors">
+              <PanelLeftClose className="w-[16.25px] h-[16.25px]" />
             </button>
           </div>
         </div>
@@ -47,7 +47,7 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <div className="flex-1 px-2 pt-4 flex flex-col font-sans">
+      <div className="flex-1 px-2 pt-4 flex flex-col gap-2 font-sans">
         {navItems.map((item) => {
           const isActive = pathname === item.href
           return (
