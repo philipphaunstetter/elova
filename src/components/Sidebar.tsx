@@ -19,19 +19,22 @@ export function Sidebar() {
     <div className="flex flex-col w-[250px] h-screen border-r border-slate-200 bg-white sticky top-0 shrink-0">
       {/* Logo & Toggle Header */}
       <div className="flex items-center justify-between px-5 py-4">
-        <div className="flex items-center gap-2">
-            {/* Placeholder for Logo */}
-            <div className="h-6 w-6 bg-purple-600 rounded-md flex items-center justify-center">
-                <span className="text-white font-bold text-xs">E</span>
-            </div>
-            <span className="font-bold text-slate-900">Elova</span>
+        {/* Logo */}
+        <div className="w-[60px] h-[25.3px] relative">
+          <img 
+            src="/elova-brand.svg" 
+            alt="Elova" 
+            className="w-full h-full object-contain"
+          />
         </div>
-        <div className="flex gap-1">
-          <button className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
-            <Sun className="w-[13px] h-[13px]" />
+        
+        {/* Icon Buttons */}
+        <div className="flex gap-1 items-center">
+          <button className="flex items-center justify-center min-w-[24px] min-h-[24px] p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+            <Sun className="w-[13.25px] h-[13.25px]" />
           </button>
-          <button className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
-            <PanelLeftClose className="w-[13px] h-[13px]" />
+          <button className="flex items-center justify-center min-w-[24px] min-h-[24px] p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+            <PanelLeftClose className="w-[13.25px] h-[13.25px]" />
           </button>
         </div>
       </div>
