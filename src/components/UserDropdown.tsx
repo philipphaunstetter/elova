@@ -53,7 +53,7 @@ export function UserDropdown({ user }: UserDropdownProps) {
 
       {/* Username */}
       <div className="flex-1 px-4">
-        <span className="text-sm font-bold text-slate-900">
+        <span className="font-sans text-sm font-bold text-slate-900">
           {user?.name || 'User'}
         </span>
       </div>
