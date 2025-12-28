@@ -6,29 +6,33 @@ import { Fragment } from 'react'
 export function DashboardTabs() {
   return (
     <Tab.Group>
-      <Tab.List className="flex space-x-1 border-b border-gray-200 mb-6">
+      <Tab.List className="flex gap-0 border-b border-transparent mb-6">
         <Tab as={Fragment}>
           {({ selected }) => (
-            <button
-              className={`
-                px-4 py-2 text-sm font-medium outline-none
-                ${selected ? 'text-slate-900 border-b-2 border-slate-900' : 'text-slate-500 hover:text-slate-700'}
-              `}
-            >
-              For you
-            </button>
+            <div className="flex flex-col items-start p-2.5 border-b-[0.5px] border-slate-900">
+              <button
+                className={`
+                  font-sans text-sm font-medium outline-none
+                  ${selected ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'}
+                `}
+              >
+                For you
+              </button>
+            </div>
           )}
         </Tab>
         <Tab as={Fragment}>
           {({ selected }) => (
-            <button
-              className={`
-                px-4 py-2 text-sm font-medium outline-none
-                ${selected ? 'text-slate-900 border-b-2 border-slate-900' : 'text-slate-500 hover:text-slate-700'}
-              `}
-            >
-              Insights
-            </button>
+            <div className="flex flex-col items-start p-2.5">
+              <button
+                className={`
+                  font-sans text-sm font-normal outline-none
+                  ${selected ? 'text-slate-900' : 'text-slate-900 hover:text-slate-700'}
+                `}
+              >
+                Insights
+              </button>
+            </div>
           )}
         </Tab>
       </Tab.List>

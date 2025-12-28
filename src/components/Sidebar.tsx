@@ -16,7 +16,7 @@ export function Sidebar() {
   ]
 
   return (
-    <div className="flex flex-col w-[250px] h-screen border-r border-slate-200 bg-white sticky top-0 shrink-0">
+    <div className="flex flex-col w-[250px] h-screen bg-white sticky top-0 shrink-0">
       {/* Logo & Toggle Header */}
       <div className="flex flex-col">
         <div className="flex items-center justify-between px-5 py-4">
@@ -68,7 +68,7 @@ export function Sidebar() {
       </div>
 
       {/* User Area */}
-      <div className="border-t border-slate-100">
+      <div className="border-t border-transparent">
         <UserDropdown 
           user={{
             name: 'Max Mustermann', // Placeholder, ideally fetch from context
