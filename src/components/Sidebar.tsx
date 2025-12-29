@@ -24,7 +24,7 @@ export function Sidebar() {
       {/* Logo & Toggle Header */}
       <div className="flex flex-col">
         <div className={`flex items-center gap-2 py-4 transition-all duration-300 ${
-          isCollapsed ? 'px-2' : 'px-5 justify-between'
+          isCollapsed ? 'px-2' : 'px-6 justify-between'
         }`}>
           {/* Logo */}
           <div className="relative h-[31.614px]" style={{ width: isCollapsed ? '25.173px' : '75px', transition: 'width 300ms' }}>
@@ -50,7 +50,8 @@ export function Sidebar() {
                 <Sun className="w-[16.25px] h-[16.25px]" />
               </button>
             )}
-            <button 
+            {/* Collapse button hidden per user request */}
+            {/* <button 
               onClick={() => setIsCollapsed(!isCollapsed)}
               className="flex items-center justify-center min-w-[36px] min-h-[36px] p-2 rounded-lg group transition-colors cursor-pointer"
             >
@@ -59,7 +60,7 @@ export function Sidebar() {
                 alt={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 className="w-[16.25px] h-[16.25px] opacity-50 group-hover:opacity-100 transition-opacity"
               />
-            </button>
+            </button> */}
           </div>
         </div>
       </div>
@@ -71,7 +72,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <div className={`flex-1 pt-4 flex flex-col gap-2 font-sans transition-all duration-300 ${
-        isCollapsed ? 'px-2' : 'px-3'
+        isCollapsed ? 'px-2' : 'px-5'
       }`}>
         {navItems.map((item) => {
           const isActive = pathname === item.href
@@ -83,10 +84,10 @@ export function Sidebar() {
                 isActive
                   ? isCollapsed 
                     ? 'bg-purple-100 text-purple-900 rounded-md px-2 justify-center'
-                    : 'bg-purple-100 text-purple-900 rounded-full gap-2 px-2'
+                    : 'bg-purple-100 text-purple-900 rounded-full gap-2 px-4'
                   : isCollapsed
                     ? 'text-purple-900 hover:bg-slate-50 rounded-md px-2 justify-center'
-                    : 'text-purple-900 hover:bg-slate-50 rounded-full gap-2 px-2'
+                    : 'text-purple-900 hover:bg-slate-50 rounded-full gap-2 px-4'
               }`}
               style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400 }}
               title={isCollapsed ? item.name : undefined}

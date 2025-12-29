@@ -1,43 +1,85 @@
 'use client'
 
 import { Tab } from '@headlessui/react'
-import { Fragment } from 'react'
+import { Fragment, useRef, useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 
 export function DashboardTabs() {
+  const [underlineStyle, setUnderlineStyle] = useState({ left: 0, width: 0 })
+  const tabsRef = useRef<(HTMLDivElement | null)[]>([])
+
+  const updateUnderline = (index: number) => {
+    const tab = tabsRef.current[index]
+    if (tab) {
+      setUnderlineStyle({
+        left: tab.offsetLeft,
+        width: tab.offsetWidth
+      })
+    }
+  }
+
+  useEffect(() => {
+    // Initialize underline position on mount
+    updateUnderline(0)
+  }, [])
+
   return (
-    <Tab.Group>
-      <Tab.List className="flex gap-0 border-b border-transparent mb-6">
-        <Tab as={Fragment}>
-          {({ selected }) => (
-            <div className="flex flex-col items-start p-2.5 border-b-[0.5px] border-slate-900">
-              <button
-                className={`
-                  text-sm outline-none cursor-pointer
-                  ${selected ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'}
-                `}
-                style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 500 }}
+    <Tab.Group onChange={updateUnderline}>
+      <div className="relative mb-6">
+        <Tab.List className="flex gap-0">
+          <Tab as={Fragment}>
+            {({ selected }) => (
+              <div 
+                ref={(el) => { tabsRef.current[0] = el }}
+                className="flex flex-col items-start p-2.5"
               >
-                For you
-              </button>
-            </div>
-          )}
-        </Tab>
-        <Tab as={Fragment}>
-          {({ selected }) => (
-            <div className="flex flex-col items-start p-2.5">
-              <button
-                className={`
-                  text-sm outline-none cursor-pointer
-                  ${selected ? 'text-slate-900' : 'text-slate-900 hover:text-slate-700'}
-                `}
-                style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400 }}
+                <button
+                  className={`
+                    text-sm outline-none cursor-pointer
+                    ${selected ? 'text-slate-900' : 'text-slate-400'}
+                  `}
+                  style={{ fontFamily: 'var(--font-match-variable)', fontWeight: selected ? 500 : 400 }}
+                >
+                  For you
+                </button>
+              </div>
+            )}
+          </Tab>
+          <Tab as={Fragment}>
+            {({ selected }) => (
+              <div 
+                ref={(el) => { tabsRef.current[1] = el }}
+                className="flex flex-col items-start p-2.5"
               >
-                Insights
-              </button>
-            </div>
-          )}
-        </Tab>
-      </Tab.List>
+                <button
+                  className={`
+                    text-sm outline-none cursor-pointer
+                    ${selected ? 'text-slate-900' : 'text-slate-400'}
+                  `}
+                  style={{ fontFamily: 'var(--font-match-variable)', fontWeight: selected ? 500 : 400 }}
+                >
+                  Insights
+                </button>
+              </div>
+            )}
+          </Tab>
+        </Tab.List>
+        
+        {/* Animated underline */}
+        <motion.div
+          className="absolute bottom-0 h-[1px] bg-slate-900"
+          initial={false}
+          animate={{
+            left: underlineStyle.left,
+            width: underlineStyle.width
+          }}
+          transition={{
+            type: 'spring',
+            stiffness: 500,
+            damping: 30
+          }}
+        />
+      </div>
       <Tab.Panels>
         <Tab.Panel>
           <div className="flex flex-col gap-6 w-full">
