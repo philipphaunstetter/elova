@@ -59,15 +59,15 @@ export function UserDropdown({ user }: UserDropdownProps) {
           color: '#020617',
           letterSpacing: '0.07px'
         }}>
-          {user?.name || 'User'}
+          {user?.name?.split(' ')[0] || 'User'}
         </span>
       </div>
 
       {/* Action Buttons */}
       <div className="flex items-center gap-1">
         <Menu as="div" className="relative inline-block text-left">
-          <Menu.Button className="p-1 rounded hover:bg-slate-100 text-slate-700 hover:text-slate-900 transition-colors">
-            <MoreHorizontal className="w-[13px] h-[13px]" />
+          <Menu.Button className="p-1 rounded text-slate-700 hover:text-slate-400 transition-colors cursor-pointer">
+            <MoreHorizontal className="w-[13.25px] h-[13.25px]" />
           </Menu.Button>
           <Transition
             as={Fragment}
@@ -78,7 +78,7 @@ export function UserDropdown({ user }: UserDropdownProps) {
             leaveFrom="transform opacity-100 scale-100"
             leaveTo="transform opacity-0 scale-95"
           >
-            <Menu.Items className="absolute bottom-full right-0 mb-2 w-48 origin-bottom-right divide-y divide-gray-100 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+            <Menu.Items className="absolute bottom-full right-0 mb-2 w-48 origin-bottom-right divide-y divide-slate-200 rounded-md bg-white shadow-lg ring-1 ring-slate-400 focus:outline-none z-50">
               <div className="px-1 py-1">
                 <Menu.Item>
                   {({ active }) => (
@@ -125,8 +125,8 @@ export function UserDropdown({ user }: UserDropdownProps) {
           </Transition>
         </Menu>
 
-        <button className="p-1 rounded hover:bg-slate-100 text-slate-700 hover:text-slate-900 transition-colors">
-          <Bell className="w-[13px] h-[13px]" />
+        <button className="p-1 rounded text-slate-700 hover:text-slate-400 transition-colors cursor-pointer">
+          <Bell className="w-[13.25px] h-[13.25px]" />
         </button>
       </div>
     </div>

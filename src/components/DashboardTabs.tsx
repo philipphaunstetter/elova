@@ -12,7 +12,7 @@ export function DashboardTabs() {
             <div className="flex flex-col items-start p-2.5 border-b-[0.5px] border-slate-900">
               <button
                 className={`
-                  text-sm outline-none
+                  text-sm outline-none cursor-pointer
                   ${selected ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'}
                 `}
                 style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 500 }}
@@ -27,7 +27,7 @@ export function DashboardTabs() {
             <div className="flex flex-col items-start p-2.5">
               <button
                 className={`
-                  text-sm outline-none
+                  text-sm outline-none cursor-pointer
                   ${selected ? 'text-slate-900' : 'text-slate-900 hover:text-slate-700'}
                 `}
                 style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400 }}

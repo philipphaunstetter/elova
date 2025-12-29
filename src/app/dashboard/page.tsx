@@ -9,7 +9,7 @@ export default function DashboardPage() {
       {/* Top Bar */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center">
-          <button className="p-2 rounded-lg hover:bg-slate-100">
+          <button className="p-2 rounded-lg hover:bg-slate-100 cursor-pointer">
             <Home className="w-4 h-4 text-slate-400" />
           </button>
         </div>
