@@ -3,6 +3,7 @@
 import { Tab } from '@headlessui/react'
 import { Fragment, useRef, useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import { CheckCircle2, TicketCheck, OctagonAlert, Bot, ChevronDown } from 'lucide-react'
 
 export function DashboardTabs() {
   const [underlineStyle, setUnderlineStyle] = useState({ left: 0, width: 0 })
@@ -107,8 +108,104 @@ export function DashboardTabs() {
           </div>
         </Tab.Panel>
         <Tab.Panel>
-          <div className="p-4 border border-slate-200 rounded-lg border-dashed text-center text-slate-500 text-sm" style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400 }}>
-            Insights content coming soon.
+          <div className="flex flex-col gap-6 w-full">
+            {/* Time Period Selector */}
+            <div className="flex items-center gap-1 cursor-pointer">
+              <span 
+                className="text-sm leading-[21px] text-[#0a0a0a]" 
+                style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0.07px' }}
+              >
+                Last 30 Days
+              </span>
+              <ChevronDown className="w-4 h-4 text-[#0a0a0a]" />
+            </div>
+
+            {/* Metric Cards */}
+            <div className="flex gap-4 items-start w-full">
+              {/* Success Rate Card */}
+              <div className="bg-white border border-[#cbd5e1] rounded-lg shadow-[0px_1px_0px_0px_rgba(0,0,0,0.05)] px-6 py-8 flex flex-col gap-2.5 min-w-[200px] flex-shrink-0">
+                <div className="flex items-center gap-1">
+                  <div className="p-1 rounded">
+                    <CheckCircle2 className="w-[13.25px] h-[13.25px] text-purple-900" />
+                  </div>
+                  <p 
+                    className="text-sm leading-[21px] text-[#581c87]" 
+                    style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0.07px' }}
+                  >
+                    Success Rate
+                  </p>
+                </div>
+                <p 
+                  className="text-[30px] leading-[30px] tracking-[-0.5px] text-[#6b21a8]" 
+                  style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 500 }}
+                >
+                  95%
+                </p>
+              </div>
+
+              {/* Total Events Card */}
+              <div className="bg-white border border-[#cbd5e1] rounded-lg shadow-[0px_1px_0px_0px_rgba(0,0,0,0.05)] px-6 py-8 flex flex-col gap-2.5 min-w-[200px] flex-shrink-0">
+                <div className="flex items-center gap-1">
+                  <div className="p-1 rounded">
+                    <TicketCheck className="w-[13.25px] h-[13.25px] text-purple-900" />
+                  </div>
+                  <p 
+                    className="text-sm leading-[21px] text-[#581c87]" 
+                    style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0.07px' }}
+                  >
+                    Total Events
+                  </p>
+                </div>
+                <p 
+                  className="text-[30px] leading-[30px] tracking-[-0.5px] text-[#6b21a8]" 
+                  style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 500 }}
+                >
+                  85K
+                </p>
+              </div>
+
+              {/* Failed Events Card */}
+              <div className="bg-white border border-[#cbd5e1] rounded-lg shadow-[0px_1px_0px_0px_rgba(0,0,0,0.05)] px-6 py-8 flex flex-col gap-2.5 min-w-[200px] flex-shrink-0">
+                <div className="flex items-center gap-1">
+                  <div className="p-1 rounded">
+                    <OctagonAlert className="w-[13.25px] h-[13.25px] text-purple-900" />
+                  </div>
+                  <p 
+                    className="text-sm leading-[21px] text-[#581c87]" 
+                    style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0.07px' }}
+                  >
+                    Failed Events
+                  </p>
+                </div>
+                <p 
+                  className="text-[30px] leading-[30px] tracking-[-0.5px] text-[#6b21a8]" 
+                  style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 500 }}
+                >
+                  125
+                </p>
+              </div>
+
+              {/* AI Costs Card */}
+              <div className="bg-white border border-[#cbd5e1] rounded-lg shadow-[0px_1px_0px_0px_rgba(0,0,0,0.05)] px-6 py-8 flex flex-col gap-2.5 min-w-[200px] flex-1">
+                <div className="flex items-center gap-1">
+                  <div className="p-1 rounded">
+                    <Bot className="w-[13.25px] h-[13.25px] text-purple-900" />
+                  </div>
+                  <p 
+                    className="text-sm leading-[21px] text-[#581c87]" 
+                    style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0.07px' }}
+                  >
+                    AI Costs
+                  </p>
+                </div>
+                <p 
+                  className="text-[30px] leading-[30px] tracking-[-0.5px] text-[#6b21a8]" 
+                  style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 500 }}
+                >
+                  0.52 $
+                </p>
+              </div>
+            </div>
           </div>
         </Tab.Panel>
       </Tab.Panels>
