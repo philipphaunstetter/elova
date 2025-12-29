@@ -225,6 +225,7 @@ export function DashboardTabs() {
                   0.52 $
                 </p>
               </div>
+            </div>
             </Tab.Panel>
           </Tab.Panels>
         </>
