@@ -42,7 +42,7 @@ export function DashboardTabs() {
         <Tab.Panel>
           <div className="flex flex-col gap-6 w-full">
             {/* Recent Activities Card */}
-            <div className="border border-slate-200 rounded-lg p-4 w-full">
+            <div className="border border-slate-200 rounded-lg p-4 w-[350px] min-w-[350px]">
               <div className="mb-4">
                 <h3 className="text-base leading-6 text-black" style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0px' }}>Change Log</h3>
                 <p className="text-sm leading-[21px] text-[#64748b]" style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0.07px' }}>Recent workflow modifications and publish notes.</p>
