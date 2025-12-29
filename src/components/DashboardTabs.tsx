@@ -11,12 +11,12 @@ export function DashboardTabs() {
   const tabsRef = useRef<(HTMLDivElement | null)[]>([])
   
   const timePeriodOptions = [
-    'Last 30 Days',
-    'Last 7 Days',
-    'Last 90 Days',
-    'All Time',
     'Last Hour',
-    'Last 24 Hours'
+    'Last 24 Hours',
+    'Last 7 Days',
+    'Last 30 Days',
+    'Last 90 Days',
+    'All Time'
   ]
 
   const updateUnderline = (index: number) => {
