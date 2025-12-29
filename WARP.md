@@ -5,6 +5,17 @@ Elova is a workflow observability platform designed to monitor and analyze n8n w
 
 ## Development Rules
 
+### UI/UX Standards
+
+#### Clickable Elements
+**ALWAYS add `cursor-pointer` class to all clickable elements:**
+- Buttons: `<button className="... cursor-pointer">`
+- Links: `<Link className="... cursor-pointer">` or `<a className="... cursor-pointer">`
+- Any element with `onClick`: `<div onClick={...} className="... cursor-pointer">`
+- Interactive icons or images
+
+This provides clear visual feedback to users and improves accessibility.
+
 ### 🚀 Elova 2.0 (v2-develop) Workflow [ACTIVE]
 **We are currently building Elova 2.0 on the `v2-develop` branch.**
 
