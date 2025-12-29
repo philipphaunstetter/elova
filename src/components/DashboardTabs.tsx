@@ -7,7 +7,17 @@ import { CheckCircle2, TicketCheck, OctagonAlert, Bot, ChevronDown } from 'lucid
 
 export function DashboardTabs() {
   const [underlineStyle, setUnderlineStyle] = useState({ left: 0, width: 0 })
+  const [timePeriod, setTimePeriod] = useState('Last 30 Days')
   const tabsRef = useRef<(HTMLDivElement | null)[]>([])
+  
+  const timePeriodOptions = [
+    'Last 30 Days',
+    'Last 7 Days',
+    'Last 90 Days',
+    'All Time',
+    'Last Hour',
+    'Last 24 Hours'
+  ]
 
   const updateUnderline = (index: number) => {
     const tab = tabsRef.current[index]
@@ -71,14 +81,20 @@ export function DashboardTabs() {
               
               {/* Time Period Selector - Only show when Insights tab is active */}
               {selectedIndex === 1 && (
-                <div className="flex items-center gap-1 cursor-pointer">
-                  <span 
-                    className="text-sm leading-[21px] text-[#0a0a0a]" 
+                <div className="relative">
+                  <select
+                    value={timePeriod}
+                    onChange={(e) => setTimePeriod(e.target.value)}
+                    className="appearance-none flex items-center gap-1 cursor-pointer bg-transparent border-none outline-none pr-5 text-sm leading-[21px] text-[#0a0a0a]"
                     style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0.07px' }}
                   >
-                    Last 30 Days
-                  </span>
-                  <ChevronDown className="w-4 h-4 text-[#0a0a0a]" />
+                    {timePeriodOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-[#0a0a0a] absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
               )}
             </div>
