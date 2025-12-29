@@ -26,8 +26,11 @@ export function DashboardTabs() {
 
   return (
     <Tab.Group onChange={updateUnderline}>
-      <div className="relative mb-6">
-        <Tab.List className="flex gap-0">
+      {({ selectedIndex }) => (
+        <>
+          <div className="relative mb-6">
+            <div className="flex items-center justify-between">
+              <Tab.List className="flex gap-0">
           <Tab as={Fragment}>
             {({ selected }) => (
               <div 
@@ -64,24 +67,38 @@ export function DashboardTabs() {
               </div>
             )}
           </Tab>
-        </Tab.List>
-        
-        {/* Animated underline */}
-        <motion.div
-          className="absolute bottom-0 h-[1px] bg-slate-900"
-          initial={false}
-          animate={{
-            left: underlineStyle.left,
-            width: underlineStyle.width
-          }}
-          transition={{
-            type: 'spring',
-            stiffness: 500,
-            damping: 30
-          }}
-        />
-      </div>
-      <Tab.Panels>
+              </Tab.List>
+              
+              {/* Time Period Selector - Only show when Insights tab is active */}
+              {selectedIndex === 1 && (
+                <div className="flex items-center gap-1 cursor-pointer">
+                  <span 
+                    className="text-sm leading-[21px] text-[#0a0a0a]" 
+                    style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0.07px' }}
+                  >
+                    Last 30 Days
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-[#0a0a0a]" />
+                </div>
+              )}
+            </div>
+            
+            {/* Animated underline */}
+            <motion.div
+              className="absolute bottom-0 h-[1px] bg-slate-900"
+              initial={false}
+              animate={{
+                left: underlineStyle.left,
+                width: underlineStyle.width
+              }}
+              transition={{
+                type: 'spring',
+                stiffness: 500,
+                damping: 30
+              }}
+            />
+          </div>
+          <Tab.Panels>
         <Tab.Panel>
           <div className="flex flex-col gap-6 w-full">
             {/* Recent Activities Card */}
@@ -107,21 +124,8 @@ export function DashboardTabs() {
             </div>
           </div>
         </Tab.Panel>
-        <Tab.Panel>
-          <div className="flex flex-col gap-6 w-full">
-            {/* Time Period Selector */}
-            <div className="flex items-center gap-1 cursor-pointer">
-              <span 
-                className="text-sm leading-[21px] text-[#0a0a0a]" 
-                style={{ fontFamily: 'var(--font-match-variable)', fontWeight: 400, letterSpacing: '0.07px' }}
-              >
-                Last 30 Days
-              </span>
-              <ChevronDown className="w-4 h-4 text-[#0a0a0a]" />
-            </div>
-
-            {/* Metric Cards */}
-            <div className="flex gap-4 items-start w-full">
+            <Tab.Panel>
+              <div className="flex gap-4 items-start w-full">
               {/* Success Rate Card */}
               <div className="bg-white border border-[#cbd5e1] rounded-lg shadow-[0px_1px_0px_0px_rgba(0,0,0,0.05)] px-6 py-8 flex flex-col gap-2.5 min-w-[200px] flex-shrink-0">
                 <div className="flex items-center gap-1">
@@ -205,10 +209,10 @@ export function DashboardTabs() {
                   0.52 $
                 </p>
               </div>
-            </div>
-          </div>
-        </Tab.Panel>
-      </Tab.Panels>
+            </Tab.Panel>
+          </Tab.Panels>
+        </>
+      )}
     </Tab.Group>
   )
 }
