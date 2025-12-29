@@ -256,17 +256,20 @@ export default function SummaryPage() {
                           {setupData.trackedWorkflowIds?.length || 0}
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-xs">
+                      <TooltipContent 
+                        side="bottom" 
+                        className="bg-white text-slate-900 shadow-lg border border-slate-200 rounded-lg px-3 py-2 text-xs max-w-xs"
+                      >
                         {loading ? (
-                          <p className="text-xs">Loading workflow names...</p>
+                          <p>Loading workflow names...</p>
                         ) : workflows.length > 0 ? (
-                          <ul className="text-xs space-y-1">
+                          <ul className="space-y-1">
                             {workflows.map((wf) => (
                               <li key={wf.id}>• {wf.name}</li>
                             ))}
                           </ul>
                         ) : (
-                          <p className="text-xs">No workflows selected</p>
+                          <p>No workflows selected</p>
                         )}
                       </TooltipContent>
                     </Tooltip>
