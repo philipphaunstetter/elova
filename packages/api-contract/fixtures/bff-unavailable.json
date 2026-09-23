@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "BACKEND_UNAVAILABLE",
+    "message": "Service temporarily unavailable"
+  }
+}

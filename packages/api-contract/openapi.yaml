@@ -1,0 +1,113 @@
+openapi: 3.1.0
+info:
+  title: Elova private backend API
+  version: 1.0.0
+  description: Canonical contract between the public VPS BFF and the private GX10 backend.
+servers:
+  - url: /v1
+    description: Relative server URL; private deployment origins are never contract data.
+paths:
+  /health/live:
+    get:
+      operationId: getLiveness
+      summary: Report process liveness
+      security: []
+      responses:
+        "200":
+          description: The backend process can serve requests.
+          headers:
+            X-Elova-Api-Version:
+              $ref: "#/components/headers/ApiVersion"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Liveness"
+  /health/ready:
+    get:
+      operationId: getReadiness
+      summary: Report PostgreSQL and migration readiness
+      security: []
+      responses:
+        "200":
+          description: The backend is ready to receive application traffic.
+          headers:
+            X-Elova-Api-Version:
+              $ref: "#/components/headers/ApiVersion"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+        "503":
+          description: A required backend dependency or schema is not ready.
+          headers:
+            X-Elova-Api-Version:
+              $ref: "#/components/headers/ApiVersion"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+components:
+  headers:
+    ApiVersion:
+      description: Major private API contract version.
+      schema:
+        type: string
+        const: "1"
+    RequestId:
+      description: Opaque correlation identifier; contains no endpoint or secret material.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+  schemas:
+    Liveness:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: live
+    Readiness:
+      type: object
+      additionalProperties: false
+      required: [status, checks]
+      properties:
+        status:
+          type: string
+          enum: [ready, not_ready]
+        checks:
+          type: object
+          additionalProperties: false
+          required: [database, migrations]
+          properties:
+            database:
+              type: string
+              enum: [ready, not_ready]
+            migrations:
+              type: string
+              enum: [ready, not_ready]
+    BffFailure:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [BACKEND_UNAVAILABLE, BACKEND_TIMEOUT]
+            message:
+              type: string
+              enum:
+                - Service temporarily unavailable
+                - Service timed out

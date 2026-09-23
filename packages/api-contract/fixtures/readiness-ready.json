@@ -1,0 +1,7 @@
+{
+  "status": "ready",
+  "checks": {
+    "database": "ready",
+    "migrations": "ready"
+  }
+}
