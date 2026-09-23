@@ -2,13 +2,19 @@
   "name": "elova",
   "version": "0.3.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "test:local": "./scripts/test-local.sh",
     "lint": "eslint",
-    "release": "./scripts/release.sh"
+    "release": "./scripts/release.sh",
+    "build:backend": "npm run build --workspace @elova/backend",
+    "test:backend": "npm run test --workspace @elova/backend"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
