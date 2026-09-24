@@ -9,7 +9,7 @@ export function StatusCard() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/v1/status", {
+    fetch("/api/v1/health/ready", {
       cache: "no-store",
       credentials: "same-origin",
       signal: controller.signal,
