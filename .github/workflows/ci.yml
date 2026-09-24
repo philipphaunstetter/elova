@@ -186,7 +186,16 @@ jobs:
         uses: trufflesecurity/trufflehog@64d939a56362f519781c53ea09b27f8d1dc0140a
         with:
           version: 3.97.6@sha256:cc1a591e83fec7bf56f64c15beaaa5d8e3d179a4165a03a087d07165296ef7df
-          extra_args: --results=verified,unknown
+          # Synthetic PostgreSQL URLs in older commits of these two test files
+          # cause unverified findings; scan their current contents separately.
+          extra_args: --results=verified,unknown --exclude-paths .github/trufflehog-historical-fixtures.txt
+      - name: Scan current test fixtures for secrets
+        run: |
+          docker run --rm \
+            -v "$PWD/apps/backend/test/config.test.ts:/fixtures/config.test.ts:ro" \
+            -v "$PWD/ops/tests/test-native-release.sh:/fixtures/test-native-release.sh:ro" \
+            ghcr.io/trufflesecurity/trufflehog:3.97.6@sha256:cc1a591e83fec7bf56f64c15beaaa5d8e3d179a4165a03a087d07165296ef7df \
+            filesystem /fixtures --fail --no-update --github-actions --results=verified,unknown
       - name: Review dependency changes
         if: github.event_name == 'pull_request'
         uses: actions/dependency-review-action@v4

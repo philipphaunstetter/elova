@@ -46,11 +46,11 @@ test('wildcard binds are rejected in every supported literal form', () => {
 
 test('database URLs accept only explicit same-host transports', () => {
   for (const databaseUrl of [
-    'postgresql://user:secret@localhost:5432/elova?sslmode=disable',
-    'postgresql://user:secret@127.0.0.1:5432/elova',
-    'postgresql://user:secret@127.255.1.2:5432/elova',
-    'postgresql://user:secret@[::1]:5432/elova',
-    'postgresql://user:secret@[0:0:0:0:0:0:0:1]:5432/elova',
+    'postgresql://localhost:5432/elova?sslmode=disable',
+    'postgresql://127.0.0.1:5432/elova',
+    'postgresql://127.255.1.2:5432/elova',
+    'postgresql://[::1]:5432/elova',
+    'postgresql://[0:0:0:0:0:0:0:1]:5432/elova',
     'postgresql:///elova?host=%2Fvar%2Frun%2Fpostgresql',
   ]) {
     assert.equal(loadConfig({ DATABASE_URL: databaseUrl }).databaseUrl, databaseUrl)
@@ -58,9 +58,9 @@ test('database URLs accept only explicit same-host transports', () => {
 
   for (const databaseUrl of [
     'postgresql:///elova',
-    'postgresql://user:secret@10.0.0.2:5432/elova',
-    'postgresql://user:secret@100.100.10.20:5432/elova',
-    'postgresql://user:secret@db.internal:5432/elova',
+    'postgresql://10.0.0.2:5432/elova',
+    'postgresql://100.100.10.20:5432/elova',
+    'postgresql://db.internal:5432/elova',
     'postgresql:///elova?host=db.internal',
     'postgresql://127.0.0.1/elova?host=%2Fvar%2Frun%2Fpostgresql',
     'postgresql:///elova?host=%2Fvar%2Frun%2Fpostgresql&hostaddr=127.0.0.1',

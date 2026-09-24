@@ -143,16 +143,16 @@ grep -Fq 'must not define backend-only DATABASE_URL' "$TMP/out" ||
 ok 'frontend preflight rejects backend-only database configuration'
 
 for local_database in \
-  'postgresql://user:secret@localhost:5432/elova?sslmode=disable' \
-  'postgresql://user:secret@127.0.0.1:5432/elova' \
-  'postgresql://user:secret@[::1]:5432/elova' \
+  'postgresql://localhost:5432/elova?sslmode=disable' \
+  'postgresql://127.0.0.1:5432/elova' \
+  'postgresql://[::1]:5432/elova' \
   'postgresql:///elova?host=%2Fvar%2Frun%2Fpostgresql'; do
   check_database_url "$local_database" || fail 'same-host PostgreSQL URL was rejected'
 done
 for remote_database in \
   'postgresql:///elova' \
-  'postgresql://user:secret@10.0.0.2:5432/elova' \
-  'postgresql://user:secret@database.internal:5432/elova' \
+  'postgresql://10.0.0.2:5432/elova' \
+  'postgresql://database.internal:5432/elova' \
   'postgresql:///elova?host=database.internal'; do
   if (check_database_url "$remote_database") >"$TMP/out" 2>&1; then
     fail 'non-loopback PostgreSQL URL was accepted'
