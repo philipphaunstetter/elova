@@ -2,6 +2,8 @@ import { Pool } from 'pg'
 import type { Migration } from './migrations.js'
 import { migrationsAreCompatible } from './migrations.js'
 
+const READINESS_QUERY_TIMEOUT_MS = 2_000
+
 export interface ReadinessChecks {
   database: 'ready' | 'not_ready'
   migrations: 'ready' | 'not_ready'
@@ -20,6 +22,8 @@ export class PostgresGateway implements DatabaseGateway {
       connectionString: databaseUrl,
       max: 10,
       connectionTimeoutMillis: 3_000,
+      query_timeout: READINESS_QUERY_TIMEOUT_MS,
+      statement_timeout: READINESS_QUERY_TIMEOUT_MS,
       idleTimeoutMillis: 30_000,
       allowExitOnIdle: false,
     })

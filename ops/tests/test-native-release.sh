@@ -17,6 +17,10 @@ make_artifact() {
   printf '{"name":"%s","scripts":{"start":"node server.js","migrate":"node migrate.js"}}\n' "$package" > "$directory/package.json"
   printf 'process.exit(0)\n' > "$directory/server.js"
   printf 'process.exit(0)\n' > "$directory/migrate.js"
+  if [[ $service == backend ]]; then
+    mkdir -p "$directory/migrations"
+    printf 'SELECT 1;\n' > "$directory/migrations/0001_baseline.sql"
+  fi
   tar -C "$TMP/$service" -czf "$TMP/$service.tgz" package
   sha256sum "$TMP/$service.tgz" > "$TMP/$service.sha256"
 }
@@ -71,8 +75,21 @@ fi
 grep -Fq 'has no explicit migrate script' "$TMP/out" || fail 'missing migration refusal was not explicit'
 ok 'backend artifacts require an explicit migration script'
 
+mkdir -p "$TMP/no-migrations/package"
+printf '{"name":"@elova/backend","scripts":{"start":"node server.js","migrate":"node migrate.js"}}\n' > "$TMP/no-migrations/package/package.json"
+printf 'process.exit(0)\n' > "$TMP/no-migrations/package/server.js"
+printf 'process.exit(0)\n' > "$TMP/no-migrations/package/migrate.js"
+tar -C "$TMP/no-migrations" -czf "$TMP/no-migrations.tgz" package
+sha256sum "$TMP/no-migrations.tgz" > "$TMP/no-migrations.sha256"
+if "$HELPER" stage --service backend --artifact "$TMP/no-migrations.tgz" \
+  --sha256-file "$TMP/no-migrations.sha256" --release test-006 --dry-run >"$TMP/out" 2>&1; then
+  fail 'backend artifact without release-owned migrations was accepted'
+fi
+grep -Fq 'has no migrations directory' "$TMP/out" || fail 'missing migrations directory refusal was not explicit'
+ok 'backend artifacts require release-owned migrations'
+
 if "$HELPER" stage --service frontend --artifact "$TMP/frontend.tgz" \
-  --sha256-file "$TMP/frontend.sha256" --release test-006 --apply --dry-run >"$TMP/out" 2>&1; then
+  --sha256-file "$TMP/frontend.sha256" --release test-007 --apply --dry-run >"$TMP/out" 2>&1; then
   fail 'conflicting mutation flags were accepted'
 fi
 grep -Fq 'mutually exclusive' "$TMP/out" || fail 'conflicting flag refusal was not explicit'
@@ -80,7 +97,9 @@ ok 'apply and dry-run gates cannot be combined'
 
 out=$("$HELPER" rollback --service backend --dry-run) || fail 'rollback dry-run failed'
 grep -Fq 'would acquire backend deployment lock' <<< "$out" || fail 'rollback plan omitted lock'
+grep -Fq 'migration-count mismatch' <<< "$out" || fail 'rollback plan omitted migration-count refusal'
+grep -Fq 'forward fix' <<< "$out" || fail 'rollback plan omitted forward-fix requirement'
 grep -Fq 'readiness convergence' <<< "$out" || fail 'rollback plan omitted readiness'
-ok 'rollback dry-run is locked and readiness-gated'
+ok 'backend rollback refuses migration-count mismatches and remains readiness-gated'
 
 printf '1..%d\n' "$pass"

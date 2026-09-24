@@ -38,7 +38,7 @@ Do not continue until every applicable item is true. The helper's `preflight` re
 
 - PostgreSQL already exists, is backed up, and accepts an authenticated TLS connection from the GX10 backend only. Database provisioning, roles, grants, network access, TLS, backup policy, and credentials are outside this slice.
 - `DATABASE_URL` references the intended production database and least-privilege runtime/migration role chosen by the operator. It appears only in `/etc/elova/backend.env`; it must never enter the frontend environment, artifact, journal, command line, or logs.
-- Ordered forward migrations for the release have been reviewed, tested against a restored backup, and proven compatible with both the new release and the release retained for rollback.
+- Ordered forward migrations for the release have been reviewed and tested against a restored backup. A migration-count change is an irreversible application-release boundary: the retained backend cannot be restored, and recovery requires a forward fix.
 - Any n8n endpoints and credentials needed by the backend already exist and are added to the backend environment file only. This change performs no n8n action.
 
 ## Release artifact contract
@@ -49,7 +49,7 @@ The integration build supplies one gzip tar archive plus a separately transporte
 2. contains no symlinks, special files, absolute paths, or `..` traversal;
 3. is complete and prebuilt—deployment never runs dependency installation or build scripts;
 4. has a top-level `package.json` named exactly `@elova/frontend` or `@elova/backend` with a `start` script;
-5. for the backend, has an explicit `migrate` script that applies ordered, forward-compatible migrations and exits nonzero on incompatibility.
+5. for the backend, has an explicit `migrate` script and a release-owned `migrations/` directory; the script applies those ordered migrations and exits nonzero on incompatibility.
 
 The SHA file starts with the archive's 64-digit SHA-256 digest. Credentials and environment files are never in the archive. A release ID should be an immutable build identifier such as the full Git commit SHA; it is limited to letters, digits, dots, underscores, and hyphens.
 
@@ -125,7 +125,7 @@ sudo "$helper" migrate --service backend --release "$release" --apply
 
 The helper invokes only `elova-backend-migrate@<release>.service`, waits for success, and writes a release-specific success marker outside the artifact. It does **not** activate or restart the API. Backend activation refuses a release without this marker. The API unit runs only `npm start`; it never invokes migration implicitly.
 
-There is deliberately **no down/destructive migration procedure**. If a forward migration fails, stop, preserve logs, leave the current release running, and escalate to the database/release owner. Restore or corrective-forward-migration decisions require separate authorization. Symlink rollback is permitted only when the retained application release is schema-compatible.
+There is deliberately **no down/destructive migration procedure**. If a forward migration fails, stop, preserve logs, leave the current release running, and escalate to the database/release owner. Restore or corrective-forward-migration decisions require separate authorization. Backend symlink rollback is prohibited whenever the current and retained releases have different migration counts, including additive changes. Exact-count readiness remains fail-closed; recovery across that boundary requires a forward fix.
 
 ### 4. Activate and converge health
 
@@ -136,13 +136,13 @@ sudo "$helper" activate --service frontend --release "$release" --dry-run
 sudo "$helper" activate --service frontend --release "$release" --apply
 ```
 
-Use `--service backend` on GX10. Activation atomically preserves the old `current` as `previous`, changes `current`, restarts only the named service, and polls the fixed readiness path for up to 60 seconds. A failed convergence restores the prior symlink and service state and records a failed event. Inspect `journalctl -u elova-frontend.service` or the corresponding backend/migration unit without copying environment values into tickets.
+Use `--service backend` on GX10. Activation atomically preserves the old `current` as `previous`, changes `current`, restarts only the named service, and polls the fixed readiness path for up to 60 seconds. A failed convergence restores the prior links and service state before recording failure when restoration does not cross a backend migration-count boundary. When counts differ, the helper leaves the migrated release selected, stops the unhealthy service, records failure, and requires a forward fix instead of restoring an incompatible release. Inspect `journalctl -u elova-frontend.service` or the corresponding backend/migration unit without copying environment values into tickets.
 
 Recommended order is backend stage → explicit backend migration → backend activation/readiness → frontend stage → frontend activation/readiness. Coordinate compatibility so either frontend can safely use either retained backend during the window.
 
 ## Symlink rollback
 
-Rollback changes no database state and runs no migration. Confirm schema compatibility first. Review the plan and the `previous` target, then:
+Rollback changes no database state and runs no migration. Review the plan and the `previous` target, then:
 
 ```sh
 sudo "$helper" rollback --service frontend --dry-run
@@ -150,7 +150,7 @@ sudo readlink -f /opt/elova/frontend/{current,previous}
 sudo "$helper" rollback --service frontend --apply
 ```
 
-Use `--service backend` on GX10. Backend rollback also requires that the previous release has a successful migration marker. The helper swaps `current` and `previous`, restarts only that service, and requires readiness. On failed readiness it restores the pre-rollback links. Never attempt a down migration as part of rollback.
+Use `--service backend` on GX10. Backend rollback also requires that the previous release has a successful migration marker and exactly the same migration count as the current release. Any count mismatch is rejected before links or services change and must be resolved with a forward fix; operator claims of forward compatibility do not override this gate. Equal counts do not guarantee compatibility, so the helper still swaps `current` and `previous`, restarts only that service, and requires fail-closed readiness. On failed readiness it restores the pre-rollback links. Never attempt a down migration as part of rollback.
 
 ## Evidence and incident checks
 

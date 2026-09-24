@@ -27,6 +27,23 @@ jobs:
       - name: Verify native-only workflow policy
         run: node --test tests/integration/ci-policy.test.mjs
 
+  native-operations:
+    name: Native release helper and systemd templates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Check release shell syntax
+        run: bash -n ops/bin/elova-native-release ops/tests/test-native-release.sh
+      - name: Verify systemd service templates
+        run: >-
+          systemd-analyze verify
+          ops/systemd/elova-frontend.service
+          ops/systemd/elova-backend.service
+          ops/systemd/elova-backend-migrate@.service
+      - name: Exercise guarded release behavior
+        run: ops/tests/test-native-release.sh
+
   frontend-quality:
     name: Frontend lint, type, unit, and build
     runs-on: ubuntu-latest
@@ -96,7 +113,7 @@ jobs:
   postgres-integration:
     name: PostgreSQL migrations, native services, and BFF compatibility
     runs-on: ubuntu-latest
-    needs: [frontend-quality, backend-quality, contract-drift, workflow-policy]
+    needs: [frontend-quality, backend-quality, contract-drift, workflow-policy, native-operations]
     timeout-minutes: 15
     services:
       postgres:

@@ -9,10 +9,12 @@ import { test } from 'node:test'
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url))
 const backendRoot = join(repositoryRoot, 'apps/backend')
 const migrationsModulePath = join(backendRoot, 'dist/src/migrations.js')
+const databaseModulePath = join(backendRoot, 'dist/src/database.js')
 const requireFromBackend = createRequire(join(backendRoot, 'package.json'))
 const { Pool } = requireFromBackend('pg')
 const { applyMigrations, loadMigrations, migrationsAreCompatible } =
   await import(pathToFileURL(migrationsModulePath).href)
+const { PostgresGateway } = await import(pathToFileURL(databaseModulePath).href)
 
 const databaseUrl = process.env.DATABASE_URL
 assert.ok(
@@ -96,4 +98,31 @@ test('ordered baseline migrations serialize through a PostgreSQL advisory lock',
     [baselineMigrations[0].checksum, baselineMigrations[0].name],
   )
   assert.equal(await migrationsAreCompatible(pool, baselineMigrations), true)
+
+  await pool.query(
+    "INSERT INTO schema_migrations (name, checksum) VALUES ('0002_future.sql', repeat('1', 64))",
+  )
+  assert.equal(
+    await migrationsAreCompatible(pool, baselineMigrations),
+    false,
+    'readiness must reject migration-count mismatches',
+  )
+  await pool.query("DELETE FROM schema_migrations WHERE name = '0002_future.sql'")
+
+  const locker = await pool.connect()
+  const gateway = new PostgresGateway(databaseUrl, baselineMigrations)
+  try {
+    await locker.query('BEGIN')
+    await locker.query('LOCK TABLE schema_migrations IN ACCESS EXCLUSIVE MODE')
+    const started = Date.now()
+    assert.deepEqual(await gateway.readiness(), {
+      database: 'ready',
+      migrations: 'not_ready',
+    })
+    assert.ok(Date.now() - started < 3_000, 'readiness queries must time out before the health deadline')
+  } finally {
+    await locker.query('ROLLBACK')
+    locker.release()
+    await gateway.close()
+  }
 })

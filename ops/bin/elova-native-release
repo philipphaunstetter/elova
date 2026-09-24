@@ -156,6 +156,7 @@ check_package_manifest() {
   expected=$(package_name)
   node - "$package_dir/package.json" "$expected" "$require_migrate" <<'NODE'
 const fs = require('node:fs');
+const path = require('node:path');
 const [manifestPath, expected, requireMigrate] = process.argv.slice(2);
 let manifest;
 try {
@@ -172,10 +173,18 @@ if (!manifest.scripts || typeof manifest.scripts.start !== 'string' || !manifest
   console.error(`${expected} artifact has no start script`);
   process.exit(1);
 }
-if (requireMigrate === '1' &&
-    (!manifest.scripts || typeof manifest.scripts.migrate !== 'string' || !manifest.scripts.migrate.trim())) {
-  console.error(`${expected} artifact has no explicit migrate script`);
-  process.exit(1);
+if (requireMigrate === '1') {
+  if (!manifest.scripts || typeof manifest.scripts.migrate !== 'string' || !manifest.scripts.migrate.trim()) {
+    console.error(`${expected} artifact has no explicit migrate script`);
+    process.exit(1);
+  }
+  const migrationsPath = path.join(path.dirname(manifestPath), 'migrations');
+  try {
+    if (!fs.statSync(migrationsPath).isDirectory()) throw new Error();
+  } catch {
+    console.error(`${expected} artifact has no migrations directory`);
+    process.exit(1);
+  }
 }
 NODE
 }
@@ -243,6 +252,9 @@ check_backend_env() {
   database_url=$(env_value DATABASE_URL "$file") || die "$file must define DATABASE_URL"
   [[ $database_url == postgres://* || $database_url == postgresql://* ]] ||
     die "DATABASE_URL must use the postgres or postgresql scheme"
+  if env_value ELOVA_MIGRATIONS_DIR "$file" >/dev/null; then
+    die "ELOVA_MIGRATIONS_DIR may not override release-owned migrations"
+  fi
   [[ $host != '0.0.0.0' && $host != '::' && $host != 'localhost' && $host != 127.* ]] ||
     die "ELOVA_BACKEND_HOST may not be wildcard or loopback"
   ip -o addr show dev tailscale0 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | grep -Fx -- "$host" >/dev/null ||
@@ -286,11 +298,11 @@ journal() {
   local action=$1 target=${2:-none} status=${3:-ok} dir file timestamp
   dir="$JOURNAL_ROOT/$service"
   file="$dir/journal.jsonl"
-  install -d -o root -g "$(service_user)" -m 0750 "$dir"
-  timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+  install -d -o root -g "$(service_user)" -m 0750 "$dir" || return
+  timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ') || return
   printf '{"timestamp":"%s","service":"%s","action":"%s","release":"%s","status":"%s"}\n' \
-    "$timestamp" "$service" "$action" "$target" "$status" >> "$file"
-  chown root:"$(service_user)" "$file"
+    "$timestamp" "$service" "$action" "$target" "$status" >> "$file" || return
+  chown root:"$(service_user)" "$file" || return
   chmod 0640 "$file"
 }
 
@@ -418,6 +430,19 @@ link_release_name() {
   case "$resolved" in "$root/releases/"*) basename -- "$resolved" ;; *) die "$link link escapes release root" ;; esac
 }
 
+backend_migration_count() {
+  local release_root=$1 migration_root name count=0
+  migration_root="$release_root/migrations"
+  [[ -d $migration_root && ! -L $migration_root ]] ||
+    die "backend release has no migrations directory: ${release_root##*/}"
+  while IFS= read -r name; do
+    if [[ $name =~ ^[0-9]{4}_[a-z0-9_]+\.sql$ ]]; then
+      ((count += 1))
+    fi
+  done < <(find "$migration_root" -mindepth 1 -maxdepth 1 -type f -printf '%f\n')
+  printf '%s\n' "$count"
+}
+
 prune_releases() {
   local root=$1 current=$2 previous=${3:-} count=0 dir name
   while IFS= read -r dir; do
@@ -436,6 +461,7 @@ prune_releases() {
 
 run_activate() {
   local root old="" prior_previous="" had_previous=0 url unit
+  local rollback_allowed=1 failure_message="" journal_status=0 old_migrations target_migrations
   validate_service
   validate_release
   if ! require_apply; then
@@ -453,33 +479,54 @@ run_activate() {
     [[ -f $JOURNAL_ROOT/backend/migrated/$release ]] || die "backend release has no successful explicit migration marker: $release"
   fi
   old=$(link_release_name "$root" current || true)
+  [[ $old != "$release" ]] || die "release is already active: $release"
   if prior_previous=$(link_release_name "$root" previous); then
     had_previous=1
   fi
-  if [[ -n $old && $old != "$release" ]]; then
+  if [[ $service == backend && -n $old ]]; then
+    old_migrations=$(backend_migration_count "$root/releases/$old")
+    target_migrations=$(backend_migration_count "$root/releases/$release")
+    if [[ $old_migrations != "$target_migrations" ]]; then
+      rollback_allowed=0
+    fi
+  fi
+  if [[ -n $old ]]; then
     set_link "$root" previous "releases/$old"
   fi
   set_link "$root" current "releases/$release"
   unit=$(service_unit)
   url=$(health_url)
   if ! systemctl restart "$unit" || ! wait_for_health; then
-    journal activate "$release" failed
-    if [[ -n $old ]]; then
-      set_link "$root" current "releases/$old"
+    if (( rollback_allowed == 1 )); then
+      if [[ -n $old ]]; then
+        set_link "$root" current "releases/$old"
+      else
+        rm -f -- "$root/current"
+      fi
+      if (( had_previous == 1 )); then
+        set_link "$root" previous "releases/$prior_previous"
+      else
+        rm -f -- "$root/previous"
+      fi
+      if [[ -n $old ]]; then
+        systemctl restart "$unit" || true
+      else
+        systemctl stop "$unit" || true
+      fi
+      failure_message="restart or readiness failed at $url; restored prior release links and attempted prior service state"
     else
-      rm -f -- "$root/current"
+      if systemctl stop "$unit"; then
+        failure_message="restart or readiness failed at $url; migration-count mismatch prohibits restoring release $old; service stopped; deploy a forward fix"
+      else
+        failure_message="restart or readiness failed at $url; migration-count mismatch prohibits restoring release $old; service stop failed; intervene and deploy a forward fix"
+      fi
     fi
-    if (( had_previous == 1 )); then
-      set_link "$root" previous "releases/$prior_previous"
-    else
-      rm -f -- "$root/previous"
+    journal activate "$release" failed || journal_status=$?
+    if (( journal_status != 0 )); then
+      printf '%s: %s; failed to record activation failure\n' "$PROGRAM" "$failure_message" >&2
+      return "$journal_status"
     fi
-    if [[ -n $old ]]; then
-      systemctl restart "$unit" || true
-    else
-      systemctl stop "$unit" || true
-    fi
-    die "restart or readiness failed at $url; restored prior release links and attempted prior service state"
+    die "$failure_message"
   fi
   journal activate "$release"
   prune_releases "$root" "$release" "$old"
@@ -487,10 +534,13 @@ run_activate() {
 }
 
 run_rollback() {
-  local root current previous unit url
+  local root current previous unit url current_migrations previous_migrations
   validate_service
   if ! require_apply; then
     printf 'dry-run: would acquire %s deployment lock and swap current with previous\n' "$service"
+    if [[ $service == backend ]]; then
+      printf 'dry-run: would refuse any migration-count mismatch and require a forward fix\n'
+    fi
     printf 'dry-run: would restart only %s after the atomic swap and require readiness convergence\n' "$(service_unit)"
     return
   fi
@@ -502,6 +552,10 @@ run_rollback() {
   [[ $current != "$previous" ]] || die "current and previous point to the same release"
   if [[ $service == backend ]]; then
     [[ -f $JOURNAL_ROOT/backend/migrated/$previous ]] || die "previous backend release has no successful migration marker"
+    current_migrations=$(backend_migration_count "$root/releases/$current")
+    previous_migrations=$(backend_migration_count "$root/releases/$previous")
+    [[ $current_migrations == "$previous_migrations" ]] ||
+      die "backend rollback across a migration-count mismatch is prohibited; deploy a forward fix"
   fi
   set_link "$root" current "releases/$previous"
   set_link "$root" previous "releases/$current"
