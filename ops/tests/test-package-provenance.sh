@@ -23,7 +23,9 @@ check_rejected() {
     echo 'dirty source was packaged' >&2; exit 1
   fi
   grep -Fq 'source checkout has uncommitted or untracked files' "$TMP/out"
-  ! grep -Fq 'npm reached' "$TMP/out"
+  if grep -Fq 'npm reached' "$TMP/out"; then
+    echo 'build ran despite dirty source' >&2; exit 1
+  fi
   test -f "$TMP/repo/apps/backend/dist/sentinel.js"
 }
 
@@ -39,7 +41,9 @@ if ELOVA_BUILD_ID=synthetic-build PATH="$TMP/bin:$PATH" \
   echo 'ignored frontend environment was packaged' >&2; exit 1
 fi
 grep -Fq 'frontend environment file present' "$TMP/out"
-! grep -Fq 'npm reached' "$TMP/out"
+if grep -Fq 'npm reached' "$TMP/out"; then
+  echo 'build ran despite ignored frontend environment' >&2; exit 1
+fi
 test -f "$TMP/repo/apps/backend/dist/sentinel.js"
 rm -- "$TMP/repo/apps/frontend/.env.production"
 
@@ -50,7 +54,9 @@ if ELOVA_BUILD_ID=synthetic-build PATH="$TMP/bin:$PATH" \
 fi
 grep -Fq 'npm reached' "$TMP/out"
 
-printf '%s\n' '#!/usr/bin/env bash' 'set -Eeuo pipefail' '
+cat > "$TMP/bin/npm" <<'SCRIPT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
 root=$(git rev-parse --show-toplevel)
 if [[ $1 == run && $2 == build ]]; then
   mkdir -p "$root/apps/backend/dist/src" \
@@ -77,7 +83,8 @@ elif [[ $1 == pack ]]; then
   printf "backend-fixture.tgz\n"
 else
   exit 1
-fi' > "$TMP/bin/npm"
+fi
+SCRIPT
 chmod +x "$TMP/bin/npm"
 
 for source in backend frontend; do
