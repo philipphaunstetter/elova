@@ -262,6 +262,10 @@ export type SynchronizeProviderErrors = {
     /**
      * Stable non-sensitive error envelope.
      */
+    409: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
     502: ErrorEnvelope;
 };
 

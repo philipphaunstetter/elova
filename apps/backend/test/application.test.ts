@@ -11,7 +11,8 @@ import type {
   StoredExecution,
   StoredWorkflow,
 } from '../src/repository.js'
-import { hashPassword } from '../src/security.js'
+import { ProviderSyncAlreadyRunningError } from '../src/repository.js'
+import { encryptCredential, hashPassword } from '../src/security.js'
 
 const SECRET = Buffer.alloc(32, 9).toString('base64')
 
@@ -22,6 +23,8 @@ class MemoryRepository implements ElovaRepository {
   workflows: StoredWorkflow[] = []
   executions: StoredExecution[] = []
   cursors: Array<string | null> = []
+  syncLocks = new Set<string>()
+  failedSyncs = 0
 
   async createInitialOwner(input: { email: string; displayName: string; passwordHash: string }): Promise<Owner> {
     this.owner = { id: '11111111-1111-4111-8111-111111111111', ...input }
@@ -47,11 +50,20 @@ class MemoryRepository implements ElovaRepository {
     return provider
   }
   async getProviderSecret(_ownerId: string, providerId: string) { return this.providers.find((item) => item.id === providerId) }
+  async withProviderSyncLock<T>(providerId: string, operation: () => Promise<T>): Promise<T> {
+    if (this.syncLocks.has(providerId)) throw new ProviderSyncAlreadyRunningError('Provider synchronization already in progress')
+    this.syncLocks.add(providerId)
+    try {
+      return await operation()
+    } finally {
+      this.syncLocks.delete(providerId)
+    }
+  }
   async storeWorkflow(_providerId: string, workflow: StoredWorkflow) { this.workflows.push(workflow) }
   async storeExecution(_providerId: string, execution: StoredExecution) { this.executions.push(execution) }
   async getSyncCursor() { return null }
   async finishSync(_providerId: string, _kind: string, cursor: string | null) { this.cursors.push(cursor) }
-  async failSync() {}
+  async failSync() { this.failedSyncs += 1 }
   async listWorkflows() { return this.workflows }
   async listExecutions() { return this.executions }
   async dashboardMetrics(): Promise<DashboardMetrics> {
@@ -133,6 +145,43 @@ test('unknown login emails do not accumulate failed-login buckets or lock the ow
   assert.equal((await application.handle(request('POST', '/v1/auth/login', {
     email: repository.owner!.email, password: 'correct horse battery staple',
   })))?.status, 429)
+})
+
+test('overlapping provider syncs cannot overwrite fresher execution outcomes', async () => {
+  const { repository, cookie } = await loggedIn()
+  repository.providers.push({
+    id: '22222222-2222-4222-8222-222222222222', ownerId: repository.owner!.id,
+    name: 'n8n', baseUrl: 'http://100.100.10.20:5678', encryptedApiKey: encryptCredential('test-api-key', SECRET),
+    status: 'unverified', createdAt: new Date().toISOString(), lastSyncedAt: null,
+  })
+  let signalFirstFetch!: () => void
+  let releaseFirstFetch!: () => void
+  const firstFetchStarted = new Promise<void>((resolve) => { signalFirstFetch = resolve })
+  const waitForRelease = new Promise<void>((resolve) => { releaseFirstFetch = resolve })
+  let executionFetches = 0
+  const fetchImplementation: typeof fetch = async (input) => {
+    const path = new URL(String(input)).pathname
+    if (path.endsWith('/workflows')) return Response.json({ data: [] })
+    executionFetches += 1
+    if (executionFetches === 1) {
+      signalFirstFetch()
+      await waitForRelease
+    }
+    return Response.json({ data: [{ id: 'ex-1', status: executionFetches === 1 ? 'running' : 'success' }] })
+  }
+  const firstApplication = new ElovaApplication(repository, SECRET, SECRET, fetchImplementation)
+  const secondApplication = new ElovaApplication(repository, SECRET, SECRET, fetchImplementation)
+  const path = '/v1/providers/22222222-2222-4222-8222-222222222222/sync'
+  const first = firstApplication.handle(request('POST', path, undefined, cookie))
+  await firstFetchStarted
+  const overlapping = await secondApplication.handle(request('POST', path, undefined, cookie))
+  assert.equal(overlapping?.status, 409)
+  assert.equal(executionFetches, 1)
+  assert.equal(repository.failedSyncs, 0)
+  releaseFirstFetch()
+  assert.equal((await first)?.status, 200)
+  assert.equal((await secondApplication.handle(request('POST', path, undefined, cookie)))?.status, 200)
+  assert.equal(repository.executions.at(-1)?.status, 'success')
 })
 
 test('provider synchronization stores only sanitized workflow and execution representations', async () => {

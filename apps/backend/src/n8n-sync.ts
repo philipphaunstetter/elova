@@ -171,13 +171,15 @@ export class N8nSynchronizer {
   }
 
   async synchronize(provider: ProviderSecret): Promise<{ workflows: number; executions: number }> {
-    try {
-      const workflows = await this.synchronizeWorkflows(provider)
-      const executions = await this.synchronizeExecutions(provider)
-      return { workflows, executions }
-    } catch {
-      await this.repository.failSync(provider.id, 'provider')
-      throw new Error('Provider synchronization failed')
-    }
+    return this.repository.withProviderSyncLock(provider.id, async () => {
+      try {
+        const workflows = await this.synchronizeWorkflows(provider)
+        const executions = await this.synchronizeExecutions(provider)
+        return { workflows, executions }
+      } catch {
+        await this.repository.failSync(provider.id, 'provider')
+        throw new Error('Provider synchronization failed')
+      }
+    })
   }
 }

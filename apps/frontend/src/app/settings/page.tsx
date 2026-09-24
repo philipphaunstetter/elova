@@ -54,7 +54,9 @@ export default function SettingsPage() {
   async function synchronize(id: string) {
     setMessage("Synchronizing sanitized workflow and execution evidence…");
     const response = await fetch(`/api/v1/providers/${id}/sync`, { method: "POST" });
-    setMessage(response.ok ? "Synchronization completed." : "Synchronization failed without storing raw content.");
+    setMessage(response.ok ? "Synchronization completed." : response.status === 409
+      ? "Synchronization already in progress. Try again after it finishes."
+      : "Synchronization failed without storing raw content.");
     await refresh();
   }
 

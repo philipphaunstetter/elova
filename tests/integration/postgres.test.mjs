@@ -17,7 +17,7 @@ const { Pool } = requireFromBackend('pg')
 const { applyMigrations, loadMigrations, migrationsAreCompatible } =
   await import(pathToFileURL(migrationsModulePath).href)
 const { PostgresGateway } = await import(pathToFileURL(databaseModulePath).href)
-const { PostgresRepository, OwnerAlreadyExistsError } = await import(pathToFileURL(repositoryModulePath).href)
+const { PostgresRepository, OwnerAlreadyExistsError, ProviderSyncAlreadyRunningError } = await import(pathToFileURL(repositoryModulePath).href)
 const { bootstrapOwner } = await import(pathToFileURL(bootstrapModulePath).href)
 
 const databaseUrl = process.env.DATABASE_URL
@@ -127,6 +127,34 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
     OwnerAlreadyExistsError,
     'operator bootstrap closes permanently after the atomic owner commit',
   )
+
+  let signalEntered
+  let releaseSync
+  const entered = new Promise((resolve) => { signalEntered = resolve })
+  const held = new Promise((resolve) => { releaseSync = resolve })
+  const providerId = '22222222-2222-4222-8222-222222222222'
+  const otherProviderId = '33333333-3333-4333-8333-333333333333'
+  const activeSync = repository.withProviderSyncLock(providerId, async () => {
+    signalEntered()
+    await held
+    return 'completed'
+  })
+  try {
+    await entered
+    await assert.rejects(
+      new PostgresRepository(pool).withProviderSyncLock(providerId, async () => 'overlapped'),
+      ProviderSyncAlreadyRunningError,
+    )
+    assert.equal(await new PostgresRepository(pool).withProviderSyncLock(otherProviderId, async () => 'independent'), 'independent')
+  } finally {
+    releaseSync()
+    assert.equal(await activeSync, 'completed')
+  }
+  assert.equal(await repository.withProviderSyncLock(providerId, async () => 'next'), 'next')
+  await assert.rejects(repository.withProviderSyncLock(providerId, async () => {
+    throw new Error('Provider fetch failed')
+  }), /Provider fetch failed/)
+  assert.equal(await repository.withProviderSyncLock(providerId, async () => 'retry'), 'retry')
 
   await pool.query(
     "INSERT INTO schema_migrations (name, checksum) VALUES ('0001_future.sql', repeat('1', 64))",

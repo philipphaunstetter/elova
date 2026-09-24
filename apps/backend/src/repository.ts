@@ -75,6 +75,7 @@ export interface ElovaRepository {
     encryptedApiKey: string
   }): Promise<ProviderSummary>
   getProviderSecret(ownerId: string, providerId: string): Promise<ProviderSecret | undefined>
+  withProviderSyncLock<T>(providerId: string, operation: () => Promise<T>): Promise<T>
   storeWorkflow(providerId: string, workflow: StoredWorkflow): Promise<void>
   storeExecution(providerId: string, execution: StoredExecution): Promise<void>
   getSyncCursor(providerId: string, kind: string): Promise<string | null>
@@ -87,6 +88,7 @@ export interface ElovaRepository {
 
 export class OwnerAlreadyExistsError extends Error {}
 export class ProviderOriginAlreadyExistsError extends Error {}
+export class ProviderSyncAlreadyRunningError extends Error {}
 
 export class PostgresRepository implements ElovaRepository {
   constructor(private readonly pool: Pool) {}
@@ -243,6 +245,33 @@ export class PostgresRepository implements ElovaRepository {
       createdAt: row.created_at.toISOString(),
       lastSyncedAt: row.last_synced_at?.toISOString() ?? null,
     } : undefined
+  }
+
+  async withProviderSyncLock<T>(providerId: string, operation: () => Promise<T>): Promise<T> {
+    const client = await this.pool.connect()
+    let discard = true
+    try {
+      const acquired = await client.query<{ acquired: boolean }>(
+        'SELECT pg_try_advisory_lock($1::integer, hashtext($2)) AS acquired',
+        [1_817_652_863, providerId],
+      )
+      if (!acquired.rows[0]?.acquired) {
+        discard = false
+        throw new ProviderSyncAlreadyRunningError('Provider synchronization already in progress')
+      }
+      try {
+        return await operation()
+      } finally {
+        const released = await client.query<{ released: boolean }>(
+          'SELECT pg_advisory_unlock($1::integer, hashtext($2)) AS released',
+          [1_817_652_863, providerId],
+        )
+        if (!released.rows[0]?.released) throw new Error('Provider synchronization lock was lost')
+        discard = false
+      }
+    } finally {
+      client.release(discard)
+    }
   }
 
   async storeWorkflow(providerId: string, workflow: StoredWorkflow): Promise<void> {

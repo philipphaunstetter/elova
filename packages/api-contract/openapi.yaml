@@ -126,6 +126,7 @@ paths:
                   executions: { type: integer, minimum: 0 }
         "401": { $ref: "#/components/responses/ErrorResponse" }
         "404": { $ref: "#/components/responses/ErrorResponse" }
+        "409": { $ref: "#/components/responses/ErrorResponse" }
         "502": { $ref: "#/components/responses/ErrorResponse" }
   /workflows:
     get:
