@@ -8,6 +8,7 @@ import type {
   ProviderSecret,
   ProviderSummary,
   SessionOwner,
+  SyncRepository,
   StoredExecution,
   StoredWorkflow,
 } from '../src/repository.js'
@@ -50,11 +51,11 @@ class MemoryRepository implements ElovaRepository {
     return provider
   }
   async getProviderSecret(_ownerId: string, providerId: string) { return this.providers.find((item) => item.id === providerId) }
-  async withProviderSyncLock<T>(providerId: string, operation: () => Promise<T>): Promise<T> {
+  async withProviderSyncLock<T>(providerId: string, operation: (repository: SyncRepository) => Promise<T>): Promise<T> {
     if (this.syncLocks.has(providerId)) throw new ProviderSyncAlreadyRunningError('Provider synchronization already in progress')
     this.syncLocks.add(providerId)
     try {
-      return await operation()
+      return await operation(this)
     } finally {
       this.syncLocks.delete(providerId)
     }

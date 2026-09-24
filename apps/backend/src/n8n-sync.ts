@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { decryptCredential, encryptCredential } from './security.js'
-import type { ElovaRepository, ProviderSecret } from './repository.js'
+import type { ElovaRepository, ProviderSecret, SyncRepository } from './repository.js'
 import { sanitizeExecution, sanitizeWorkflow } from './sanitizer.js'
 
 const MAX_PROVIDER_RESPONSE_BYTES = 10 * 1024 * 1024
@@ -98,8 +98,8 @@ export class N8nSynchronizer {
     }
   }
 
-  private async synchronizeWorkflows(provider: ProviderSecret): Promise<number> {
-    const storedCursor = await this.repository.getSyncCursor(provider.id, 'workflows')
+  private async synchronizeWorkflows(provider: ProviderSecret, repository: SyncRepository): Promise<number> {
+    const storedCursor = await repository.getSyncCursor(provider.id, 'workflows')
     const cursor = storedCursor ? decryptCredential(storedCursor, this.encryptionSecret) : null
     const page = await this.request(provider, '/api/v1/workflows?limit=100', cursor)
     let count = 0
@@ -108,7 +108,7 @@ export class N8nSynchronizer {
       const providerWorkflowId = sourceIdentifier(workflow.id)
       if (!providerWorkflowId) continue
       const sanitized = sanitizeWorkflow(workflow)
-      await this.repository.storeWorkflow(provider.id, {
+      await repository.storeWorkflow(provider.id, {
         providerWorkflowId,
         name: `Workflow ${providerWorkflowId.slice(0, 12)}`,
         active: workflow.active === true,
@@ -121,7 +121,7 @@ export class N8nSynchronizer {
       count += 1
     }
     const nextCursor = text(page.nextCursor)
-    await this.repository.finishSync(
+    await repository.finishSync(
       provider.id,
       'workflows',
       nextCursor ? encryptCursor(nextCursor, this.encryptionSecret) : null,
@@ -130,8 +130,8 @@ export class N8nSynchronizer {
     return count
   }
 
-  private async synchronizeExecutions(provider: ProviderSecret): Promise<number> {
-    const storedCursor = await this.repository.getSyncCursor(provider.id, 'executions')
+  private async synchronizeExecutions(provider: ProviderSecret, repository: SyncRepository): Promise<number> {
+    const storedCursor = await repository.getSyncCursor(provider.id, 'executions')
     const cursor = storedCursor ? decryptCredential(storedCursor, this.encryptionSecret) : null
     const page = await this.request(provider, '/api/v1/executions?includeData=true&limit=100', cursor)
     let count = 0
@@ -145,7 +145,7 @@ export class N8nSynchronizer {
       const durationMs = integer(execution.duration) ?? (
         startedAt && stoppedAt ? Math.max(0, Date.parse(stoppedAt) - Date.parse(startedAt)) : null
       )
-      await this.repository.storeExecution(provider.id, {
+      await repository.storeExecution(provider.id, {
         providerExecutionId,
         providerWorkflowId: sourceIdentifier(execution.workflowId),
         status: enumValue(execution.status, ['success', 'error', 'failed', 'crashed', 'running', 'waiting', 'canceled'], 'unknown')!,
@@ -161,7 +161,7 @@ export class N8nSynchronizer {
       count += 1
     }
     const nextCursor = text(page.nextCursor)
-    await this.repository.finishSync(
+    await repository.finishSync(
       provider.id,
       'executions',
       nextCursor ? encryptCursor(nextCursor, this.encryptionSecret) : null,
@@ -171,13 +171,13 @@ export class N8nSynchronizer {
   }
 
   async synchronize(provider: ProviderSecret): Promise<{ workflows: number; executions: number }> {
-    return this.repository.withProviderSyncLock(provider.id, async () => {
+    return this.repository.withProviderSyncLock(provider.id, async (repository) => {
       try {
-        const workflows = await this.synchronizeWorkflows(provider)
-        const executions = await this.synchronizeExecutions(provider)
+        const workflows = await this.synchronizeWorkflows(provider, repository)
+        const executions = await this.synchronizeExecutions(provider, repository)
         return { workflows, executions }
       } catch {
-        await this.repository.failSync(provider.id, 'provider')
+        await repository.failSync(provider.id, 'provider')
         throw new Error('Provider synchronization failed')
       }
     })

@@ -61,7 +61,15 @@ export interface DashboardMetrics {
   averageDurationMs: number | null
 }
 
-export interface ElovaRepository {
+export interface SyncRepository {
+  storeWorkflow(providerId: string, workflow: StoredWorkflow): Promise<void>
+  storeExecution(providerId: string, execution: StoredExecution): Promise<void>
+  getSyncCursor(providerId: string, kind: string): Promise<string | null>
+  finishSync(providerId: string, kind: string, cursor: string | null, processed: number): Promise<void>
+  failSync(providerId: string, kind: string): Promise<void>
+}
+
+export interface ElovaRepository extends SyncRepository {
   createInitialOwner(input: { email: string; displayName: string; passwordHash: string }): Promise<Owner>
   findOwnerByEmail(email: string): Promise<Owner | undefined>
   createSession(sessionId: string, ownerId: string, tokenDigest: string, expiresAt: Date): Promise<void>
@@ -75,12 +83,7 @@ export interface ElovaRepository {
     encryptedApiKey: string
   }): Promise<ProviderSummary>
   getProviderSecret(ownerId: string, providerId: string): Promise<ProviderSecret | undefined>
-  withProviderSyncLock<T>(providerId: string, operation: () => Promise<T>): Promise<T>
-  storeWorkflow(providerId: string, workflow: StoredWorkflow): Promise<void>
-  storeExecution(providerId: string, execution: StoredExecution): Promise<void>
-  getSyncCursor(providerId: string, kind: string): Promise<string | null>
-  finishSync(providerId: string, kind: string, cursor: string | null, processed: number): Promise<void>
-  failSync(providerId: string, kind: string): Promise<void>
+  withProviderSyncLock<T>(providerId: string, operation: (repository: SyncRepository) => Promise<T>): Promise<T>
   listWorkflows(ownerId: string, limit: number): Promise<unknown[]>
   listExecutions(ownerId: string, limit: number): Promise<unknown[]>
   dashboardMetrics(ownerId: string): Promise<DashboardMetrics>
@@ -91,7 +94,11 @@ export class ProviderOriginAlreadyExistsError extends Error {}
 export class ProviderSyncAlreadyRunningError extends Error {}
 
 export class PostgresRepository implements ElovaRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly syncClient?: PoolClient) {}
+
+  private get syncDatabase(): Pool | PoolClient {
+    return this.syncClient ?? this.pool
+  }
 
   async createInitialOwner(input: { email: string; displayName: string; passwordHash: string }): Promise<Owner> {
     const client = await this.pool.connect()
@@ -247,7 +254,7 @@ export class PostgresRepository implements ElovaRepository {
     } : undefined
   }
 
-  async withProviderSyncLock<T>(providerId: string, operation: () => Promise<T>): Promise<T> {
+  async withProviderSyncLock<T>(providerId: string, operation: (repository: SyncRepository) => Promise<T>): Promise<T> {
     const client = await this.pool.connect()
     let discard = true
     try {
@@ -260,7 +267,7 @@ export class PostgresRepository implements ElovaRepository {
         throw new ProviderSyncAlreadyRunningError('Provider synchronization already in progress')
       }
       try {
-        return await operation()
+        return await operation(new PostgresRepository(this.pool, client))
       } finally {
         const released = await client.query<{ released: boolean }>(
           'SELECT pg_advisory_unlock($1::integer, hashtext($2)) AS released',
@@ -275,7 +282,7 @@ export class PostgresRepository implements ElovaRepository {
   }
 
   async storeWorkflow(providerId: string, workflow: StoredWorkflow): Promise<void> {
-    await this.pool.query(
+    await this.syncDatabase.query(
       `INSERT INTO workflows (
          id, provider_id, provider_workflow_id, name, active, sanitized_definition,
          privacy_mode, sanitizer_version, content_digest, source_updated_at
@@ -295,7 +302,7 @@ export class PostgresRepository implements ElovaRepository {
   }
 
   async storeExecution(providerId: string, execution: StoredExecution): Promise<void> {
-    await this.pool.query(
+    await this.syncDatabase.query(
       `INSERT INTO executions (
          id, provider_id, workflow_id, provider_execution_id, status, mode, started_at,
          stopped_at, duration_ms, sanitized_content, privacy_mode, sanitizer_version, content_digest
@@ -319,7 +326,7 @@ export class PostgresRepository implements ElovaRepository {
   }
 
   async getSyncCursor(providerId: string, kind: string): Promise<string | null> {
-    const result = await this.pool.query<{ cursor: string | null }>(
+    const result = await this.syncDatabase.query<{ cursor: string | null }>(
       'SELECT cursor FROM sync_cursors WHERE provider_id = $1 AND sync_kind = $2',
       [providerId, kind],
     )
@@ -327,28 +334,28 @@ export class PostgresRepository implements ElovaRepository {
   }
 
   async finishSync(providerId: string, kind: string, cursor: string | null, processed: number): Promise<void> {
-    await this.pool.query(
+    await this.syncDatabase.query(
       `INSERT INTO sync_cursors (provider_id, sync_kind, cursor, last_synced_at)
        VALUES ($1,$2,$3,now())
        ON CONFLICT (provider_id, sync_kind) DO UPDATE SET
          cursor = excluded.cursor, last_synced_at = excluded.last_synced_at`,
       [providerId, kind, cursor],
     )
-    await this.pool.query(
+    await this.syncDatabase.query(
       `INSERT INTO sync_runs (id, provider_id, sync_kind, status, records_processed, finished_at)
        VALUES ($1,$2,$3,'completed',$4,now())`,
       [randomUUID(), providerId, kind, processed],
     )
-    await this.pool.query("UPDATE n8n_providers SET status = 'healthy', updated_at = now() WHERE id = $1", [providerId])
+    await this.syncDatabase.query("UPDATE n8n_providers SET status = 'healthy', updated_at = now() WHERE id = $1", [providerId])
   }
 
   async failSync(providerId: string, kind: string): Promise<void> {
-    await this.pool.query(
+    await this.syncDatabase.query(
       `INSERT INTO sync_runs (id, provider_id, sync_kind, status, error_code, finished_at)
        VALUES ($1,$2,$3,'failed','PROVIDER_SYNC_FAILED',now())`,
       [randomUUID(), providerId, kind],
     )
-    await this.pool.query("UPDATE n8n_providers SET status = 'error', updated_at = now() WHERE id = $1", [providerId])
+    await this.syncDatabase.query("UPDATE n8n_providers SET status = 'error', updated_at = now() WHERE id = $1", [providerId])
   }
 
   async listWorkflows(ownerId: string, limit: number): Promise<unknown[]> {

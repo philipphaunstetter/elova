@@ -151,6 +151,16 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
     assert.equal(await activeSync, 'completed')
   }
   assert.equal(await repository.withProviderSyncLock(providerId, async () => 'next'), 'next')
+  const singleClientPool = new Pool({ connectionString: databaseUrl, max: 1, connectionTimeoutMillis: 250 })
+  try {
+    const isolatedRepository = new PostgresRepository(singleClientPool)
+    assert.equal(await isolatedRepository.withProviderSyncLock(providerId, async (syncRepository) => {
+      assert.equal(await syncRepository.getSyncCursor(providerId, 'executions'), null)
+      return 'cursor read without another connection'
+    }), 'cursor read without another connection')
+  } finally {
+    await singleClientPool.end()
+  }
   await assert.rejects(repository.withProviderSyncLock(providerId, async () => {
     throw new Error('Provider fetch failed')
   }), /Provider fetch failed/)
