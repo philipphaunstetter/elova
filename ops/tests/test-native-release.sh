@@ -172,8 +172,11 @@ grep -Fq 'already has a migration record' "$TMP/out" || fail 'release identity r
 ok 'migration markers are bound to one staged artifact identity'
 
 systemctl_log="$TMP/systemctl.log"
+health_log="$TMP/health.log"
 systemctl_status=0
+health_status=0
 systemctl() { printf '%s\n' "$*" >> "$systemctl_log"; return "$systemctl_status"; }
+wait_for_health() { printf '%s\n' "$1" >> "$health_log"; return "$health_status"; }
 activation_root="$TMP/activation"
 mkdir -p "$activation_root/releases"/{release-a,release-b,release-c}
 ln -s releases/release-a "$activation_root/current"
@@ -186,6 +189,7 @@ restore_release_state \
   fail 'failed rollback did not restore the previous backend link'
 [[ $(<"$systemctl_log") == 'stop elova-backend.service' ]] ||
   fail 'a previously stopped backend was restarted during restoration'
+[[ ! -s $health_log ]] || fail 'a previously stopped backend was health checked'
 : > "$systemctl_log"
 set_link "$activation_root" current releases/release-c
 set_link "$activation_root" previous releases/release-b
@@ -193,7 +197,10 @@ restore_release_state \
   "$activation_root" release-b 1 release-a elova-backend.service 1
 [[ $(<"$systemctl_log") == 'restart elova-backend.service' ]] ||
   fail 'a previously active backend was not restarted during restoration'
+[[ $(<"$health_log") == 'elova-backend.service' ]] ||
+  fail 'restored active backend was not readiness checked'
 : > "$systemctl_log"
+: > "$health_log"
 systemctl_status=1
 if restore_release_state \
   "$activation_root" release-b 1 release-a elova-backend.service 1; then
@@ -201,8 +208,20 @@ if restore_release_state \
 fi
 [[ $(<"$systemctl_log") == 'restart elova-backend.service' ]] ||
   fail 'failed service restoration did not attempt the prior state'
+[[ ! -s $health_log ]] || fail 'readiness ran after a failed service restart'
+: > "$systemctl_log"
 systemctl_status=0
-ok 'failed release restoration preserves state and propagates failure'
+health_status=1
+if restore_release_state \
+  "$activation_root" release-b 1 release-a elova-backend.service 1; then
+  fail 'restored service readiness failure was hidden'
+fi
+[[ $(<"$systemctl_log") == 'restart elova-backend.service' ]] ||
+  fail 'unready service restoration did not restart the prior state'
+[[ $(<"$health_log") == 'elova-backend.service' ]] ||
+  fail 'unready restored service was not readiness checked'
+health_status=0
+ok 'failed release restoration preserves state and requires readiness'
 
 owned_pid=$$
 listener_pid=$owned_pid

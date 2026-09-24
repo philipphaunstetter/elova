@@ -5,7 +5,7 @@ import { createClient } from "@elova/api-contract/client";
 import { hasExpectedApiVersion } from "./api-version";
 import { getBackendOrigin } from "./backend-config";
 
-const HEALTH_TIMEOUT_MS = 3_000;
+const HEALTH_TIMEOUT_MS = 5_000;
 
 function isReadiness(value: unknown): value is Readiness {
   if (typeof value !== "object" || value === null) return false;

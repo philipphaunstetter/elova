@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import { backendIsReady } from "../src/server/backend-health";
 
@@ -25,6 +26,27 @@ test("uses the generated readiness operation against the private /v1 base", asyn
   try {
     assert.equal(await backendIsReady(), true);
     assert.equal(requested, `${PRIVATE_URL}/v1/health/ready`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("allows the backend readiness checks to use their full budget", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input) => {
+    const signal = input instanceof Request ? input.signal : undefined;
+    await delay(3_200, undefined, { signal });
+    return Response.json(
+      {
+        status: "ready",
+        checks: { database: "ready", migrations: "ready" },
+      },
+      { headers: { "x-elova-api-version": "1" } },
+    );
+  }) as typeof fetch;
+
+  try {
+    assert.equal(await backendIsReady(), true);
   } finally {
     globalThis.fetch = originalFetch;
   }

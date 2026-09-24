@@ -9,7 +9,7 @@ readonly LOCK_ROOT=/run/lock
 readonly FRONTEND_PORT=3000
 readonly BACKEND_PORT=3001
 readonly HEALTH_TIMEOUT_SECONDS=60
-readonly HEALTH_REQUEST_TIMEOUT_SECONDS=3
+readonly HEALTH_REQUEST_TIMEOUT_SECONDS=6
 readonly HEALTH_DELAY_SECONDS=2
 readonly KEEP_RELEASES=3
 readonly RELEASE_DIGEST_FILE=.elova-artifact-sha256
@@ -637,7 +637,7 @@ restore_release_state() {
     rm -f -- "$root/previous" || return 1
   fi
   if [[ -n $old_release && $was_active == 1 ]]; then
-    systemctl restart "$unit"
+    systemctl restart "$unit" && wait_for_health "$unit"
   else
     systemctl stop "$unit"
   fi
