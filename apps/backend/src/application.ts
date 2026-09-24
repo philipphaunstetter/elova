@@ -82,17 +82,24 @@ export class ElovaApplication {
     if (request.method === 'POST' && request.pathname === '/v1/auth/login') {
       const body = record(request.body)
       const email = stringField(body.email, 320)?.toLowerCase()
-      const password = stringField(body.password, 256)
-      if (!email || !password) return error(400, 'BAD_REQUEST', 'Email and password are required')
+      const password = body.password
+      if (!email || typeof password !== 'string' || password.length < 1 || password.length > 256) {
+        return error(400, 'BAD_REQUEST', 'Email and password are required')
+      }
       const now = Date.now()
+      for (const [trackedEmail, failure] of this.loginFailures) {
+        if (now - failure.windowStartedAt >= 15 * 60_000) this.loginFailures.delete(trackedEmail)
+      }
       const currentFailures = this.loginFailures.get(email)
-      const failures = !currentFailures || now - currentFailures.windowStartedAt > 15 * 60_000
-        ? { count: 0, windowStartedAt: now }
-        : currentFailures
-      if (failures.count >= 5) return error(429, 'RATE_LIMITED', 'Try again later')
+      if (currentFailures && currentFailures.count >= 5) return error(429, 'RATE_LIMITED', 'Try again later')
       const owner = await this.repository.findOwnerByEmail(email)
-      if (!owner || !(await verifyPassword(password, owner.passwordHash))) {
-        this.loginFailures.set(email, { ...failures, count: failures.count + 1 })
+      if (!owner) return error(401, 'INVALID_CREDENTIALS', 'Invalid email or password')
+      if (!(await verifyPassword(password, owner.passwordHash))) {
+        if (!currentFailures && this.loginFailures.size >= 1_024) return error(429, 'RATE_LIMITED', 'Try again later')
+        this.loginFailures.set(email, {
+          count: (currentFailures?.count ?? 0) + 1,
+          windowStartedAt: currentFailures?.windowStartedAt ?? now,
+        })
         return error(401, 'INVALID_CREDENTIALS', 'Invalid email or password')
       }
       this.loginFailures.delete(email)

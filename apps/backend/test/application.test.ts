@@ -97,6 +97,44 @@ test('wrong password and forged unsigned session are rejected', async () => {
   assert.equal(session?.status, 401)
 })
 
+test('login preserves the exact operator password including surrounding spaces', async () => {
+  const repository = new MemoryRepository()
+  repository.owner = {
+    id: '11111111-1111-4111-8111-111111111111', email: 'owner@example.test', displayName: 'Owner',
+    passwordHash: await hashPassword('  correct horse battery staple  '),
+  }
+  const application = new ElovaApplication(repository, SECRET, SECRET)
+  const login = await application.handle(request('POST', '/v1/auth/login', {
+    email: repository.owner.email, password: '  correct horse battery staple  ',
+  }))
+  assert.equal(login?.status, 200)
+  assert.equal((await application.handle(request('GET', '/v1/auth/session', undefined,
+    String(login?.headers?.['set-cookie']).split(';')[0])))?.status, 200)
+  assert.equal((await application.handle(request('POST', '/v1/auth/login', {
+    email: repository.owner.email, password: 'correct horse battery staple',
+  })))?.status, 401)
+})
+
+test('unknown login emails do not accumulate failed-login buckets or lock the owner', async () => {
+  const { application, repository } = await loggedIn()
+  for (let index = 0; index < 7; index += 1) {
+    assert.equal((await application.handle(request('POST', '/v1/auth/login', {
+      email: 'unknown@example.test', password: 'incorrect password value',
+    })))?.status, 401)
+  }
+  assert.equal((await application.handle(request('POST', '/v1/auth/login', {
+    email: repository.owner!.email, password: 'correct horse battery staple',
+  })))?.status, 200)
+  for (let index = 0; index < 5; index += 1) {
+    assert.equal((await application.handle(request('POST', '/v1/auth/login', {
+      email: repository.owner!.email, password: 'incorrect password value',
+    })))?.status, 401)
+  }
+  assert.equal((await application.handle(request('POST', '/v1/auth/login', {
+    email: repository.owner!.email, password: 'correct horse battery staple',
+  })))?.status, 429)
+})
+
 test('provider synchronization stores only sanitized workflow and execution representations', async () => {
   const { application, repository, cookie } = await loggedIn()
   const created = await application.handle(request('POST', '/v1/providers', {
@@ -107,8 +145,8 @@ test('provider synchronization stores only sanitized workflow and execution repr
   const fetchImplementation: typeof fetch = async (input) => {
     const path = new URL(String(input)).pathname
     const data = path.endsWith('/workflows')
-      ? [{ id: 'wf-1', name: 'Jane Doe intake', active: true, nodes: [{ type: 'n8n-nodes-base.webhook', parameters: { path: 'jane@example.test', authorization: 'secret' } }] }]
-      : [{ id: 'ex-1', workflowId: 'wf-1', status: 'success', data: { email: 'jane@example.test', token: 'secret' } }]
+      ? [{ id: 'wf-1', name: 'Jane Doe intake', active: true, nodes: [{ type: 'n8n-nodes-base.webhook', parameters: { path: 'jane@example.test', type: 'jane@example.test', authorization: 'secret' } }] }]
+      : [{ id: 'ex-1', workflowId: 'wf-1', status: 'success', data: { json: { 'jane@example.test': 'secret', type: 'jane@example.test' } } }]
     return new Response(JSON.stringify({ data, nextCursor: 'sensitive-provider-cursor' }), { status: 200, headers: { 'content-type': 'application/json' } })
   }
   const syncApplication = new ElovaApplication(repository, SECRET, SECRET, fetchImplementation)
