@@ -3,7 +3,7 @@ import { once } from 'node:events'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { afterEach, test } from 'node:test'
-import type { AddressInfo } from 'node:net'
+import { connect, type AddressInfo } from 'node:net'
 import type { DatabaseGateway, ReadinessChecks } from '../src/database.js'
 import { createBackendServer } from '../src/http-server.js'
 
@@ -35,6 +35,18 @@ async function start(checks: ReadinessChecks, database = gateway(checks)): Promi
 async function fixture(name: string): Promise<unknown> {
   const path = resolve(process.cwd(), '../../packages/api-contract/fixtures', name)
   return JSON.parse(await readFile(path, 'utf8'))
+}
+
+async function rawRequest(origin: string, target: string): Promise<string> {
+  const { port } = new URL(origin)
+  const socket = connect(Number(port), '127.0.0.1')
+  socket.setEncoding('utf8')
+  let response = ''
+  socket.on('data', (chunk) => { response += chunk })
+  await once(socket, 'connect')
+  socket.end(`GET ${target} HTTP/1.1\r\nHost: elova.invalid\r\nConnection: close\r\n\r\n`)
+  await once(socket, 'end')
+  return response
 }
 
 test('liveness conforms to the frozen fixture and headers', async () => {
@@ -80,6 +92,21 @@ test('unexpected readiness errors fail closed', async () => {
   assert.equal(response.status, 503)
   assert.deepEqual(JSON.parse(text), await fixture('readiness-not-ready.json'))
   assert.doesNotMatch(text, /secret|gx10|postgres/i)
+})
+
+test('malformed request targets return a stable error without terminating the server', async () => {
+  const origin = await start({ database: 'ready', migrations: 'ready' })
+  const response = await rawRequest(origin, '//%')
+  const [, payload] = response.split('\r\n\r\n', 2)
+
+  assert.match(response, /^HTTP\/1\.1 400 Bad Request\r\n/)
+  assert.ok(payload)
+  assert.deepEqual(JSON.parse(payload), {
+    error: { code: 'BAD_REQUEST', message: 'Bad request' },
+  })
+
+  const live = await fetch(`${origin}/v1/health/live`)
+  assert.equal(live.status, 200)
 })
 
 test('unknown paths and methods return stable, non-reflective errors', async () => {

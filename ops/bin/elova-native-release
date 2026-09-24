@@ -267,12 +267,44 @@ if ((url.port || '80') !== expectedPort) {
 NODE
 }
 
+check_database_url() {
+  local database_url=$1
+  ELOVA_DATABASE_URL_TO_VALIDATE="$database_url" node <<'NODE'
+const { isIP } = require('node:net');
+const raw = process.env.ELOVA_DATABASE_URL_TO_VALIDATE;
+function withoutBrackets(value) {
+  return value.startsWith('[') && value.endsWith(']') ? value.slice(1, -1) : value;
+}
+function canonicalIpv6(value) {
+  if (isIP(value) !== 6) return undefined;
+  return withoutBrackets(new URL(`http://[${value}]/`).hostname);
+}
+function isLoopbackHost(value) {
+  const host = withoutBrackets(value).toLowerCase();
+  if (host === 'localhost') return true;
+  if (isIP(host) === 4) return host.split('.')[0] === '127';
+  return canonicalIpv6(host) === '::1';
+}
+let url;
+try { url = new URL(raw); } catch { console.error('DATABASE_URL must be a valid PostgreSQL URL'); process.exit(1); }
+if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
+  console.error('DATABASE_URL must use the postgres or postgresql scheme'); process.exit(1);
+}
+const socketHosts = url.searchParams.getAll('host');
+const usesUnixSocket = url.hostname === '' && socketHosts.length === 1 &&
+  socketHosts[0].startsWith('/') && !socketHosts[0].includes('\0');
+const usesLoopback = socketHosts.length === 0 && isLoopbackHost(url.hostname);
+if (url.searchParams.has('hostaddr') || (!usesUnixSocket && !usesLoopback)) {
+  console.error('DATABASE_URL must use a same-host Unix socket or loopback address'); process.exit(1);
+}
+NODE
+}
+
 check_backend_env() {
   local file=$1 host database_url
   host=$(env_value ELOVA_BACKEND_HOST "$file") || die "$file must define ELOVA_BACKEND_HOST"
   database_url=$(env_value DATABASE_URL "$file") || die "$file must define DATABASE_URL"
-  [[ $database_url == postgres://* || $database_url == postgresql://* ]] ||
-    die "DATABASE_URL must use the postgres or postgresql scheme"
+  check_database_url "$database_url"
   [[ $host != '0.0.0.0' && $host != '::' && $host != 'localhost' && $host != 127.* ]] ||
     die "ELOVA_BACKEND_HOST may not be wildcard or loopback"
   ip -o addr show dev tailscale0 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | grep -Fx -- "$host" >/dev/null ||
@@ -516,19 +548,19 @@ require_matching_migration_marker() {
 restore_release_state() {
   local root=$1 old_release=$2 had_previous=$3 prior_previous=$4 unit=$5 was_active=$6
   if [[ -n $old_release ]]; then
-    set_link "$root" current "releases/$old_release"
+    set_link "$root" current "releases/$old_release" || return 1
   else
-    rm -f -- "$root/current"
+    rm -f -- "$root/current" || return 1
   fi
   if (( had_previous == 1 )); then
-    set_link "$root" previous "releases/$prior_previous"
+    set_link "$root" previous "releases/$prior_previous" || return 1
   else
-    rm -f -- "$root/previous"
+    rm -f -- "$root/previous" || return 1
   fi
   if [[ -n $old_release && $was_active == 1 ]]; then
-    systemctl restart "$unit" || true
+    systemctl restart "$unit"
   else
-    systemctl stop "$unit" || true
+    systemctl stop "$unit"
   fi
 }
 
@@ -597,9 +629,12 @@ run_activate() {
   url=$(health_url)
   if ! systemctl restart "$unit" || ! wait_for_health; then
     if (( rollback_allowed == 1 )); then
-      restore_release_state \
-        "$root" "$old" "$had_previous" "$prior_previous" "$unit" "$prior_service_active"
-      failure_message="restart or readiness failed at $url; restored prior release links and prior service state"
+      if restore_release_state \
+        "$root" "$old" "$had_previous" "$prior_previous" "$unit" "$prior_service_active"; then
+        failure_message="restart or readiness failed at $url; restored prior release links and prior service state"
+      else
+        failure_message="restart or readiness failed at $url; prior release restoration failed; operator intervention required"
+      fi
     else
       if systemctl stop "$unit"; then
         failure_message="restart or readiness failed at $url; migration-count mismatch prohibits restoring release $old; service stopped; deploy a forward fix"
@@ -621,6 +656,7 @@ run_activate() {
 
 run_rollback() {
   local root current previous unit url current_migrations previous_migrations prior_service_active=0
+  local failure_message="" journal_status=0
   validate_service
   if ! require_apply; then
     printf 'dry-run: would acquire %s deployment lock and swap current with previous\n' "$service"
@@ -652,10 +688,18 @@ run_rollback() {
   set_link "$root" previous "releases/$current"
   url=$(health_url)
   if ! systemctl restart "$unit" || ! wait_for_health; then
-    restore_release_state \
-      "$root" "$current" 1 "$previous" "$unit" "$prior_service_active"
-    journal rollback "$previous" failed
-    die "rollback restart or readiness failed at $url; restored release $current and prior service state"
+    if restore_release_state \
+      "$root" "$current" 1 "$previous" "$unit" "$prior_service_active"; then
+      failure_message="rollback restart or readiness failed at $url; restored release $current and prior service state"
+    else
+      failure_message="rollback restart or readiness failed at $url; prior release restoration failed; operator intervention required"
+    fi
+    journal rollback "$previous" failed || journal_status=$?
+    if (( journal_status != 0 )); then
+      printf '%s: %s; failed to record rollback failure\n' "$PROGRAM" "$failure_message" >&2
+      return "$journal_status"
+    fi
+    die "$failure_message"
   fi
   journal rollback "$previous"
   printf 'rolled back %s from %s to %s; readiness converged at %s\n' "$service" "$current" "$previous" "$url"

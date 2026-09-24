@@ -7,7 +7,7 @@ const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/
 
 interface ErrorEnvelope {
   error: {
-    code: 'NOT_FOUND' | 'METHOD_NOT_ALLOWED'
+    code: 'BAD_REQUEST' | 'NOT_FOUND' | 'METHOD_NOT_ALLOWED'
     message: string
   }
 }
@@ -41,7 +41,16 @@ function readinessBody(checks: ReadinessChecks) {
 export function createBackendServer(database: DatabaseGateway): Server {
   const server = createServer(async (request, response) => {
     const correlationId = requestId(request)
-    const pathname = new URL(request.url ?? '/', 'http://elova.invalid').pathname
+    let pathname: string
+    try {
+      pathname = new URL(request.url ?? '/', 'http://elova.invalid').pathname
+    } catch {
+      const body: ErrorEnvelope = {
+        error: { code: 'BAD_REQUEST', message: 'Bad request' },
+      }
+      writeJson(response, 400, body, correlationId)
+      return
+    }
 
     if (request.method !== 'GET') {
       const body: ErrorEnvelope = {

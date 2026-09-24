@@ -14,7 +14,7 @@ ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/to/o
 
 ## Run the backend locally
 
-The backend requires a PostgreSQL URL and refuses wildcard binds. Apply migrations explicitly before startup:
+The backend requires a same-host Unix-socket or loopback PostgreSQL URL and refuses wildcard binds. Apply migrations explicitly before startup:
 
 ```bash
 cd apps/backend

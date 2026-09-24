@@ -26,7 +26,7 @@ Shared files (`package.json`, lockfile, TypeScript/lint configuration, this cont
 - Frontend bind variables: `HOSTNAME` and `PORT` (production defaults are specified by the unit template, not application code).
 - Backend bind variables: `ELOVA_BACKEND_HOST` and `PORT` (the unit template must bind only the intended Tailnet address, never `0.0.0.0` by default).
 
-The browser calls only `https://<public-vps>/api/v1/...`. The frontend server removes `/api` and calls `${ELOVA_BACKEND_URL}/v1/...` across the Tailnet. PostgreSQL is reachable only by the backend on GX10. Tailnet transport identity does not replace application authentication or workspace authorization.
+The browser calls only `https://<public-vps>/api/v1/...`. The frontend server removes `/api` and calls `${ELOVA_BACKEND_URL}/v1/...` across the Tailnet. PostgreSQL is reachable only by the backend through a same-host GX10 Unix socket or loopback connection. Tailnet transport identity does not replace application authentication or workspace authorization.
 
 ## BFF behavior
 

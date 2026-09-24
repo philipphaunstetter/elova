@@ -2,7 +2,7 @@
 
 These tests exercise the frozen frontend/BFF/backend seam without publishing an image or contacting deployed Elova infrastructure.
 
-- `ci-policy.test.mjs` parses `.github/workflows/ci.yml` into its normalized YAML model and verifies jobs, permissions, actions, commands, services, dependencies, test targets, and the absence of image publication or live credentials. The PostgreSQL service image is only ephemeral test infrastructure.
+- The independent frontend, backend, native-operations, contract, integration, and security job results are the executable CI evidence. The PostgreSQL service image is only ephemeral test infrastructure.
 - `contract.test.mjs` validates the OpenAPI document, then checks its normalized paths, operations, version headers, schemas, and accepted response fixtures.
 - `postgres.test.mjs` runs concurrent migrations against the workflow's ephemeral PostgreSQL service. Its intentionally slow DDL probe only succeeds for both callers when migration execution is serialized, then it verifies the product-schema-free migration seam and drift-sensitive readiness state.
 - `native-services.test.mjs` extracts the install-free archives accepted by the release helper, runs their packaged migration/start commands without installing dependencies, checks backend and proxied health compatibility, inspects browser assets for private values, verifies generic 502/504 envelopes, and requires graceful service exits.

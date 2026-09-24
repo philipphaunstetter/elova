@@ -32,38 +32,14 @@ if [[ -z $build_id ]]; then
 fi
 [[ $build_id =~ ^[A-Za-z0-9._-]{1,128}$ ]] || die "ELOVA_BUILD_ID must be an immutable source identifier"
 rm -rf -- "$ROOT/apps/backend/dist" "$ROOT/apps/frontend/.next"
-mkdir -p "$ROOT/apps/frontend/.next/cache"
-next_encryption_key=$(node - "$build_id" "$ROOT/apps/frontend/.next/cache" <<'NODE'
-const crypto = require('node:crypto');
-const fs = require('node:fs');
-const path = require('node:path');
-const [buildId, cacheDirectory] = process.argv.slice(2);
-const derive = (purpose) => crypto.createHash('sha256').update(`${purpose}\0${buildId}`).digest();
-fs.writeFileSync(path.join(cacheDirectory, '.previewinfo'), JSON.stringify({
-  previewModeId: derive('preview-id').subarray(0, 16).toString('hex'),
-  previewModeSigningKey: derive('preview-signing').toString('hex'),
-  previewModeEncryptionKey: derive('preview-encryption').toString('hex'),
-  expireAt: 253402300799000,
-}));
-process.stdout.write(derive('server-actions').toString('base64'));
-NODE
-)
 (
   cd -- "$ROOT"
-  ELOVA_BUILD_ID="$build_id" NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="$next_encryption_key" npm run build
+  ELOVA_BUILD_ID="$build_id" npm run build
 )
 
 [[ -f $ROOT/apps/backend/dist/src/server.js ]] || die "backend build output is missing"
 [[ -f $ROOT/apps/frontend/.next/standalone/apps/frontend/server.js ]] || die "frontend standalone server is missing"
 [[ -d $ROOT/apps/frontend/.next/static ]] || die "frontend static output is missing"
-node - "$ROOT/apps/frontend/.next/server/server-reference-manifest.json" <<'NODE'
-const fs = require('node:fs');
-const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-if (Object.keys(manifest.node ?? {}).length || Object.keys(manifest.edge ?? {}).length) {
-  console.error('native packaging does not support server actions');
-  process.exit(1);
-}
-NODE
 
 mkdir -p "$output"
 output=$(cd -- "$output" && pwd -P)

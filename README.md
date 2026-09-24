@@ -5,9 +5,9 @@ Elova is being separated into independently built native services:
 - `apps/frontend` — the public VPS Next.js frontend and same-origin BFF;
 - `apps/backend` — the private GX10 API and PostgreSQL migration boundary;
 - `packages/api-contract` — the canonical OpenAPI contract, fixtures, and generated client;
-- `ops` — deterministic native artifact packaging, reviewed systemd templates, and guarded runbook material.
+- `ops` — clean native artifact packaging, reviewed systemd templates, and guarded runbook material.
 
-Browsers call only the public frontend at `/api/v1/*`. Server-only BFF code uses `ELOVA_BACKEND_URL` to reach the private backend over the Tailnet. The browser bundle and responses must never contain that private origin. PostgreSQL access and `DATABASE_URL` belong only to the backend.
+Browsers call only the public frontend at `/api/v1/*`. Server-only BFF code uses `ELOVA_BACKEND_URL` to reach the private backend over the Tailnet. The browser bundle and responses must never contain that private origin. PostgreSQL access and `DATABASE_URL` belong only to the backend and use a same-host GX10 socket or loopback connection.
 
 ## Local verification
 

@@ -134,6 +134,24 @@ for rejected_origin in \
 done
 ok 'frontend preflight accepts only Tailnet HTTP origins'
 
+for local_database in \
+  'postgresql://user:secret@localhost:5432/elova?sslmode=disable' \
+  'postgresql://user:secret@127.0.0.1:5432/elova' \
+  'postgresql://user:secret@[::1]:5432/elova' \
+  'postgresql:///elova?host=%2Fvar%2Frun%2Fpostgresql'; do
+  check_database_url "$local_database" || fail 'same-host PostgreSQL URL was rejected'
+done
+for remote_database in \
+  'postgresql:///elova' \
+  'postgresql://user:secret@10.0.0.2:5432/elova' \
+  'postgresql://user:secret@database.internal:5432/elova' \
+  'postgresql:///elova?host=database.internal'; do
+  if (check_database_url "$remote_database") >"$TMP/out" 2>&1; then
+    fail 'non-loopback PostgreSQL URL was accepted'
+  fi
+done
+ok 'backend preflight accepts only same-host PostgreSQL transports'
+
 release_root="$TMP/staged-release"
 marker="$TMP/migration-marker"
 mkdir -p "$release_root"
@@ -154,7 +172,8 @@ grep -Fq 'already has a migration record' "$TMP/out" || fail 'release identity r
 ok 'migration markers are bound to one staged artifact identity'
 
 systemctl_log="$TMP/systemctl.log"
-systemctl() { printf '%s\n' "$*" >> "$systemctl_log"; }
+systemctl_status=0
+systemctl() { printf '%s\n' "$*" >> "$systemctl_log"; return "$systemctl_status"; }
 activation_root="$TMP/activation"
 mkdir -p "$activation_root/releases"/{release-a,release-b,release-c}
 ln -s releases/release-a "$activation_root/current"
@@ -174,6 +193,15 @@ restore_release_state \
   "$activation_root" release-b 1 release-a elova-backend.service 1
 [[ $(<"$systemctl_log") == 'restart elova-backend.service' ]] ||
   fail 'a previously active backend was not restarted during restoration'
-ok 'failed release restoration preserves prior links and service state'
+: > "$systemctl_log"
+systemctl_status=1
+if restore_release_state \
+  "$activation_root" release-b 1 release-a elova-backend.service 1; then
+  fail 'service restoration failure was hidden'
+fi
+[[ $(<"$systemctl_log") == 'restart elova-backend.service' ]] ||
+  fail 'failed service restoration did not attempt the prior state'
+systemctl_status=0
+ok 'failed release restoration preserves state and propagates failure'
 
 printf '1..%d\n' "$pass"

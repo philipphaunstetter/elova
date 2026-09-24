@@ -16,13 +16,26 @@ function required(name: string, value: string | undefined): string {
   return value
 }
 
+function withoutBrackets(value: string): string {
+  return value.startsWith('[') && value.endsWith(']') ? value.slice(1, -1) : value
+}
+
+function canonicalIpv6(value: string): string | undefined {
+  if (isIP(value) !== 6) return undefined
+  return withoutBrackets(new URL(`http://[${value}]/`).hostname)
+}
+
+function isLoopbackHost(value: string): boolean {
+  const host = withoutBrackets(value).toLowerCase()
+  if (host === 'localhost') return true
+  if (isIP(host) === 4) return host.split('.')[0] === '127'
+  return canonicalIpv6(host) === '::1'
+}
+
 function parseHost(value: string | undefined): string {
   const host = value?.trim() || '127.0.0.1'
-  const literal = host.startsWith('[') && host.endsWith(']')
-    ? host.slice(1, -1)
-    : host
-  const isUnspecifiedIpv6 = isIP(literal) === 6 && literal.replace(/[:0]/g, '') === ''
-  if (literal === '0.0.0.0' || isUnspecifiedIpv6) {
+  const literal = withoutBrackets(host)
+  if (literal === '0.0.0.0' || canonicalIpv6(literal) === '::') {
     throw new Error('ELOVA_BACKEND_HOST must not use a wildcard address')
   }
 
@@ -40,6 +53,18 @@ function parseDatabaseUrl(value: string | undefined): string {
 
   if (url.protocol !== 'postgres:' && url.protocol !== 'postgresql:') {
     throw new Error('DATABASE_URL must use the postgres or postgresql scheme')
+  }
+
+  const socketHosts = url.searchParams.getAll('host')
+  const socketHost = socketHosts.length === 1 ? socketHosts[0] : undefined
+  const usesUnixSocket =
+    url.hostname === '' &&
+    socketHost !== undefined &&
+    socketHost.startsWith('/') &&
+    !socketHost.includes('\0')
+  const usesLoopback = socketHosts.length === 0 && isLoopbackHost(url.hostname)
+  if (url.searchParams.has('hostaddr') || (!usesUnixSocket && !usesLoopback)) {
+    throw new Error('DATABASE_URL must use a same-host Unix socket or loopback address')
   }
 
   return databaseUrl

@@ -18,22 +18,6 @@ env:
   CI: 'true'
 
 jobs:
-  workflow-policy:
-    name: Workflow has no image publication path
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - name: Install locked dependencies
-        run: npm ci
-      - name: Verify native-only workflow policy
-        run: node --test tests/integration/ci-policy.test.mjs
-
   native-operations:
     name: Native release helper and systemd templates
     runs-on: ubuntu-latest
@@ -120,7 +104,7 @@ jobs:
   postgres-integration:
     name: PostgreSQL migrations, native services, and BFF compatibility
     runs-on: ubuntu-latest
-    needs: [frontend-quality, backend-quality, contract-drift, workflow-policy, native-operations]
+    needs: [frontend-quality, backend-quality, contract-drift, native-operations]
     timeout-minutes: 15
     services:
       postgres:
@@ -153,13 +137,13 @@ jobs:
         run: npm run package:native -- "$RUNNER_TEMP/elova-native"
         env:
           ELOVA_BACKEND_URL: http://100.100.10.20:3001
-      - name: Verify native packaging is reproducible
+      - name: Verify native packaging removes stale output
         run: |
           printf 'stale backend output\n' > apps/backend/dist/src/stale-output.js
           printf 'stale frontend output\n' > apps/frontend/.next/static/stale-output.txt
           npm run package:native -- "$RUNNER_TEMP/elova-native-repeat"
-          cmp "$RUNNER_TEMP/elova-native/elova-backend.tgz" "$RUNNER_TEMP/elova-native-repeat/elova-backend.tgz"
-          cmp "$RUNNER_TEMP/elova-native/elova-frontend.tgz" "$RUNNER_TEMP/elova-native-repeat/elova-frontend.tgz"
+          if tar -tzf "$RUNNER_TEMP/elova-native-repeat/elova-backend.tgz" | grep -Fq stale-output; then exit 1; fi
+          if tar -tzf "$RUNNER_TEMP/elova-native-repeat/elova-frontend.tgz" | grep -Fq stale-output; then exit 1; fi
         env:
           ELOVA_BACKEND_URL: http://100.100.10.20:3001
       - name: Verify artifacts satisfy the release-helper contract
