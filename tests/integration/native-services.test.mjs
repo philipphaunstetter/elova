@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { execFile, spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
-import { networkInterfaces, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -14,24 +14,6 @@ const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url))
 const frontendPort = 43100
 const backendPort = 43200
 const execFileAsync = promisify(execFile)
-
-function privateAddress() {
-  for (const addresses of Object.values(networkInterfaces())) {
-    for (const address of addresses ?? []) {
-      if (address.family !== 'IPv4' || address.internal) continue
-      const octets = address.address.split('.').map(Number)
-      const isPrivate =
-        octets[0] === 10 ||
-        (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
-        (octets[0] === 192 && octets[1] === 168) ||
-        (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127)
-      if (isPrivate) return address.address
-    }
-  }
-  throw new Error(
-    'CI runner needs a private non-loopback address for the native service boundary test',
-  )
-}
 
 async function nativeScriptCommand(packageRoot, scriptName) {
   const metadata = JSON.parse(
@@ -214,8 +196,12 @@ test('packaged native services honor the contract without exposing their private
   const backendRoot = await extractArtifact(artifactDirectory, 'backend', stagingRoot)
   const frontendRoot = await extractArtifact(artifactDirectory, 'frontend', stagingRoot)
 
-  const backendHost = privateAddress()
-  const backendOrigin = `http://${backendHost}:${backendPort}`
+  const backendHost = '127.0.0.1'
+  const backendName = 'gx10'
+  const hostAliases = join(stagingRoot, 'host-aliases')
+  await writeFile(hostAliases, `${backendName} ${backendHost}\n`)
+  const backendOrigin = `http://${backendName}:${backendPort}`
+  const directBackendOrigin = `http://${backendHost}:${backendPort}`
   const frontendOrigin = `http://127.0.0.1:${frontendPort}`
   const commonEnvironment = {
     ...process.env,
@@ -230,6 +216,7 @@ test('packaged native services honor the contract without exposing their private
   const frontendEnvironment = {
     ...commonEnvironment,
     ELOVA_BACKEND_URL: backendOrigin,
+    HOSTALIASES: hostAliases,
     HOSTNAME: '127.0.0.1',
     PORT: String(frontendPort),
   }
@@ -283,11 +270,11 @@ test('packaged native services honor the contract without exposing their private
       frontend.child.kill('SIGKILL')
   })
 
-  const live = await waitFor(`${backendOrigin}/v1/health/live`, 200, backend)
+  const live = await waitFor(`${directBackendOrigin}/v1/health/live`, 200, backend)
   assert.equal(live.headers.get('x-elova-api-version'), '1')
   assert.deepEqual(await live.json(), await fixture('liveness.json'))
 
-  const ready = await waitFor(`${backendOrigin}/v1/health/ready`, 200, backend)
+  const ready = await waitFor(`${directBackendOrigin}/v1/health/ready`, 200, backend)
   assert.equal(ready.headers.get('x-elova-api-version'), '1')
   assert.deepEqual(await ready.json(), await fixture('readiness-ready.json'))
 
@@ -310,7 +297,6 @@ test('packaged native services honor the contract without exposing their private
   const leakMarkers = [
     backendOrigin,
     backendHost,
-    '10.255.255.1:4100',
     'elova_test_password',
   ]
   assertNoPrivateLeak(serializedResponse(correlated, proxiedText), leakMarkers)

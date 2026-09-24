@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
+import SwaggerParser from '@apidevtools/swagger-parser'
+import { load } from 'js-yaml'
 
 const contractRoot = new URL('../../packages/api-contract/', import.meta.url)
+const openapiUrl = new URL('openapi.yaml', contractRoot)
+const openapi = load(await readFile(openapiUrl, 'utf8'))
+const packageMetadata = JSON.parse(
+  await readFile(new URL('package.json', contractRoot), 'utf8'),
+)
 
 async function fixture(name) {
   return JSON.parse(
@@ -10,23 +18,38 @@ async function fixture(name) {
   )
 }
 
-const openapi = await readFile(new URL('openapi.yaml', contractRoot), 'utf8')
-const packageMetadata = JSON.parse(
-  await readFile(new URL('package.json', contractRoot), 'utf8'),
-)
+test('the canonical private API is valid and exposes only health operations', async () => {
+  await SwaggerParser.validate(fileURLToPath(openapiUrl))
 
-test('the canonical package and private API seam remain fixed', () => {
   assert.equal(packageMetadata.name, '@elova/api-contract')
-  assert.match(openapi, /^openapi: 3\.1\.0$/m)
-  assert.match(openapi, /^  - url: \/v1$/m)
-  assert.match(openapi, /^  \/health\/live:$/m)
-  assert.match(openapi, /^  \/health\/ready:$/m)
-  assert.match(openapi, /^        const: "1"$/m)
+  assert.equal(openapi.openapi, '3.1.0')
+  assert.deepEqual(openapi.servers.map((server) => server.url), ['/v1'])
+  assert.deepEqual(Object.keys(openapi.paths), ['/health/live', '/health/ready'])
+  assert.equal(openapi.paths['/health/live'].get.operationId, 'getLiveness')
+  assert.equal(openapi.paths['/health/ready'].get.operationId, 'getReadiness')
 
-  const declaredPaths = [...openapi.matchAll(/^  (\/[^:]+):$/gm)].map(
-    (match) => match[1],
-  )
-  assert.deepEqual(declaredPaths, ['/health/live', '/health/ready'])
+  for (const [path, statuses] of [
+    ['/health/live', ['200']],
+    ['/health/ready', ['200', '503']],
+  ]) {
+    const responses = openapi.paths[path].get.responses
+    assert.deepEqual(Object.keys(responses), statuses)
+    for (const response of Object.values(responses)) {
+      assert.equal(
+        response.headers['X-Elova-Api-Version'].$ref,
+        '#/components/headers/ApiVersion',
+      )
+      assert.equal(
+        response.headers['X-Request-Id'].$ref,
+        '#/components/headers/RequestId',
+      )
+    }
+  }
+
+  assert.deepEqual(openapi.components.headers.ApiVersion.schema, {
+    type: 'string',
+    const: '1',
+  })
 })
 
 test('health fixtures match the frozen success envelopes', async () => {
@@ -41,7 +64,10 @@ test('health fixtures match the frozen success envelopes', async () => {
   })
 })
 
-test('BFF failure fixtures are stable, generic, and contain no private details', async () => {
+test('BFF failure fixtures match the declared generic failure schema', async () => {
+  const failureSchema = openapi.components.schemas.BffFailure
+  const codes = failureSchema.properties.error.properties.code.enum
+  const messages = failureSchema.properties.error.properties.message.enum
   const failures = [
     [
       'bff-unavailable.json',
@@ -54,11 +80,11 @@ test('BFF failure fixtures are stable, generic, and contain no private details',
   for (const [name, code, message] of failures) {
     const value = await fixture(name)
     assert.deepEqual(value, { error: { code, message } })
+    assert.equal(codes.includes(code), true)
+    assert.equal(messages.includes(message), true)
     assert.doesNotMatch(
       JSON.stringify(value),
       /database|postgres|origin|hostname|tailnet|gx10|stack/i,
     )
-    assert.match(openapi, new RegExp(`\\b${code}\\b`))
-    assert.match(openapi, new RegExp(message))
   }
 })

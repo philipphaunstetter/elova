@@ -1,42 +1,78 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
+import { load } from 'js-yaml'
 
 const workflowUrl = new URL('../../.github/workflows/ci.yml', import.meta.url)
-const workflow = await readFile(workflowUrl, 'utf8')
+const parsed = load(await readFile(workflowUrl, 'utf8'))
 
-function extractRunBlocks(source) {
-  const lines = source.split('\n')
-  const blocks = []
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const match = /^(\s*)run:\s*(.*)$/.exec(lines[index])
-    if (!match) continue
-
-    const indentation = match[1].length
-    const firstLine = match[2]
-    const block = [firstLine]
-    while (index + 1 < lines.length) {
-      const next = lines[index + 1]
-      if (next.trim() && next.length - next.trimStart().length <= indentation)
-        break
-      block.push(next.trim())
-      index += 1
-    }
-    blocks.push(block.join('\n'))
-  }
-
-  return blocks
+function record(value, label) {
+  assert.ok(value && typeof value === 'object' && !Array.isArray(value), `${label} must be an object`)
+  return value
 }
 
-test('candidate workflow cannot build, log in to, or publish container images', () => {
-  assert.doesNotMatch(
-    workflow,
-    /(?:docker|podman|buildah|nerdctl)\/(?:build|login|metadata)/i,
-  )
-  assert.doesNotMatch(workflow, /build-push-action|kaniko|packages:\s*write/i)
+const workflow = record(parsed, 'workflow')
+const jobs = record(workflow.jobs, 'workflow jobs')
+for (const [jobName, value] of Object.entries(jobs)) {
+  const job = record(value, `job ${jobName}`)
+  assert.equal(job['runs-on'], 'ubuntu-latest')
+  assert.ok(Array.isArray(job.steps), `job ${jobName} must define steps`)
+  for (const stepValue of job.steps) {
+    const step = record(stepValue, `step in ${jobName}`)
+    assert.equal(typeof step.run === 'string' || typeof step.uses === 'string', true)
+  }
+}
 
-  for (const command of extractRunBlocks(workflow)) {
+function runCommands(jobName) {
+  return jobs[jobName].steps.flatMap((step) =>
+    typeof step.run === 'string' ? [step.run] : [],
+  )
+}
+
+function usedActions(jobName) {
+  return jobs[jobName].steps.flatMap((step) =>
+    typeof step.uses === 'string' ? [step.uses] : [],
+  )
+}
+
+function hasCommand(jobName, fragment) {
+  return runCommands(jobName).some((command) => command.includes(fragment))
+}
+
+function valuesBelow(value) {
+  if (Array.isArray(value)) return value.flatMap(valuesBelow)
+  if (value && typeof value === 'object') return Object.values(value).flatMap(valuesBelow)
+  return [value]
+}
+
+test('workflow model exposes only the native CI jobs and read permission', () => {
+  assert.deepEqual(Object.keys(workflow.on).sort(), ['pull_request', 'push', 'workflow_dispatch'])
+  assert.deepEqual(workflow.permissions, { contents: 'read' })
+  assert.deepEqual(Object.keys(jobs).sort(), [
+    'backend-quality',
+    'contract-drift',
+    'frontend-quality',
+    'native-operations',
+    'postgres-integration',
+    'security',
+    'workflow-policy',
+  ])
+
+  for (const job of Object.values(jobs)) {
+    assert.equal(job.container, undefined)
+    assert.notEqual(job.permissions?.packages, 'write')
+  }
+})
+
+test('normalized actions and commands have no image publication path', () => {
+  const actions = Object.keys(jobs).flatMap(usedActions)
+  for (const action of actions) {
+    assert.doesNotMatch(action, /(?:docker|podman|buildah|nerdctl)\/(?:build|login|metadata)/i)
+    assert.doesNotMatch(action, /build-push-action|kaniko/i)
+  }
+
+  const commands = Object.keys(jobs).flatMap(runCommands)
+  for (const command of commands) {
     assert.doesNotMatch(
       command,
       /(?:^|[;&|\s])(?:docker|podman|buildah|nerdctl)(?:\s|$)|(?:^|\s)(?:npm\s+)?publish(?:\s|$)/i,
@@ -44,53 +80,67 @@ test('candidate workflow cannot build, log in to, or publish container images', 
   }
 })
 
-test('candidate workflow has no application credentials or live integration targets', () => {
-  assert.doesNotMatch(workflow, /\$\{\{\s*secrets\./i)
-  assert.doesNotMatch(workflow, /dockerhub|newflowio|n8n|tailnet|gx10/i)
-  assert.doesNotMatch(workflow, /https?:\/\/(?!10\.255\.255\.1|127\.0\.0\.1)/i)
-})
-
-test('only an ephemeral PostgreSQL service image is declared', () => {
-  const images = [...workflow.matchAll(/^\s+image:\s*(\S+)\s*$/gm)].map(
-    (match) => match[1],
-  )
-  assert.deepEqual(images, ['postgres:16-alpine'])
-  assert.match(workflow, /^\s+services:\s*$/m)
-  assert.match(
-    workflow,
-    /postgresql:\/\/elova_test:elova_test_password@127\.0\.0\.1:5432\/elova_test/,
-  )
-})
-
-test('required independent and integration evidence is present', () => {
-  for (const job of [
-    'frontend-quality:',
-    'backend-quality:',
-    'contract-drift:',
-    'postgres-integration:',
-    'security:',
-  ]) {
-    assert.match(workflow, new RegExp(`^  ${job.replace(':', '\\:')}`, 'm'))
+test('normalized workflow contains no live credentials or integration targets', () => {
+  const scalarValues = valuesBelow(workflow).filter((value) => typeof value === 'string')
+  for (const value of scalarValues) {
+    assert.doesNotMatch(value, /\$\{\{\s*secrets\./i)
   }
 
-  for (const evidence of [
-    'Lint frontend independently',
-    'Type-check frontend independently',
-    'Run frontend unit tests independently',
-    'Build frontend native artifact independently',
-    'Lint backend independently',
-    'Type-check backend independently',
-    'Run backend unit tests independently',
-    'Build backend native artifact independently',
-    'Reject generated contract or client drift',
-    'Verify baseline migration and advisory locking',
-    'Verify startup, readiness, BFF failures, leakage, and shutdown',
-    'Scan production dependencies',
-    'Scan tracked files for committed secrets',
-  ]) {
-    assert.ok(
-      workflow.includes(evidence),
-      `missing workflow evidence: ${evidence}`,
-    )
-  }
+  const backendUrls = scalarValues.filter((value) => value.startsWith('http://'))
+  assert.deepEqual([...new Set(backendUrls)], ['http://100.100.10.20:3001'])
+  assert.deepEqual(jobs['postgres-integration'].services.postgres.env, {
+    POSTGRES_USER: 'elova_test',
+    POSTGRES_PASSWORD: 'elova_test_password',
+    POSTGRES_DB: 'elova_test',
+  })
+})
+
+test('only the integration job declares an ephemeral PostgreSQL service', () => {
+  const declaredServices = Object.entries(jobs).flatMap(([jobName, job]) =>
+    Object.entries(job.services ?? {}).map(([serviceName, service]) => ({
+      jobName,
+      serviceName,
+      image: service.image,
+    })),
+  )
+  assert.deepEqual(declaredServices, [{
+    jobName: 'postgres-integration',
+    serviceName: 'postgres',
+    image: 'postgres:16-alpine',
+  }])
+})
+
+test('jobs execute independent quality, integration, and security evidence', () => {
+  assert.equal(hasCommand('frontend-quality', 'eslint -- apps/frontend'), true)
+  assert.equal(hasCommand('frontend-quality', 'tsc -- --noEmit -p apps/frontend/tsconfig.json'), true)
+  assert.equal(hasCommand('frontend-quality', 'npm test --workspace @elova/frontend'), true)
+  assert.equal(hasCommand('frontend-quality', 'npm run build --workspace @elova/frontend'), true)
+
+  assert.equal(hasCommand('backend-quality', 'eslint -- apps/backend/src apps/backend/test'), true)
+  assert.equal(hasCommand('backend-quality', 'tsc -- --noEmit -p apps/backend/tsconfig.json'), true)
+  assert.equal(hasCommand('backend-quality', 'npm test --workspace @elova/backend'), true)
+  assert.equal(hasCommand('backend-quality', 'npm run build --workspace @elova/backend'), true)
+
+  assert.equal(hasCommand('contract-drift', 'tests/integration/contract.test.mjs'), true)
+  assert.equal(hasCommand('contract-drift', 'git diff --exit-code -- packages/api-contract'), true)
+  assert.equal(hasCommand('native-operations', 'ops/tests/test-native-release.sh'), true)
+  assert.equal(hasCommand('postgres-integration', 'tests/integration/postgres.test.mjs'), true)
+  assert.equal(hasCommand('postgres-integration', 'tests/integration/native-services.test.mjs'), true)
+  assert.deepEqual(jobs['postgres-integration'].needs, [
+    'frontend-quality',
+    'backend-quality',
+    'contract-drift',
+    'workflow-policy',
+    'native-operations',
+  ])
+
+  assert.equal(hasCommand('security', 'npm audit --omit=dev --audit-level=high'), true)
+  assert.equal(
+    usedActions('security').some((action) => action.startsWith('trufflesecurity/trufflehog@')),
+    true,
+  )
+  assert.equal(
+    usedActions('security').some((action) => action.startsWith('actions/dependency-review-action@')),
+    true,
+  )
 })

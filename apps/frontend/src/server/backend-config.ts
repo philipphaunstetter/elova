@@ -2,8 +2,6 @@ import "server-only";
 
 import { isIP } from "node:net";
 
-const PRIVATE_HOST_SUFFIXES = [".internal", ".local", ".ts.net"];
-
 export class BackendConfigurationError extends Error {
   constructor() {
     super("Private backend is not configured");
@@ -11,31 +9,26 @@ export class BackendConfigurationError extends Error {
   }
 }
 
-function isPrivateIpv4(hostname: string): boolean {
-  const octets = hostname.split(".").map(Number);
-  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part))) return false;
-
-  const [first, second] = octets;
-  return (
-    first === 10 ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168) ||
-    (first === 100 && second >= 64 && second <= 127) ||
-    (first === 169 && second === 254)
-  );
+function isTailnetIpv4(hostname: string): boolean {
+  const [first, second] = hostname.split(".").map(Number);
+  return first === 100 && second >= 64 && second <= 127;
 }
 
-function isPrivateIpv6(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  return normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe8") || normalized.startsWith("fe9") || normalized.startsWith("fea") || normalized.startsWith("feb");
+function isDnsLabel(value: string): boolean {
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value);
 }
 
-function isPrivateHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  if (isIP(normalized) === 4) return isPrivateIpv4(normalized);
-  if (isIP(normalized) === 6) return isPrivateIpv6(normalized);
+function isMagicDnsName(hostname: string): boolean {
+  const labels = hostname.split(".");
+  if (labels.length === 1) return isDnsLabel(labels[0]);
+  return labels.length >= 4 && hostname.endsWith(".ts.net") && labels.every(isDnsLabel);
+}
 
-  return !normalized.includes(".") || PRIVATE_HOST_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
+function isTailnetHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  if (isIP(normalized) === 4) return isTailnetIpv4(normalized);
+  if (isIP(normalized) === 6) return normalized.startsWith("fd7a:115c:a1e0:");
+  return isMagicDnsName(normalized);
 }
 
 export function getBackendOrigin(): URL {
@@ -57,7 +50,7 @@ export function getBackendOrigin(): URL {
 
   const hostname = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   const isLoopback = hostname === "localhost" || hostname === "::1" || hostname.startsWith("127.");
-  if (process.env.NODE_ENV === "production" && (isLoopback || !isPrivateHostname(hostname))) {
+  if (process.env.NODE_ENV === "production" && (isLoopback || !isTailnetHostname(hostname))) {
     throw new BackendConfigurationError();
   }
 
@@ -65,6 +58,6 @@ export function getBackendOrigin(): URL {
 }
 
 export function getPrivateEndpointTokens(url: URL): string[] {
-  const tokens = [url.origin, url.host, url.hostname.replace(/^\[|\]$/g, ""), url.port];
+  const tokens = [url.origin, url.host, url.hostname.replace(/^\[|\]$/g, "")];
   return [...new Set(tokens.filter((token) => token.length >= 2))].sort((a, b) => b.length - a.length);
 }

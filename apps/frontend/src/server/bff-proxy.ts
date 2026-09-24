@@ -21,7 +21,6 @@ const FORWARDED_RESPONSE_HEADERS = [
   "content-type",
   "etag",
   "retry-after",
-  "set-cookie",
   "x-request-id",
 ] as const;
 
@@ -64,6 +63,20 @@ function sanitize(value: string, privateTokens: string[]): string {
   }, value);
 }
 
+function sanitizeJson(value: unknown, privateTokens: string[]): unknown {
+  if (typeof value === "string") return sanitize(value, privateTokens);
+  if (Array.isArray(value)) return value.map((item) => sanitizeJson(item, privateTokens));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        sanitize(key, privateTokens),
+        sanitizeJson(item, privateTokens),
+      ]),
+    );
+  }
+  return value;
+}
+
 function safeResponseHeaders(upstream: Response, privateTokens: string[]): Headers {
   const headers = new Headers();
   for (const name of FORWARDED_RESPONSE_HEADERS) {
@@ -71,6 +84,9 @@ function safeResponseHeaders(upstream: Response, privateTokens: string[]): Heade
     if (!value || sanitize(value, privateTokens) !== value) continue;
     if (name === "x-request-id" && (value.length > 128 || !/^[\w.:-]+$/.test(value))) continue;
     headers.set(name, value);
+  }
+  for (const cookie of upstream.headers.getSetCookie()) {
+    if (sanitize(cookie, privateTokens) === cookie) headers.append("set-cookie", cookie);
   }
   return headers;
 }
@@ -214,16 +230,17 @@ export async function proxyToBackend(
     const contentType = upstream.headers.get("content-type")?.toLowerCase() ?? "";
     if (!contentType.includes("json")) return failure("unavailable");
 
-    let text: string;
+    let sanitized: string;
     try {
       const bytes = await readLimitedBody(upstream.body, MAX_RESPONSE_BYTES, controller.signal);
-      text = new TextDecoder().decode(bytes);
-      JSON.parse(text);
+      const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+      const serialized = JSON.stringify(sanitizeJson(parsed, privateTokens));
+      if (serialized === undefined) throw new TypeError("Invalid JSON response");
+      sanitized = serialized;
     } catch {
       return failure(timedOut ? "timeout" : "unavailable");
     }
 
-    const sanitized = sanitize(text, privateTokens);
     return new Response(sanitized, {
       status: upstream.status,
       headers: safeResponseHeaders(upstream, privateTokens),

@@ -21,9 +21,11 @@
     "test:frontend": "npm run test --workspace @elova/frontend"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
     "@eslint/eslintrc": "^3.3.1",
     "eslint": "^9.36.0",
     "eslint-config-next": "16.3.6",
+    "js-yaml": "^4.2.0",
     "typescript": "^5.9.2"
   }
 }

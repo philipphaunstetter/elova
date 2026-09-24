@@ -56,7 +56,7 @@ The SHA file starts with the archive's 64-digit SHA-256 digest. Credentials and 
 From a locked checkout with dependencies installed, create both prebuilt, install-free archives and checksums with:
 
 ```sh
-ELOVA_BACKEND_URL=http://10.255.255.1:4100 npm run package:native -- /path/to/output
+ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/to/output
 ```
 
 The build-only private URL is synthetic and is not a deployment target. The packager derives `ELOVA_BUILD_ID` from the checked-out commit unless an immutable source identifier is supplied explicitly, then uses it for the Next.js build. The command emits `elova-frontend.tgz`, `elova-backend.tgz`, and a matching `.sha256` file for each. It does not install or deploy anything. CI performs two complete builds from the same source identity and requires byte-identical archives, then validates both archives through the release helper, extracts them into isolated staging directories, runs the packaged migration command, and starts the packaged services without dependency installation before checking health and the BFF boundary.
@@ -131,7 +131,7 @@ sudo "$helper" migrate --service backend --release "$release" --dry-run
 sudo "$helper" migrate --service backend --release "$release" --apply
 ```
 
-The helper invokes only `elova-backend-migrate@<release>.service`, waits for success, and writes a release-specific success marker outside the artifact. It does **not** activate or restart the API. Backend activation refuses a release without this marker. The API unit runs only `npm start`; it never invokes migration implicitly.
+The helper invokes only `elova-backend-migrate@<release>.service`, waits for success, and writes the verified staged-artifact digest into a release-specific success marker outside the artifact. A release identity with an existing migration record cannot be staged again, and activation refuses a missing or artifact-mismatched marker. It does **not** activate or restart the API. The API unit runs only `npm start`; it never invokes migration implicitly.
 
 There is deliberately **no down/destructive migration procedure**. If a forward migration fails, stop, preserve logs, leave the current release running, and escalate to the database/release owner. Restore or corrective-forward-migration decisions require separate authorization. Backend symlink rollback is prohibited whenever the current and retained releases have different migration counts, including additive changes. Exact-count readiness remains fail-closed; recovery across that boundary requires a forward fix.
 
@@ -144,7 +144,7 @@ sudo "$helper" activate --service frontend --release "$release" --dry-run
 sudo "$helper" activate --service frontend --release "$release" --apply
 ```
 
-Use `--service backend` on GX10. Before changing links, activation rejects any backend target with fewer migrations than the current release and requires a forward fix. Otherwise activation atomically preserves the old `current` as `previous`, changes `current`, restarts only the named service, and polls the fixed readiness path for up to 60 seconds. A failed convergence restores the prior links and service state before recording failure when restoration does not cross a backend migration-count boundary. When counts differ, the helper leaves the migrated release selected, stops the unhealthy service, records failure, and requires a forward fix instead of restoring an incompatible release. Inspect `journalctl -u elova-frontend.service` or the corresponding backend/migration unit without copying environment values into tickets.
+Use `--service backend` on GX10. Before changing links, activation rejects any backend target with fewer migrations than the current release and requires a forward fix. Otherwise activation atomically preserves the old `current` as `previous`, changes `current`, restarts only the named service, and polls the fixed readiness path for up to 60 seconds. A failed convergence restores the prior links and preserves whether the prior service was active or stopped before recording failure when restoration does not cross a backend migration-count boundary. When counts differ, the helper leaves the migrated release selected, stops the unhealthy service, records failure, and requires a forward fix instead of restoring an incompatible release. Inspect `journalctl -u elova-frontend.service` or the corresponding backend/migration unit without copying environment values into tickets.
 
 Recommended order is backend stage → explicit backend migration → backend activation/readiness → frontend stage → frontend activation/readiness. Coordinate compatibility so either frontend can safely use either retained backend during the window.
 
@@ -158,7 +158,7 @@ sudo readlink -f /opt/elova/frontend/{current,previous}
 sudo "$helper" rollback --service frontend --apply
 ```
 
-Use `--service backend` on GX10. Backend rollback also requires that the previous release has a successful migration marker and exactly the same migration count as the current release. Any count mismatch is rejected before links or services change and must be resolved with a forward fix; operator claims of forward compatibility do not override this gate. Equal counts do not guarantee compatibility, so the helper still swaps `current` and `previous`, restarts only that service, and requires fail-closed readiness. On failed readiness it restores the pre-rollback links. Never attempt a down migration as part of rollback.
+Use `--service backend` on GX10. Backend rollback also requires that the previous release has an artifact-matching successful migration marker and exactly the same migration count as the current release. Any count mismatch is rejected before links or services change and must be resolved with a forward fix; operator claims of forward compatibility do not override this gate. Equal counts do not guarantee compatibility, so the helper still swaps `current` and `previous`, restarts only that service, and requires fail-closed readiness. On failed readiness it restores the pre-rollback links. Never attempt a down migration as part of rollback.
 
 ## Evidence and incident checks
 

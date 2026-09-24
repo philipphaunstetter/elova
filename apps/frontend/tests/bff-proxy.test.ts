@@ -129,9 +129,14 @@ test("rejects successful responses without the expected API version", async () =
   }
 });
 
-test("redacts the configured endpoint from successful JSON and safe-header candidates", async () => {
+test("redacts endpoint strings without changing JSON numbers", async () => {
   const fakeFetch: typeof fetch = async () => Response.json(
-    { status: "live", diagnostic: `${PRIVATE_URL}/v1`, backendPort: "8787" },
+    {
+      status: "live",
+      diagnostic: `${PRIVATE_URL}/v1`,
+      nested: { backend: "100.100.10.20", duration: 8787 },
+      backendPort: "8787",
+    },
     {
       headers: {
         etag: `\"${PRIVATE_URL}\"`,
@@ -142,12 +147,36 @@ test("redacts the configured endpoint from successful JSON and safe-header candi
   );
 
   const response = await proxyToBackend(browserRequest(), ["health", "live"], fakeFetch);
-  const text = await response.text();
   assert.equal(response.status, 200);
-  assert.equal(text.includes("100.100.10.20"), false);
-  assert.equal(text.includes("8787"), false);
+  assert.deepEqual(await response.json(), {
+    status: "live",
+    diagnostic: "[redacted]/v1",
+    nested: { backend: "[redacted]", duration: 8787 },
+    backendPort: "8787",
+  });
   assert.equal(response.headers.has("etag"), false);
   assert.equal(response.headers.has("set-cookie"), false);
+});
+
+test("preserves distinct safe upstream cookies", async () => {
+  const headers = new Headers({
+    "content-type": "application/json",
+    "x-elova-api-version": "1",
+  });
+  headers.append("set-cookie", "session=one; Path=/; HttpOnly");
+  headers.append("set-cookie", "csrf=two; Path=/; SameSite=Strict");
+  headers.append("set-cookie", `backend=${PRIVATE_URL}; Path=/`);
+
+  const response = await proxyToBackend(
+    browserRequest(),
+    ["health", "live"],
+    async () => new Response(JSON.stringify({ status: "live" }), { headers }),
+  );
+
+  assert.deepEqual(response.headers.getSetCookie(), [
+    "session=one; Path=/; HttpOnly",
+    "csrf=two; Path=/; SameSite=Strict",
+  ]);
 });
 
 test("rejects streamed request bodies as soon as they exceed the limit", async () => {

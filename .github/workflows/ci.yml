@@ -24,6 +24,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
       - name: Verify native-only workflow policy
         run: node --test tests/integration/ci-policy.test.mjs
 
@@ -66,7 +73,7 @@ jobs:
       - name: Build frontend native artifact independently
         run: npm run build --workspace @elova/frontend
         env:
-          ELOVA_BACKEND_URL: http://10.255.255.1:4100
+          ELOVA_BACKEND_URL: http://100.100.10.20:3001
 
   backend-quality:
     name: Backend lint, type, unit, and build
@@ -145,14 +152,14 @@ jobs:
       - name: Package install-free native artifacts
         run: npm run package:native -- "$RUNNER_TEMP/elova-native"
         env:
-          ELOVA_BACKEND_URL: http://10.255.255.1:4100
+          ELOVA_BACKEND_URL: http://100.100.10.20:3001
       - name: Verify native packaging is reproducible
         run: |
           npm run package:native -- "$RUNNER_TEMP/elova-native-repeat"
           cmp "$RUNNER_TEMP/elova-native/elova-backend.tgz" "$RUNNER_TEMP/elova-native-repeat/elova-backend.tgz"
           cmp "$RUNNER_TEMP/elova-native/elova-frontend.tgz" "$RUNNER_TEMP/elova-native-repeat/elova-frontend.tgz"
         env:
-          ELOVA_BACKEND_URL: http://10.255.255.1:4100
+          ELOVA_BACKEND_URL: http://100.100.10.20:3001
       - name: Verify artifacts satisfy the release-helper contract
         run: |
           ops/bin/elova-native-release stage --service backend \

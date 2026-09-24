@@ -35,6 +35,6 @@ NODE_ENV=development ELOVA_BACKEND_URL=http://127.0.0.1:3001 \
   HOSTNAME=127.0.0.1 PORT=3000 npm start
 ```
 
-Production rejects loopback and public backend origins. The frontend must be configured with the private GX10 Tailnet origin only on the server.
+Production accepts only the GX10 Tailnet IPv4, Tailscale IPv6, or MagicDNS origin. The frontend must configure it only on the server.
 
 For production prerequisites, guarded release mechanics, readiness, rollback, and restore expectations, see [`ops/docs/native-services-runbook.md`](ops/docs/native-services-runbook.md). Do not install or run those templates without separate host authority.

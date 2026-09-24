@@ -107,4 +107,72 @@ grep -Fq 'forward fix' <<< "$out" || fail 'rollback plan omitted forward-fix req
 grep -Fq 'readiness convergence' <<< "$out" || fail 'rollback plan omitted readiness'
 ok 'backend rollback refuses migration-count mismatches and remains readiness-gated'
 
+source "$HELPER"
+frontend_env="$TMP/frontend.env"
+for allowed_origin in \
+  http://100.64.0.1:3001 \
+  http://100.127.255.254:3001 \
+  http://gx10:3001 \
+  https://gx10.example-tailnet.ts.net:3001 \
+  'http://[fd7a:115c:a1e0::1]:3001'; do
+  printf 'ELOVA_BACKEND_URL=%s\n' "$allowed_origin" > "$frontend_env"
+  check_frontend_env "$frontend_env" || fail "Tailnet origin was rejected: $allowed_origin"
+done
+for rejected_origin in \
+  http://10.0.0.2:3001 \
+  http://192.168.0.2:3001 \
+  http://169.254.0.2:3001 \
+  http://gx10.internal:3001 \
+  http://gx10.local:3001 \
+  http://api.example.com:3001 \
+  'http://[fd00::1]:3001'; do
+  printf 'ELOVA_BACKEND_URL=%s\n' "$rejected_origin" > "$frontend_env"
+  if (check_frontend_env "$frontend_env") >"$TMP/out" 2>&1; then
+    fail "non-Tailnet origin was accepted: $rejected_origin"
+  fi
+done
+ok 'frontend preflight accepts only Tailnet origins'
+
+release_root="$TMP/staged-release"
+marker="$TMP/migration-marker"
+mkdir -p "$release_root"
+digest=$(printf 'verified artifact' | sha256sum | awk '{print $1}')
+printf '%s\n' "$digest" > "$release_root/$RELEASE_DIGEST_FILE"
+printf '%s\n' "$digest" > "$marker"
+require_matching_migration_marker "$release_root" "$marker" ||
+  fail 'artifact-matching migration marker was rejected'
+printf '%064d\n' 0 > "$marker"
+if (require_matching_migration_marker "$release_root" "$marker") >"$TMP/out" 2>&1; then
+  fail 'migration marker for another artifact was accepted'
+fi
+grep -Fq 'does not match staged artifact' "$TMP/out" || fail 'artifact mismatch refusal was not explicit'
+if (require_unused_migration_identity "$marker" reused-release) >"$TMP/out" 2>&1; then
+  fail 'reused backend release identity was accepted'
+fi
+grep -Fq 'already has a migration record' "$TMP/out" || fail 'release identity reuse refusal was not explicit'
+ok 'migration markers are bound to one staged artifact identity'
+
+systemctl_log="$TMP/systemctl.log"
+systemctl() { printf '%s\n' "$*" >> "$systemctl_log"; }
+activation_root="$TMP/activation"
+mkdir -p "$activation_root/releases"/{release-a,release-b,release-c}
+ln -s releases/release-c "$activation_root/current"
+ln -s releases/release-b "$activation_root/previous"
+restore_failed_activation \
+  "$activation_root" release-b 1 release-a elova-backend.service 0
+[[ $(link_release_name "$activation_root" current) == release-b ]] ||
+  fail 'failed forward fix did not restore the contained backend link'
+[[ $(link_release_name "$activation_root" previous) == release-a ]] ||
+  fail 'failed forward fix did not restore the previous backend link'
+[[ $(<"$systemctl_log") == 'stop elova-backend.service' ]] ||
+  fail 'a previously stopped backend was restarted during restoration'
+: > "$systemctl_log"
+set_link "$activation_root" current releases/release-c
+set_link "$activation_root" previous releases/release-b
+restore_failed_activation \
+  "$activation_root" release-b 1 release-a elova-backend.service 1
+[[ $(<"$systemctl_log") == 'restart elova-backend.service' ]] ||
+  fail 'a previously active backend was not restarted during restoration'
+ok 'failed forward-fix restoration preserves prior links and service state'
+
 printf '1..%d\n' "$pass"
