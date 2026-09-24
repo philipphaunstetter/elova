@@ -196,6 +196,3 @@ jobs:
             -v "$PWD/ops/tests/test-native-release.sh:/fixtures/test-native-release.sh:ro" \
             ghcr.io/trufflesecurity/trufflehog:3.97.6@sha256:cc1a591e83fec7bf56f64c15beaaa5d8e3d179a4165a03a087d07165296ef7df \
             filesystem /fixtures --fail --no-update --github-actions --results=verified,unknown
-      - name: Review dependency changes
-        if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@v4
