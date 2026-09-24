@@ -25,7 +25,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
       - name: Check release shell syntax
-        run: bash -n ops/bin/elova-native-release ops/bin/elova-package-native ops/tests/test-native-release.sh
+        run: bash -n ops/bin/elova-native-release ops/bin/elova-package-native ops/tests/test-native-release.sh ops/tests/test-package-provenance.sh
       - name: Verify systemd service templates
         run: >-
           systemd-analyze verify
@@ -34,6 +34,8 @@ jobs:
           ops/systemd/elova-backend-migrate@.service
       - name: Exercise guarded release behavior
         run: ops/tests/test-native-release.sh
+      - name: Refuse dirty native artifact provenance
+        run: ops/tests/test-package-provenance.sh
 
   frontend-quality:
     name: Frontend lint, type, unit, and build

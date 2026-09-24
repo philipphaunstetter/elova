@@ -31,6 +31,10 @@ if [[ -z $build_id ]]; then
   build_id=$(git -C "$ROOT" rev-parse HEAD) || die "cannot derive immutable source identity"
 fi
 [[ $build_id =~ ^[A-Za-z0-9._-]{1,128}$ ]] || die "ELOVA_BUILD_ID must be an immutable source identifier"
+# The archive is named by a source commit. Refuse local edits (including untracked
+# sources) before deleting build output, even when the build ID was supplied by CI.
+status=$(git -C "$ROOT" status --porcelain --untracked-files=all) || die "cannot inspect source checkout"
+[[ -z $status ]] || die "source checkout has uncommitted or untracked files; build from a clean, locked commit"
 rm -rf -- "$ROOT/apps/backend/dist" "$ROOT/apps/frontend/.next"
 (
   cd -- "$ROOT"

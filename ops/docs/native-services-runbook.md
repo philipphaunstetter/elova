@@ -11,6 +11,21 @@ The first vNext slice runs without containers:
 
 The frontend's public TLS reverse proxy is outside this slice. It must proxy browser requests to the loopback frontend; it must never expose GX10 directly. PostgreSQL is reachable only on GX10 by authorized backend and operator processes. Tailnet transport identity does not replace the signed owner session required by product endpoints.
 
+## Day-one operator checklist (not an authorization to deploy)
+
+**Repository provides:** the PostgreSQL-only `0001_postgres_authority.sql` schema and ordered migration command, one-time `bootstrap-owner` command, native backend/frontend builds and install-free archives, SHA-256 files, root-operated guarded release helper, systemd templates, example environment *keys*, and synthetic/ephemeral CI verification. Pulling this repository onto either host alone installs nothing and does not configure PostgreSQL. The current public Docker artifact is unaffected.
+
+**Supply/approve separately before the window:** a dedicated backed-up *empty* GX10 PostgreSQL database and local-only role/connection with permission to create the initial schema and write application tables (the current migration unit and runtime share `DATABASE_URL`; do not mistake this for a read-only runtime role); independent protected keys and owner bootstrap credentials; approved GX10 `tailscale0` address, VPS-to-GX10 Tailnet policy and firewall; supported host packages, non-login service users, protected env files and installed units; VPS DNS/TLS/reverse proxy to loopback; trusted archive transfer and digest; a backup/restore and incident owner. The repository does **not** provision any of these. Separating migration and runtime database roles would require a reviewed design change; do not silently grant database superuser or remote-access privileges. For an existing database or legacy-data import, stop for a separately reviewed migration plan rather than applying the initial schema blindly.
+
+**Safe order (on approved hosts only):**
+
+1. In a clean, locked checkout on a trusted **build workspace**, run `npm ci`, then `ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/outside/repo`. The synthetic build URL is not the runtime target. Record the commit SHA and transfer each archive **with its independently checked SHA file** and reviewed helper/templates. A host-side `git pull` is only source checkout, not an activation; do not run a build as root or from a dirty checkout. Verify the transferred digest against the trusted build record before continuing.
+2. On GX10, provision the separately approved local PostgreSQL database/role and `/etc/elova/backend.env`; on VPS configure `/etc/elova/frontend.env`. Keep `DATABASE_URL` and both keys only on GX10, never on VPS. Confirm Tailnet/private bind and public proxy boundaries. Review/install only each host's own unit(s) and the helper, then `systemctl daemon-reload` as separately authorized.
+3. On each host run the helper's **read-only** artifact `preflight --dry-run` and full host `preflight`; resolve failures. On GX10, stage the backend; verify backup and migration SQL; explicitly migrate the staged backend release. Only after successful migration, bootstrap the owner once using a protected transient environment as below; check database state if acknowledgement is uncertain. Never expose a public signup path.
+4. Activate the backend and require PostgreSQL/migration readiness; then stage and activate the frontend and require its BFF readiness. Verify the VPS loopback listener, public TLS proxy to the frontend only, authenticated login, and absence of a public GX10/database listener. Configure n8n through the authenticated owner settings only after service health. Preserve logs, artifact hashes and rollback/forward-fix decision ownership.
+
+**Stop conditions:** any missing separate authorization, backup, clean artifact provenance, private route, database/secret, unit or readiness check is a blocker for live bring-up. No live host/database/network state was verified by this repository; passing local or CI tests cannot certify tomorrow's hosts. A failed migration or changed migration count is a forward-fix/restore decision, not permission to down-migrate or roll back the backend.
+
 ## Preconditions owned by the operator
 
 Do not continue until every applicable item is true. The helper's `preflight` reads and verifies these conditions but does not create them.
@@ -54,13 +69,13 @@ The integration build runs `npm run package:native -- <output-directory>` and su
 
 The SHA file starts with the archive's 64-digit SHA-256 digest. Credentials and environment files are never in the archive. A release ID should be an immutable build identifier such as the full Git commit SHA; it is limited to letters, digits, dots, underscores, and hyphens.
 
-From a locked checkout with dependencies installed, create both prebuilt, install-free archives and checksums with:
+From a clean locked checkout with dependencies installed and an output directory **outside the checkout**, create both prebuilt, install-free archives and checksums with:
 
 ```sh
 ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/to/output
 ```
 
-The build-only private URL is synthetic and is not a deployment target. The packager removes prior backend and frontend generated output, derives `ELOVA_BUILD_ID` from the checked-out commit unless an immutable source identifier is supplied explicitly, then performs a fresh build. The command emits `elova-frontend.tgz`, `elova-backend.tgz`, and a matching `.sha256` file for each. It does not install or deploy anything. CI verifies that stale generated files cannot enter either archive, then validates the archives through the release helper, extracts them into isolated staging directories, runs the packaged migration command, and starts the packaged services without dependency installation before checking health and the BFF boundary.
+The build-only private URL is synthetic and is not a deployment target. The packager refuses tracked edits and untracked files even when `ELOVA_BUILD_ID` is set; it then removes prior backend and frontend generated output, derives `ELOVA_BUILD_ID` from the checked-out commit unless an immutable source identifier is supplied explicitly, then performs a fresh build. The command emits `elova-frontend.tgz`, `elova-backend.tgz`, and a matching `.sha256` file for each. It does not install or deploy anything. CI verifies that stale generated files cannot enter either archive, then validates the archives through the release helper, extracts them into isolated staging directories, runs the packaged migration command, and starts the packaged services without dependency installation before checking health and the BFF boundary.
 
 Releases are staged under `/opt/elova/<service>/releases/<release-id>`, root-owned and non-writable. `current` and `previous` are relative symlinks. Each operation takes `/run/lock/elova-<service>-deploy.lock`. The append-only operational record is `/var/lib/elova/releases/<service>/journal.jsonl`; it contains no secrets. Activation retains `current`, `previous`, and at most one additional recent release.
 
@@ -75,8 +90,9 @@ These are instructions for a separately authorized maintenance window, not actio
    systemd-analyze verify ops/systemd/elova-frontend.service \
      ops/systemd/elova-backend.service \
      ops/systemd/elova-backend-migrate@.service
-   bash -n ops/bin/elova-native-release ops/bin/elova-package-native ops/tests/test-native-release.sh
+   bash -n ops/bin/elova-native-release ops/bin/elova-package-native ops/tests/test-native-release.sh ops/tests/test-package-provenance.sh
    ops/tests/test-native-release.sh
+   ops/tests/test-package-provenance.sh
    ```
 
 3. After separately authorizing host changes, install only the relevant files. On the VPS that is the frontend unit; on GX10 that is the backend and migration units. Preserve root ownership and non-writable modes.
@@ -136,14 +152,28 @@ The helper invokes only `elova-backend-migrate@<release>.service`, waits for suc
 
 ### 3a. Bootstrap the sole owner separately
 
-Only after migration and separate authorization, an operator on GX10 may run the packaged backend command once with `DATABASE_URL`, `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD` supplied through a protected transient environment. An operator shell does not automatically inherit the backend unit's environment file. Do not put the bootstrap password in shell history, process arguments, the persistent environment file, logs, or tickets.
+Only after migration and separate authorization, an operator on GX10 may run the packaged backend command once. An operator shell does not automatically inherit the backend unit's environment file, and running plain `npm run bootstrap-owner` from a root shell is **not** the service-user procedure. Create a **root-owned mode 0600 file on tmpfs** (for example `/run/elova/operator-bootstrap/owner.env`, with parent directory mode 0700), copy the protected `/etc/elova/backend.env` into it, then supply `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD` via a separately approved secret handoff into that same file; use systemd `EnvironmentFile=` syntax. Do not put the password in shell history, process arguments, the persistent `/etc/elova/backend.env`, logs, tickets, or a disk-backed editor swap file. Do not use `sudoedit` if its temporary copy could be disk-backed. Confirm the transient file has only the four backend keys and those three bootstrap keys with the approved values; never reuse it.
+
+Create the protected tmpfs copy (these commands do not supply bootstrap values), then use the approved handoff to append the three bootstrap keys and run as the unprivileged backend user (systemd reads the file before dropping privileges):
 
 ```sh
-cd "/opt/elova/backend/releases/$release"
-npm run bootstrap-owner
+sudo install -d -o root -g root -m 0700 /run/elova/operator-bootstrap
+sudo install -o root -g root -m 0600 /etc/elova/backend.env /run/elova/operator-bootstrap/owner.env
+# STOP: securely append the three bootstrap values before running the next command.
+bootstrap_status=0
+sudo systemd-run --wait --collect --uid=elova-backend --gid=elova-backend \
+  --working-directory="/opt/elova/backend/releases/$release" \
+  --property=EnvironmentFile=/run/elova/operator-bootstrap/owner.env \
+  /usr/bin/env npm run bootstrap-owner || bootstrap_status=$?
+# Remove the transient file after success OR failure, before inspecting/retrying.
+sudo rm -f -- /run/elova/operator-bootstrap/owner.env
+if [ "$bootstrap_status" -ne 0 ]; then
+  echo 'Bootstrap outcome uncertain; inspect GX10 owner state before retrying' >&2
+  false
+fi
 ```
 
-The command takes a PostgreSQL transaction lock and commits exactly one owner. A failure before commitment is retryable; every call after commitment fails closed. If the command fails and commit acknowledgement is uncertain, check PostgreSQL for an existing owner before retrying; do not assume no credentials were written. There is no web bootstrap or public signup. This runbook does not authorize executing the command, and the repository change performs no live bootstrap.
+Treat a nonzero exit or missing success acknowledgement as uncertain; remove the transient file even if the command fails, then check the owner count on GX10 before considering a retry. The command takes a PostgreSQL transaction lock and commits exactly one owner. A failure before commitment is retryable; every call after commitment fails closed. If acknowledgement is uncertain, check PostgreSQL for an existing owner before retrying; do not assume no credentials were written. There is no web bootstrap or public signup. This runbook does not authorize executing the command, and the repository change performs no live bootstrap.
 
 There is deliberately **no down/destructive migration procedure**. If a forward migration fails, stop, preserve logs, leave the current release running, and escalate to the database/release owner. Restore or corrective-forward-migration decisions require separate authorization. Backend symlink rollback is prohibited whenever the current and retained releases have different migration counts, including additive changes. Exact-count readiness remains fail-closed; recovery across that boundary requires a forward fix.
 
