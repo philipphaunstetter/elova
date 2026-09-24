@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Pool } from 'pg'
-import { PostgresRepository, type StoredExecution } from '../src/repository.js'
+import { PostgresRepository, ProviderSyncCapacityError, type StoredExecution } from '../src/repository.js'
 
 function execution(status: string): StoredExecution {
   return {
@@ -13,6 +13,7 @@ function execution(status: string): StoredExecution {
 }
 
 class SimulatedPool {
+  options = { max: 10 }
   clients: Array<{ connected: boolean; released: boolean }> = []
   storedStatuses: string[] = []
 
@@ -29,7 +30,16 @@ class SimulatedPool {
     }
   }
 
-  async query(): Promise<never> { throw new Error('no pooled connection available') }
+  async query(): Promise<{ rows: unknown[] }> { throw new Error('no pooled connection available') }
+}
+
+class CapacityPool extends SimulatedPool {
+  override async query(): Promise<{ rows: unknown[] }> {
+    if (this.clients.filter((client) => !client.released).length >= this.options.max) {
+      throw new Error('no pooled connection available')
+    }
+    return { rows: [{ ready: true }] }
+  }
 }
 
 test('provider sync uses its leased connection and refuses writes after lock loss', async () => {
@@ -56,4 +66,27 @@ test('provider sync uses its leased connection and refuses writes after lock los
   await assert.rejects(oldSync, /connection lost/)
   assert.deepEqual(pool.storedStatuses, ['success'])
   assert.equal(pool.clients.every((client) => client.released), true)
+})
+
+test('provider sync admission reserves pooled connections for ordinary queries', async () => {
+  const pool = new CapacityPool()
+  let release!: () => void
+  const held = new Promise<void>((resolve) => { release = resolve })
+  const attempts = Array.from({ length: 10 }, (_, index) =>
+    new PostgresRepository(pool as unknown as Pool).withProviderSyncLock(`provider-${index}`, async () => {
+      await held
+      return index
+    }).then((value) => ({ value }), (failure: unknown) => ({ failure })),
+  )
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  try {
+    assert.equal(pool.clients.filter((client) => !client.released).length, 4)
+    assert.deepEqual(await pool.query(), { rows: [{ ready: true }] })
+  } finally {
+    release()
+  }
+  const results = await Promise.all(attempts)
+  assert.deepEqual(results.slice(0, 4), [0, 1, 2, 3].map((value) => ({ value })))
+  assert.equal(results.slice(4).every((item) => 'failure' in item && item.failure instanceof ProviderSyncCapacityError), true)
+  assert.equal(await new PostgresRepository(pool as unknown as Pool).withProviderSyncLock('next', async () => 'retry'), 'retry')
 })

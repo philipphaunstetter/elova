@@ -56,6 +56,7 @@ export default function SettingsPage() {
     const response = await fetch(`/api/v1/providers/${id}/sync`, { method: "POST" });
     setMessage(response.ok ? "Synchronization completed." : response.status === 409
       ? "Synchronization already in progress. Try again after it finishes."
+      : response.status === 429 ? "Sync capacity reached. Try again shortly."
       : "Synchronization failed without storing raw content.");
     await refresh();
   }

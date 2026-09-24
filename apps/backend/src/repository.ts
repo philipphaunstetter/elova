@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import type { Pool, PoolClient } from 'pg'
 
+const MAX_CONCURRENT_PROVIDER_SYNCS = 4
+const activeSyncs = new WeakMap<Pool, number>()
+
 export interface Owner {
   id: string
   email: string
@@ -92,6 +95,7 @@ export interface ElovaRepository extends SyncRepository {
 export class OwnerAlreadyExistsError extends Error {}
 export class ProviderOriginAlreadyExistsError extends Error {}
 export class ProviderSyncAlreadyRunningError extends Error {}
+export class ProviderSyncCapacityError extends Error {}
 
 export class PostgresRepository implements ElovaRepository {
   constructor(private readonly pool: Pool, private readonly syncClient?: PoolClient) {}
@@ -255,29 +259,39 @@ export class PostgresRepository implements ElovaRepository {
   }
 
   async withProviderSyncLock<T>(providerId: string, operation: (repository: SyncRepository) => Promise<T>): Promise<T> {
-    const client = await this.pool.connect()
-    let discard = true
+    const count = activeSyncs.get(this.pool) ?? 0
+    const capacity = Math.min(MAX_CONCURRENT_PROVIDER_SYNCS, Math.max(1, (this.pool.options?.max ?? 10) - 1))
+    if (count >= capacity) throw new ProviderSyncCapacityError('Provider synchronization capacity reached')
+    activeSyncs.set(this.pool, count + 1)
     try {
-      const acquired = await client.query<{ acquired: boolean }>(
-        'SELECT pg_try_advisory_lock($1::integer, hashtext($2)) AS acquired',
-        [1_817_652_863, providerId],
-      )
-      if (!acquired.rows[0]?.acquired) {
-        discard = false
-        throw new ProviderSyncAlreadyRunningError('Provider synchronization already in progress')
-      }
+      const client = await this.pool.connect()
+      let discard = true
       try {
-        return await operation(new PostgresRepository(this.pool, client))
-      } finally {
-        const released = await client.query<{ released: boolean }>(
-          'SELECT pg_advisory_unlock($1::integer, hashtext($2)) AS released',
+        const acquired = await client.query<{ acquired: boolean }>(
+          'SELECT pg_try_advisory_lock($1::integer, hashtext($2)) AS acquired',
           [1_817_652_863, providerId],
         )
-        if (!released.rows[0]?.released) throw new Error('Provider synchronization lock was lost')
-        discard = false
+        if (!acquired.rows[0]?.acquired) {
+          discard = false
+          throw new ProviderSyncAlreadyRunningError('Provider synchronization already in progress')
+        }
+        try {
+          return await operation(new PostgresRepository(this.pool, client))
+        } finally {
+          const released = await client.query<{ released: boolean }>(
+            'SELECT pg_advisory_unlock($1::integer, hashtext($2)) AS released',
+            [1_817_652_863, providerId],
+          )
+          if (!released.rows[0]?.released) throw new Error('Provider synchronization lock was lost')
+          discard = false
+        }
+      } finally {
+        client.release(discard)
       }
     } finally {
-      client.release(discard)
+      const remaining = (activeSyncs.get(this.pool) ?? 1) - 1
+      if (remaining === 0) activeSyncs.delete(this.pool)
+      else activeSyncs.set(this.pool, remaining)
     }
   }
 

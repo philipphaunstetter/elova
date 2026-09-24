@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { ElovaRepository, SessionOwner } from './repository.js'
-import { ProviderOriginAlreadyExistsError, ProviderSyncAlreadyRunningError } from './repository.js'
+import { ProviderOriginAlreadyExistsError, ProviderSyncAlreadyRunningError, ProviderSyncCapacityError } from './repository.js'
 import { N8nSynchronizer } from './n8n-sync.js'
 import { normalizeProviderOrigin } from './provider-url.js'
 import {
@@ -185,6 +185,9 @@ export class ElovaApplication {
       } catch (caught) {
         if (caught instanceof ProviderSyncAlreadyRunningError) {
           return error(409, 'PROVIDER_SYNC_IN_PROGRESS', 'Provider synchronization already in progress')
+        }
+        if (caught instanceof ProviderSyncCapacityError) {
+          return error(429, 'PROVIDER_SYNC_BUSY', 'Synchronization capacity reached; try again later')
         }
         return error(502, 'PROVIDER_SYNC_FAILED', 'Provider synchronization failed')
       }
