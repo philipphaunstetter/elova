@@ -158,22 +158,26 @@ In the **same operator shell**, install the cleanup trap before creating the pro
 
 ```sh
 bootstrap_file=/run/elova/operator-bootstrap/owner.env
-sudo install -d -o root -g root -m 0700 /run/elova/operator-bootstrap
-sudo test ! -e "$bootstrap_file" && sudo test ! -L "$bootstrap_file" || { echo 'Existing bootstrap file: inspect prior attempt first' >&2; false; }
-trap 'sudo rm -f -- "$bootstrap_file"' EXIT
-trap 'exit 129' HUP
-trap 'exit 130' INT
-trap 'exit 143' TERM
-sudo install -o root -g root -m 0600 /etc/elova/backend.env "$bootstrap_file"
-# STOP: securely append the three bootstrap values before running the next command.
-bootstrap_status=0
-sudo systemd-run --wait --collect --uid=elova-backend --gid=elova-backend \
-  --working-directory="/opt/elova/backend/releases/$release" \
-  --property=EnvironmentFile=/run/elova/operator-bootstrap/owner.env \
-  /usr/bin/env npm run bootstrap-owner || bootstrap_status=$?
-sudo rm -f -- "$bootstrap_file" && trap - EXIT HUP INT TERM
-if [ "$bootstrap_status" -ne 0 ]; then
-  echo 'Bootstrap outcome uncertain; inspect GX10 owner state before retrying' >&2
+if sudo install -d -o root -g root -m 0700 /run/elova/operator-bootstrap &&
+   sudo test ! -e "$bootstrap_file" && sudo test ! -L "$bootstrap_file"; then
+  trap 'sudo rm -f -- "$bootstrap_file"' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  sudo install -o root -g root -m 0600 /etc/elova/backend.env "$bootstrap_file"
+  # STOP: securely append the three bootstrap values before running the next command.
+  bootstrap_status=0
+  sudo systemd-run --wait --collect --uid=elova-backend --gid=elova-backend \
+    --working-directory="/opt/elova/backend/releases/$release" \
+    --property=EnvironmentFile=/run/elova/operator-bootstrap/owner.env \
+    /usr/bin/env npm run bootstrap-owner || bootstrap_status=$?
+  sudo rm -f -- "$bootstrap_file" && trap - EXIT HUP INT TERM
+  if [ "$bootstrap_status" -ne 0 ]; then
+    echo 'Bootstrap outcome uncertain; inspect GX10 owner state before retrying' >&2
+    false
+  fi
+else
+  echo 'Bootstrap file exists or tmpfs directory is unavailable: inspect before retrying' >&2
   false
 fi
 ```
