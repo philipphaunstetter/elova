@@ -31,7 +31,7 @@ Do not continue until every applicable item is true. The helper's `preflight` re
 - The VPS and GX10 are already enrolled in the intended Tailnet. Their identity, device approval, key expiry, ownership, and ACL/grant policy have been reviewed.
 - GX10 has a stable address assigned to `tailscale0`; this exact address is `ELOVA_BACKEND_HOST`. Wildcard and loopback binds are rejected.
 - The VPS can reach GX10 TCP port `3001` over the Tailnet, and no public interface can reach that port. Any host or network firewall changes require separate authorization.
-- `ELOVA_BACKEND_URL` is the credential-free private GX10 Tailnet HTTP origin with explicit port `3001`. Production must not use HTTPS, a public or loopback origin, or a `NEXT_PUBLIC_` alias.
+- `ELOVA_BACKEND_URL` is the credential-free private GX10 Tailnet HTTP origin with explicit port `3001`, using a Tailnet IP or fully qualified MagicDNS `.ts.net` name. Production must not use HTTPS, a public, loopback, or unqualified hostname origin, or a `NEXT_PUBLIC_` alias.
 - Public DNS/TLS and the VPS reverse proxy are already configured separately. No DNS or proxy configuration is included here.
 
 ### PostgreSQL and integrations

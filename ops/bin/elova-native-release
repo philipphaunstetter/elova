@@ -241,7 +241,6 @@ function isDnsLabel(value) {
 }
 function isMagicDnsName(host) {
   const labels = host.split('.');
-  if (labels.length === 1) return isDnsLabel(labels[0]);
   return labels.length >= 4 && host.endsWith('.ts.net') && labels.every(isDnsLabel);
 }
 function isTailnetHost(host) {
@@ -259,7 +258,7 @@ if (url.protocol !== 'http:' || url.username || url.password || url.pathname !==
   console.error('ELOVA_BACKEND_URL must be a credential-free HTTP origin'); process.exit(1);
 }
 if (host === 'localhost' || host === '::1' || /^127\./.test(host) || !isTailnetHost(host)) {
-  console.error('production ELOVA_BACKEND_URL must use a Tailnet IP or MagicDNS host'); process.exit(1);
+  console.error('production ELOVA_BACKEND_URL must use a Tailnet IP or fully qualified MagicDNS host'); process.exit(1);
 }
 if ((url.port || '80') !== expectedPort) {
   console.error(`ELOVA_BACKEND_URL must use backend port ${expectedPort}`); process.exit(1);

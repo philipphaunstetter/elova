@@ -112,7 +112,6 @@ frontend_env="$TMP/frontend.env"
 for allowed_origin in \
   http://100.64.0.1:3001 \
   http://100.127.255.254:3001 \
-  http://gx10:3001 \
   http://gx10.example-tailnet.ts.net:3001 \
   'http://[fd7a:115c:a1e0::1]:3001'; do
   printf 'ELOVA_BACKEND_URL=%s\n' "$allowed_origin" > "$frontend_env"
@@ -122,6 +121,7 @@ for rejected_origin in \
   http://10.0.0.2:3001 \
   http://192.168.0.2:3001 \
   http://169.254.0.2:3001 \
+  http://gx10:3001 \
   http://gx10.internal:3001 \
   http://gx10.local:3001 \
   http://api.example.com:3001 \

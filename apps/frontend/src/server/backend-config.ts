@@ -20,7 +20,6 @@ function isDnsLabel(value: string): boolean {
 
 function isMagicDnsName(hostname: string): boolean {
   const labels = hostname.split(".");
-  if (labels.length === 1) return isDnsLabel(labels[0]);
   return labels.length >= 4 && hostname.endsWith(".ts.net") && labels.every(isDnsLabel);
 }
 

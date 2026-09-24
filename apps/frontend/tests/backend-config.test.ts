@@ -20,7 +20,6 @@ test("production accepts only Tailnet IP and MagicDNS origins", () => {
     "http://100.64.0.1:3001",
     "http://100.127.255.254:3001",
     "http://[fd7a:115c:a1e0::1]:3001",
-    "http://gx10:3001",
     "http://gx10.example-tailnet.ts.net:3001",
   ]) {
     mutableEnvironment.ELOVA_BACKEND_URL = tailnetUrl;
@@ -36,6 +35,7 @@ test("production accepts only Tailnet IP and MagicDNS origins", () => {
     "http://100.128.0.1:3001",
     "http://[fd00::1]:3001",
     "http://[fe80::1]:3001",
+    "http://gx10:3001",
     "http://gx10.internal:3001",
     "http://gx10.local:3001",
     "http://example-tailnet.ts.net:3001",

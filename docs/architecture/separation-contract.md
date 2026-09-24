@@ -40,7 +40,7 @@ The BFF:
 6. preserves only known, versioned backend `400`, `404`, and `405` envelopes after structured sanitization;
 7. maps timeout to the stable `504` envelope and other upstream unavailability to the stable `502` envelope in `packages/api-contract/fixtures`.
 
-There is no browser CORS path to GX10. Production accepts only an HTTP `ELOVA_BACKEND_URL` using a Tailnet IP or MagicDNS name; local development may use HTTP loopback only under an explicit development environment.
+There is no browser CORS path to GX10. Production accepts only an HTTP `ELOVA_BACKEND_URL` using a Tailnet IP or fully qualified MagicDNS `.ts.net` name; local development may use HTTP loopback only under an explicit development environment.
 
 ## Frozen API seam
 
