@@ -42,7 +42,7 @@ export function getBackendOrigin(): URL {
     throw new BackendConfigurationError();
   }
 
-  const isHttp = url.protocol === "http:" || url.protocol === "https:";
+  const isHttp = url.protocol === "http:";
   const isOriginOnly = url.pathname === "/" && !url.search && !url.hash;
   if (!isHttp || !isOriginOnly || url.username || url.password) {
     throw new BackendConfigurationError();

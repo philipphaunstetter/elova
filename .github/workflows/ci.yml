@@ -155,6 +155,8 @@ jobs:
           ELOVA_BACKEND_URL: http://100.100.10.20:3001
       - name: Verify native packaging is reproducible
         run: |
+          printf 'stale backend output\n' > apps/backend/dist/src/stale-output.js
+          printf 'stale frontend output\n' > apps/frontend/.next/static/stale-output.txt
           npm run package:native -- "$RUNNER_TEMP/elova-native-repeat"
           cmp "$RUNNER_TEMP/elova-native/elova-backend.tgz" "$RUNNER_TEMP/elova-native-repeat/elova-backend.tgz"
           cmp "$RUNNER_TEMP/elova-native/elova-frontend.tgz" "$RUNNER_TEMP/elova-native-repeat/elova-frontend.tgz"

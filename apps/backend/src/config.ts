@@ -1,3 +1,4 @@
+import { isIP } from 'node:net'
 import { resolve } from 'node:path'
 
 export interface BackendConfig {
@@ -17,7 +18,11 @@ function required(name: string, value: string | undefined): string {
 
 function parseHost(value: string | undefined): string {
   const host = value?.trim() || '127.0.0.1'
-  if (host === '0.0.0.0' || host === '::' || host === '[::]') {
+  const literal = host.startsWith('[') && host.endsWith(']')
+    ? host.slice(1, -1)
+    : host
+  const isUnspecifiedIpv6 = isIP(literal) === 6 && literal.replace(/[:0]/g, '') === ''
+  if (literal === '0.0.0.0' || isUnspecifiedIpv6) {
     throw new Error('ELOVA_BACKEND_HOST must not use a wildcard address')
   }
 
@@ -54,6 +59,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     host: parseHost(env.ELOVA_BACKEND_HOST),
     port: parsePort(env.PORT),
     databaseUrl: parseDatabaseUrl(env.DATABASE_URL),
-    migrationsDirectory: env.ELOVA_MIGRATIONS_DIR?.trim() || resolve(process.cwd(), 'migrations'),
+    migrationsDirectory: resolve(process.cwd(), 'migrations'),
   }
 }

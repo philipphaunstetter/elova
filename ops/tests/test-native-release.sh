@@ -113,10 +113,10 @@ for allowed_origin in \
   http://100.64.0.1:3001 \
   http://100.127.255.254:3001 \
   http://gx10:3001 \
-  https://gx10.example-tailnet.ts.net:3001 \
+  http://gx10.example-tailnet.ts.net:3001 \
   'http://[fd7a:115c:a1e0::1]:3001'; do
   printf 'ELOVA_BACKEND_URL=%s\n' "$allowed_origin" > "$frontend_env"
-  check_frontend_env "$frontend_env" || fail "Tailnet origin was rejected: $allowed_origin"
+  check_frontend_env "$frontend_env" || fail "Tailnet HTTP origin was rejected: $allowed_origin"
 done
 for rejected_origin in \
   http://10.0.0.2:3001 \
@@ -125,13 +125,14 @@ for rejected_origin in \
   http://gx10.internal:3001 \
   http://gx10.local:3001 \
   http://api.example.com:3001 \
+  https://gx10.example-tailnet.ts.net:3001 \
   'http://[fd00::1]:3001'; do
   printf 'ELOVA_BACKEND_URL=%s\n' "$rejected_origin" > "$frontend_env"
   if (check_frontend_env "$frontend_env") >"$TMP/out" 2>&1; then
-    fail "non-Tailnet origin was accepted: $rejected_origin"
+    fail "unsupported backend origin was accepted: $rejected_origin"
   fi
 done
-ok 'frontend preflight accepts only Tailnet origins'
+ok 'frontend preflight accepts only Tailnet HTTP origins'
 
 release_root="$TMP/staged-release"
 marker="$TMP/migration-marker"
@@ -156,23 +157,23 @@ systemctl_log="$TMP/systemctl.log"
 systemctl() { printf '%s\n' "$*" >> "$systemctl_log"; }
 activation_root="$TMP/activation"
 mkdir -p "$activation_root/releases"/{release-a,release-b,release-c}
-ln -s releases/release-c "$activation_root/current"
+ln -s releases/release-a "$activation_root/current"
 ln -s releases/release-b "$activation_root/previous"
-restore_failed_activation \
+restore_release_state \
   "$activation_root" release-b 1 release-a elova-backend.service 0
 [[ $(link_release_name "$activation_root" current) == release-b ]] ||
-  fail 'failed forward fix did not restore the contained backend link'
+  fail 'failed rollback did not restore the contained backend link'
 [[ $(link_release_name "$activation_root" previous) == release-a ]] ||
-  fail 'failed forward fix did not restore the previous backend link'
+  fail 'failed rollback did not restore the previous backend link'
 [[ $(<"$systemctl_log") == 'stop elova-backend.service' ]] ||
   fail 'a previously stopped backend was restarted during restoration'
 : > "$systemctl_log"
 set_link "$activation_root" current releases/release-c
 set_link "$activation_root" previous releases/release-b
-restore_failed_activation \
+restore_release_state \
   "$activation_root" release-b 1 release-a elova-backend.service 1
 [[ $(<"$systemctl_log") == 'restart elova-backend.service' ]] ||
   fail 'a previously active backend was not restarted during restoration'
-ok 'failed forward-fix restoration preserves prior links and service state'
+ok 'failed release restoration preserves prior links and service state'
 
 printf '1..%d\n' "$pass"

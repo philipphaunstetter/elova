@@ -31,7 +31,7 @@ Do not continue until every applicable item is true. The helper's `preflight` re
 - The VPS and GX10 are already enrolled in the intended Tailnet. Their identity, device approval, key expiry, ownership, and ACL/grant policy have been reviewed.
 - GX10 has a stable address assigned to `tailscale0`; this exact address is `ELOVA_BACKEND_HOST`. Wildcard and loopback binds are rejected.
 - The VPS can reach GX10 TCP port `3001` over the Tailnet, and no public interface can reach that port. Any host or network firewall changes require separate authorization.
-- `ELOVA_BACKEND_URL` is the credential-free private GX10 Tailnet origin with explicit port `3001`. Production must not use a public or loopback origin and must not create a `NEXT_PUBLIC_` alias.
+- `ELOVA_BACKEND_URL` is the credential-free private GX10 Tailnet HTTP origin with explicit port `3001`. Production must not use HTTPS, a public or loopback origin, or a `NEXT_PUBLIC_` alias.
 - Public DNS/TLS and the VPS reverse proxy are already configured separately. No DNS or proxy configuration is included here.
 
 ### PostgreSQL and integrations
@@ -59,7 +59,7 @@ From a locked checkout with dependencies installed, create both prebuilt, instal
 ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/to/output
 ```
 
-The build-only private URL is synthetic and is not a deployment target. The packager derives `ELOVA_BUILD_ID` from the checked-out commit unless an immutable source identifier is supplied explicitly, then uses it for the Next.js build. The command emits `elova-frontend.tgz`, `elova-backend.tgz`, and a matching `.sha256` file for each. It does not install or deploy anything. CI performs two complete builds from the same source identity and requires byte-identical archives, then validates both archives through the release helper, extracts them into isolated staging directories, runs the packaged migration command, and starts the packaged services without dependency installation before checking health and the BFF boundary.
+The build-only private URL is synthetic and is not a deployment target. The packager removes prior backend and frontend generated output, derives `ELOVA_BUILD_ID` from the checked-out commit unless an immutable source identifier is supplied explicitly, then performs a fresh build. This foundation uses route handlers rather than Next.js Server Actions, and packaging rejects a Server Actions manifest with entries. The command emits `elova-frontend.tgz`, `elova-backend.tgz`, and a matching `.sha256` file for each. It does not install or deploy anything. CI performs two complete builds from the same source identity and requires byte-identical archives, then validates both archives through the release helper, extracts them into isolated staging directories, runs the packaged migration command, and starts the packaged services without dependency installation before checking health and the BFF boundary.
 
 Releases are staged under `/opt/elova/<service>/releases/<release-id>`, root-owned and non-writable. `current` and `previous` are relative symlinks. Each operation takes `/run/lock/elova-<service>-deploy.lock`. The append-only operational record is `/var/lib/elova/releases/<service>/journal.jsonl`; it contains no secrets. Activation retains `current`, `previous`, and at most one additional recent release.
 
@@ -158,7 +158,7 @@ sudo readlink -f /opt/elova/frontend/{current,previous}
 sudo "$helper" rollback --service frontend --apply
 ```
 
-Use `--service backend` on GX10. Backend rollback also requires that the previous release has an artifact-matching successful migration marker and exactly the same migration count as the current release. Any count mismatch is rejected before links or services change and must be resolved with a forward fix; operator claims of forward compatibility do not override this gate. Equal counts do not guarantee compatibility, so the helper still swaps `current` and `previous`, restarts only that service, and requires fail-closed readiness. On failed readiness it restores the pre-rollback links. Never attempt a down migration as part of rollback.
+Use `--service backend` on GX10. Backend rollback also requires that the previous release has an artifact-matching successful migration marker and exactly the same migration count as the current release. Any count mismatch is rejected before links or services change and must be resolved with a forward fix; operator claims of forward compatibility do not override this gate. Equal counts do not guarantee compatibility, so the helper still swaps `current` and `previous`, restarts only that service, and requires fail-closed readiness. On failed readiness it restores the pre-rollback links and preserves whether the prior service was active or stopped. Never attempt a down migration as part of rollback.
 
 ## Evidence and incident checks
 
