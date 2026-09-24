@@ -1,0 +1,17 @@
+{
+  "name": "@elova/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/generated/index.ts",
+    "./client": "./src/generated/client/index.ts"
+  },
+  "scripts": {
+    "generate": "openapi-ts -i ../api-contract/openapi.yaml -o ./src/generated -c @hey-api/client-fetch"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
+    "typescript": "5.9.3"
+  }
+}

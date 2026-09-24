@@ -1,0 +1,8 @@
+import type { Liveness } from "@elova/api-client";
+
+export const dynamic = "force-dynamic";
+
+export function GET(): Response {
+  const body: Liveness = { status: "live" };
+  return Response.json(body, { headers: { "cache-control": "no-store" } });
+}

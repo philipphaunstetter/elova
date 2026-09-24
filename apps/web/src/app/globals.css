@@ -1,0 +1,95 @@
+:root {
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #171717;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --accent: #e11d48;
+  --accent-soft: #fff1f2;
+}
+
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+a { color: inherit; text-decoration: none; }
+.app-shell { min-height: 100vh; }
+header {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  padding: 0 clamp(24px, 6vw, 88px);
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -.03em;
+}
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent);
+  color: white;
+  font-family: Georgia, serif;
+  font-style: italic;
+}
+.service-panel {
+  width: min(620px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: clamp(88px, 16vh, 170px) 0 72px;
+  text-align: center;
+}
+.eyebrow, .status-label {
+  margin: 0;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+h1 {
+  margin: 18px 0 16px;
+  font-size: clamp(38px, 7vw, 58px);
+  line-height: 1.05;
+  letter-spacing: -.045em;
+}
+.intro {
+  margin: 0 auto;
+  max-width: 540px;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.6;
+}
+.status-card {
+  width: fit-content;
+  margin: 34px auto 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 19px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: left;
+}
+.status-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 99px;
+  background: #94a3b8;
+  box-shadow: 0 0 0 5px #f1f5f9;
+}
+.status-ready { background: #16845b; box-shadow: 0 0 0 5px #e6f6ee; }
+.status-not_ready { background: var(--accent); box-shadow: 0 0 0 5px var(--accent-soft); }
+.status-label { color: var(--muted); font-size: 10px; }
+.status-value { margin: 3px 0 0; font-size: 14px; font-weight: 650; }
