@@ -75,7 +75,7 @@ From a clean locked checkout with dependencies installed and an output directory
 ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/to/output
 ```
 
-The build-only private URL is synthetic and is not a deployment target. The packager refuses tracked edits and untracked files even when `ELOVA_BUILD_ID` is set; it then removes prior backend and frontend generated output, derives `ELOVA_BUILD_ID` from the checked-out commit unless an immutable source identifier is supplied explicitly, then performs a fresh build. The command emits `elova-frontend.tgz`, `elova-backend.tgz`, and a matching `.sha256` file for each. It does not install or deploy anything. CI verifies that stale generated files cannot enter either archive, then validates the archives through the release helper, extracts them into isolated staging directories, runs the packaged migration command, and starts the packaged services without dependency installation before checking health and the BFF boundary.
+The build-only private URL is synthetic and is not a deployment target. The packager refuses tracked edits, untracked files, and frontend environment files (including ignored files) even when `ELOVA_BUILD_ID` is set; it then removes prior backend and frontend generated output, derives `ELOVA_BUILD_ID` from the checked-out commit unless an immutable source identifier is supplied explicitly, then performs a fresh build. It also rejects environment files from either staged release before archiving. The command emits `elova-frontend.tgz`, `elova-backend.tgz`, and a matching `.sha256` file for each. It does not install or deploy anything. CI verifies that stale generated files cannot enter either archive, then validates the archives through the release helper, extracts them into isolated staging directories, runs the packaged migration command, and starts the packaged services without dependency installation before checking health and the BFF boundary.
 
 Releases are staged under `/opt/elova/<service>/releases/<release-id>`, root-owned and non-writable. `current` and `previous` are relative symlinks. Each operation takes `/run/lock/elova-<service>-deploy.lock`. The append-only operational record is `/var/lib/elova/releases/<service>/journal.jsonl`; it contains no secrets. Activation retains `current`, `previous`, and at most one additional recent release.
 
@@ -154,26 +154,31 @@ The helper invokes only `elova-backend-migrate@<release>.service`, waits for suc
 
 Only after migration and separate authorization, an operator on GX10 may run the packaged backend command once. An operator shell does not automatically inherit the backend unit's environment file, and running plain `npm run bootstrap-owner` from a root shell is **not** the service-user procedure. Create a **root-owned mode 0600 file on tmpfs** (for example `/run/elova/operator-bootstrap/owner.env`, with parent directory mode 0700), copy the protected `/etc/elova/backend.env` into it, then supply `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD` via a separately approved secret handoff into that same file; use systemd `EnvironmentFile=` syntax. Do not put the password in shell history, process arguments, the persistent `/etc/elova/backend.env`, logs, tickets, or a disk-backed editor swap file. Do not use `sudoedit` if its temporary copy could be disk-backed. Confirm the transient file has only the four backend keys and those three bootstrap keys with the approved values; never reuse it.
 
-Create the protected tmpfs copy (these commands do not supply bootstrap values), then use the approved handoff to append the three bootstrap keys and run as the unprivileged backend user (systemd reads the file before dropping privileges):
+In the **same operator shell**, install the cleanup trap before creating the protected tmpfs copy (these commands do not supply bootstrap values). Stop if a file already exists: investigate any prior attempt before replacing it. Use the approved handoff to append the three bootstrap keys, then run as the unprivileged backend user (systemd reads the file before dropping privileges):
 
 ```sh
+bootstrap_file=/run/elova/operator-bootstrap/owner.env
 sudo install -d -o root -g root -m 0700 /run/elova/operator-bootstrap
-sudo install -o root -g root -m 0600 /etc/elova/backend.env /run/elova/operator-bootstrap/owner.env
+sudo test ! -e "$bootstrap_file" && sudo test ! -L "$bootstrap_file" || { echo 'Existing bootstrap file: inspect prior attempt first' >&2; false; }
+trap 'sudo rm -f -- "$bootstrap_file"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+sudo install -o root -g root -m 0600 /etc/elova/backend.env "$bootstrap_file"
 # STOP: securely append the three bootstrap values before running the next command.
 bootstrap_status=0
 sudo systemd-run --wait --collect --uid=elova-backend --gid=elova-backend \
   --working-directory="/opt/elova/backend/releases/$release" \
   --property=EnvironmentFile=/run/elova/operator-bootstrap/owner.env \
   /usr/bin/env npm run bootstrap-owner || bootstrap_status=$?
-# Remove the transient file after success OR failure, before inspecting/retrying.
-sudo rm -f -- /run/elova/operator-bootstrap/owner.env
+sudo rm -f -- "$bootstrap_file" && trap - EXIT HUP INT TERM
 if [ "$bootstrap_status" -ne 0 ]; then
   echo 'Bootstrap outcome uncertain; inspect GX10 owner state before retrying' >&2
   false
 fi
 ```
 
-Treat a nonzero exit or missing success acknowledgement as uncertain; remove the transient file even if the command fails, then check the owner count on GX10 before considering a retry. The command takes a PostgreSQL transaction lock and commits exactly one owner. A failure before commitment is retryable; every call after commitment fails closed. If acknowledgement is uncertain, check PostgreSQL for an existing owner before retrying; do not assume no credentials were written. There is no web bootstrap or public signup. This runbook does not authorize executing the command, and the repository change performs no live bootstrap.
+Treat a nonzero exit or missing success acknowledgement as uncertain; remove the transient file even if the command fails, then check the owner count on GX10 before considering a retry. If the shell or `systemd-run --wait` is interrupted, verify the transient file is gone (`sudo rm -f -- /run/elova/operator-bootstrap/owner.env` if it remains), inspect the transient unit outcome and GX10 owner state, and only then consider a retry. A trap cannot handle a killed shell, a lost machine, or a failed removal, so manually check the tmpfs path after any interrupted session. The command takes a PostgreSQL transaction lock and commits exactly one owner. A failure before commitment is retryable; every call after commitment fails closed. If acknowledgement is uncertain, check PostgreSQL for an existing owner before retrying; do not assume no credentials were written. There is no web bootstrap or public signup. This runbook does not authorize executing the command, and the repository change performs no live bootstrap.
 
 There is deliberately **no down/destructive migration procedure**. If a forward migration fails, stop, preserve logs, leave the current release running, and escalate to the database/release owner. Restore or corrective-forward-migration decisions require separate authorization. Backend symlink rollback is prohibited whenever the current and retained releases have different migration counts, including additive changes. Exact-count readiness remains fail-closed; recovery across that boundary requires a forward fix.
 

@@ -35,6 +35,9 @@ fi
 # sources) before deleting build output, even when the build ID was supplied by CI.
 status=$(git -C "$ROOT" status --porcelain --untracked-files=all) || die "cannot inspect source checkout"
 [[ -z $status ]] || die "source checkout has uncommitted or untracked files; build from a clean, locked commit"
+if find "$ROOT/apps/frontend" -maxdepth 1 \( -name '.env' -o -name '.env.*' -o -name '*.env' -o -name '*.env.*' \) ! -name '.env.example' -print -quit | grep -q .; then
+  die "frontend environment file present; remove it before building"
+fi
 rm -rf -- "$ROOT/apps/backend/dist" "$ROOT/apps/frontend/.next"
 (
   cd -- "$ROOT"
@@ -141,6 +144,9 @@ NODE
 for package_root in "$work/backend/package" "$frontend_package"; do
   if find "$package_root" -type l -print -quit | grep -q .; then
     die "packaged releases may not contain symbolic links"
+  fi
+  if find "$package_root" -type f \( -name '.env' -o -name '.env.*' -o -name '*.env' -o -name '*.env.*' \) -print -quit | grep -q .; then
+    die "packaged releases may not contain environment files"
   fi
 done
 
