@@ -8,8 +8,9 @@ readonly JOURNAL_ROOT=/var/lib/elova/releases
 readonly LOCK_ROOT=/run/lock
 readonly FRONTEND_PORT=3000
 readonly BACKEND_PORT=3001
-readonly HEALTH_ATTEMPTS=30
-readonly HEALTH_DELAY=2
+readonly HEALTH_TIMEOUT_SECONDS=60
+readonly HEALTH_REQUEST_TIMEOUT_SECONDS=3
+readonly HEALTH_DELAY_SECONDS=2
 readonly KEEP_RELEASES=3
 
 command_name=""
@@ -230,15 +231,31 @@ check_frontend_env() {
   local file=$1 url
   url=$(env_value ELOVA_BACKEND_URL "$file") || die "$file must define ELOVA_BACKEND_URL"
   node - "$url" "$BACKEND_PORT" <<'NODE'
+const { isIP } = require('node:net');
 const [raw, expectedPort] = process.argv.slice(2);
+const privateSuffixes = ['.internal', '.local', '.ts.net'];
+function isPrivateHost(host) {
+  if (isIP(host) === 4) {
+    const [first, second] = host.split('.').map(Number);
+    return first === 10 ||
+      (first === 172 && second >= 16 && second <= 31) ||
+      (first === 192 && second === 168) ||
+      (first === 100 && second >= 64 && second <= 127) ||
+      (first === 169 && second === 254);
+  }
+  if (isIP(host) === 6) {
+    return /^(?:fc|fd|fe8|fe9|fea|feb)/.test(host);
+  }
+  return !host.includes('.') || privateSuffixes.some((suffix) => host.endsWith(suffix));
+}
 let url;
 try { url = new URL(raw); } catch { console.error('ELOVA_BACKEND_URL must be an absolute URL'); process.exit(1); }
 const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
 if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
   console.error('ELOVA_BACKEND_URL must be a credential-free http(s) origin'); process.exit(1);
 }
-if (['localhost', '0.0.0.0', '::', '::1'].includes(host) || /^127\./.test(host)) {
-  console.error('production ELOVA_BACKEND_URL may not be loopback or wildcard'); process.exit(1);
+if (host === 'localhost' || host === '::1' || /^127\./.test(host) || !isPrivateHost(host)) {
+  console.error('production ELOVA_BACKEND_URL must use a private non-loopback host'); process.exit(1);
 }
 if ((url.port || (url.protocol === 'https:' ? '443' : '80')) !== expectedPort) {
   console.error(`ELOVA_BACKEND_URL must use backend port ${expectedPort}`); process.exit(1);
@@ -405,13 +422,21 @@ health_url() {
 }
 
 wait_for_health() {
-  local url attempt
+  local url deadline remaining request_timeout sleep_time
   url=$(health_url)
-  for ((attempt=1; attempt<=HEALTH_ATTEMPTS; attempt++)); do
-    if curl --noproxy '*' --fail --silent --show-error --max-time 3 "$url" >/dev/null; then
+  deadline=$((SECONDS + HEALTH_TIMEOUT_SECONDS))
+  while (( SECONDS < deadline )); do
+    remaining=$((deadline - SECONDS))
+    request_timeout=$HEALTH_REQUEST_TIMEOUT_SECONDS
+    if (( request_timeout > remaining )); then request_timeout=$remaining; fi
+    if curl --noproxy '*' --fail --silent --show-error --max-time "$request_timeout" "$url" >/dev/null; then
       return 0
     fi
-    sleep "$HEALTH_DELAY"
+    remaining=$((deadline - SECONDS))
+    if (( remaining <= 0 )); then break; fi
+    sleep_time=$HEALTH_DELAY_SECONDS
+    if (( sleep_time > remaining )); then sleep_time=$remaining; fi
+    sleep "$sleep_time"
   done
   return 1
 }

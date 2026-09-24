@@ -6,7 +6,7 @@ These tests exercise the frozen frontend/BFF/backend seam without publishing an 
 - `contract.test.mjs` checks the canonical API package, paths, version header, and accepted response fixtures.
 - `postgres.test.mjs` runs concurrent migrations against the workflow's ephemeral PostgreSQL service. Its intentionally slow DDL probe only succeeds for both callers when migration execution is serialized, then it verifies the product-schema-free migration seam and drift-sensitive readiness state.
 - `native-services.test.mjs` extracts the install-free archives accepted by the release helper, runs their packaged migration/start commands without installing dependencies, checks backend and proxied health compatibility, inspects browser assets for private values, verifies generic 502/504 envelopes, and requires graceful service exits.
-- `secrets.test.mjs` scans tracked source for credential files and recognizable high-confidence secret formats.
+- The pinned TruffleHog action scans repository history and tracked content, failing CI on verified or unknown secret findings.
 
 The workflow uses only synthetic local test values. `DATABASE_URL` is additionally constrained by the PostgreSQL test to the local `elova_test` database.
 

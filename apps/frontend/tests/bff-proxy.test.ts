@@ -150,6 +150,83 @@ test("redacts the configured endpoint from successful JSON and safe-header candi
   assert.equal(response.headers.has("set-cookie"), false);
 });
 
+test("rejects streamed request bodies as soon as they exceed the limit", async () => {
+  let called = false;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(1024 * 1024));
+      controller.enqueue(new Uint8Array(1));
+    },
+  });
+  const request = new Request("https://elova.example/api/v1/workflows", {
+    method: "POST",
+    body,
+    duplex: "half",
+  } as RequestInit & { duplex: "half" });
+  const fakeFetch: typeof fetch = async () => {
+    called = true;
+    return Response.json({ ok: true });
+  };
+
+  const response = await proxyToBackend(request, ["workflows"], fakeFetch);
+  assert.equal(response.status, 413);
+  assert.equal(called, false);
+});
+
+test("enforces one deadline across request and response streams", async () => {
+  const stalledRequest = new Request("https://elova.example/api/v1/workflows", {
+    method: "POST",
+    body: new ReadableStream<Uint8Array>(),
+    duplex: "half",
+  } as RequestInit & { duplex: "half" });
+  const requestTimeout = await proxyToBackend(
+    stalledRequest,
+    ["workflows"],
+    async () => Response.json({ ok: true }),
+    20,
+  );
+  assert.equal(requestTimeout.status, 504);
+
+  const stalledResponse = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode("{"));
+    },
+  });
+  const responseTimeout = await proxyToBackend(
+    browserRequest(),
+    ["health", "ready"],
+    async () => new Response(stalledResponse, {
+      headers: {
+        "content-type": "application/json",
+        "x-elova-api-version": "1",
+      },
+    }),
+    20,
+  );
+  assert.equal(responseTimeout.status, 504);
+});
+
+test("stops reading upstream responses at the byte limit", async () => {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(5 * 1024 * 1024));
+      controller.enqueue(new Uint8Array(1));
+    },
+  });
+  const response = await proxyToBackend(
+    browserRequest(),
+    ["health", "ready"],
+    async () => new Response(body, {
+      headers: {
+        "content-type": "application/json",
+        "x-elova-api-version": "1",
+      },
+    }),
+  );
+
+  assert.equal(response.status, 502);
+});
+
 test("network failures do not log or return exception details", async () => {
   const messages: unknown[][] = [];
   const originalError = console.error;

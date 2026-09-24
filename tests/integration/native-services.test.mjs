@@ -81,6 +81,19 @@ function managedProcess(command, args, options) {
   return { child, output: () => output }
 }
 
+async function expectFailedStartup(process, name) {
+  const result = await Promise.race([
+    once(process.child, 'exit').then(([code, signal]) => ({ code, signal })),
+    delay(5_000).then(() => null),
+  ])
+  if (!result) {
+    process.child.kill('SIGKILL')
+    throw new Error(`${name} did not exit after startup failure`)
+  }
+  assert.equal(result.signal, null, `${name} was killed by ${result.signal}\n${process.output()}`)
+  assert.equal(result.code, 1, `${name} did not fail startup\n${process.output()}`)
+}
+
 async function stopGracefully(process, name) {
   if (process.child.exitCode !== null || process.child.signalCode !== null)
     return
@@ -232,6 +245,20 @@ test('packaged native services honor the contract without exposing their private
     await nativeScriptCommand(backendRoot, 'start')
   const [frontendExecutable, frontendArguments] =
     await nativeScriptCommand(frontendRoot, 'start')
+
+  const occupiedPort = createServer()
+  occupiedPort.listen(backendPort, backendHost)
+  await once(occupiedPort, 'listening')
+  try {
+    const blockedBackend = managedProcess(backendExecutable, backendArguments, {
+      cwd: backendRoot,
+      env: backendEnvironment,
+    })
+    await expectFailedStartup(blockedBackend, 'backend with occupied port')
+  } finally {
+    occupiedPort.close()
+    await once(occupiedPort, 'close')
+  }
 
   const backend = managedProcess(backendExecutable, backendArguments, {
     cwd: backendRoot,

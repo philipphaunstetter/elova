@@ -15,8 +15,8 @@
     "build:frontend": "npm run build --workspace @elova/frontend",
     "generate": "npm run generate --workspace @elova/api-contract",
     "lint": "eslint apps/backend/src apps/backend/test apps/frontend tests/integration",
-    "package:native": "npm run build && ops/bin/elova-package-native",
-    "test": "npm run test:backend && npm run test:frontend && node --test tests/integration/contract.test.mjs tests/integration/ci-policy.test.mjs tests/integration/secrets.test.mjs",
+    "package:native": "ops/bin/elova-package-native",
+    "test": "npm run test:backend && npm run test:frontend && node --test tests/integration/contract.test.mjs tests/integration/ci-policy.test.mjs",
     "test:backend": "npm run test --workspace @elova/backend",
     "test:frontend": "npm run test --workspace @elova/frontend"
   },

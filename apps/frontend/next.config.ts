@@ -9,7 +9,13 @@ const securityHeaders = [
   { key: "Content-Security-Policy", value: "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" },
 ];
 
+const buildId = process.env.ELOVA_BUILD_ID?.trim() || "local";
+if (!/^[A-Za-z0-9._-]{1,128}$/.test(buildId)) {
+  throw new Error("ELOVA_BUILD_ID must be an immutable source identifier");
+}
+
 const nextConfig: NextConfig = {
+  generateBuildId: async () => buildId,
   output: "standalone",
   outputFileTracingRoot: resolve(process.cwd(), "../.."),
   poweredByHeader: false,

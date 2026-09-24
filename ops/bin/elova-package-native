@@ -26,9 +26,19 @@ archive_package() {
   ) | gzip -n > "$archive"
 }
 
-for command in npm node tar gzip sha256sum; do
+for command in git npm node tar gzip sha256sum; do
   command -v "$command" >/dev/null 2>&1 || die "required command not found: $command"
 done
+
+build_id=${ELOVA_BUILD_ID:-}
+if [[ -z $build_id ]]; then
+  build_id=$(git -C "$ROOT" rev-parse HEAD) || die "cannot derive immutable source identity"
+fi
+[[ $build_id =~ ^[A-Za-z0-9._-]{1,128}$ ]] || die "ELOVA_BUILD_ID must be an immutable source identifier"
+(
+  cd -- "$ROOT"
+  ELOVA_BUILD_ID="$build_id" npm run build
+)
 
 [[ -f $ROOT/apps/backend/dist/src/server.js ]] || die "backend build output is missing"
 [[ -f $ROOT/apps/frontend/.next/standalone/apps/frontend/server.js ]] || die "frontend standalone server is missing"

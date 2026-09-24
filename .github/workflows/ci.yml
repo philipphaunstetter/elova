@@ -131,6 +131,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://elova_test:elova_test_password@127.0.0.1:5432/elova_test
+      ELOVA_BUILD_ID: ${{ github.sha }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -147,9 +148,11 @@ jobs:
           ELOVA_BACKEND_URL: http://10.255.255.1:4100
       - name: Verify native packaging is reproducible
         run: |
-          ops/bin/elova-package-native "$RUNNER_TEMP/elova-native-repeat"
+          npm run package:native -- "$RUNNER_TEMP/elova-native-repeat"
           cmp "$RUNNER_TEMP/elova-native/elova-backend.tgz" "$RUNNER_TEMP/elova-native-repeat/elova-backend.tgz"
           cmp "$RUNNER_TEMP/elova-native/elova-frontend.tgz" "$RUNNER_TEMP/elova-native-repeat/elova-frontend.tgz"
+        env:
+          ELOVA_BACKEND_URL: http://10.255.255.1:4100
       - name: Verify artifacts satisfy the release-helper contract
         run: |
           ops/bin/elova-native-release stage --service backend \
@@ -185,7 +188,10 @@ jobs:
       - name: Scan production dependencies
         run: npm audit --omit=dev --audit-level=high
       - name: Scan tracked files for committed secrets
-        run: node --test tests/integration/secrets.test.mjs
+        uses: trufflesecurity/trufflehog@64d939a56362f519781c53ea09b27f8d1dc0140a
+        with:
+          version: 3.97.6@sha256:cc1a591e83fec7bf56f64c15beaaa5d8e3d179a4165a03a087d07165296ef7df
+          extra_args: --results=verified,unknown
       - name: Review dependency changes
         if: github.event_name == 'pull_request'
         uses: actions/dependency-review-action@v4
