@@ -197,9 +197,37 @@ test('packaged native services honor the contract without exposing their private
   const frontendRoot = await extractArtifact(artifactDirectory, 'frontend', stagingRoot)
 
   const backendHost = '127.0.0.1'
-  const backendName = 'gx10'
-  const hostAliases = join(stagingRoot, 'host-aliases')
-  await writeFile(hostAliases, `${backendName} ${backendHost}\n`)
+  const backendName = 'gx10.integration-test.ts.net'
+  const lookupOverride = join(stagingRoot, 'tailnet-lookup.cjs')
+  await writeFile(lookupOverride, `
+const dns = require('node:dns')
+const originalLookup = dns.lookup
+const originalPromiseLookup = dns.promises.lookup
+const backendName = ${JSON.stringify(backendName)}
+const backendHost = ${JSON.stringify(backendHost)}
+dns.lookup = function lookup(hostname, options, callback) {
+  if (hostname !== backendName) return originalLookup.call(this, hostname, options, callback)
+  if (typeof options === 'function') {
+    callback = options
+    options = {}
+  } else if (typeof options === 'number') {
+    options = { family: options }
+  } else {
+    options ??= {}
+  }
+  process.nextTick(() => callback(
+    null,
+    options.all ? [{ address: backendHost, family: 4 }] : backendHost,
+    options.all ? undefined : 4,
+  ))
+}
+dns.promises.lookup = async function lookup(hostname, options = {}) {
+  if (hostname !== backendName) return originalPromiseLookup.call(this, hostname, options)
+  return options.all
+    ? [{ address: backendHost, family: 4 }]
+    : { address: backendHost, family: 4 }
+}
+`)
   const backendOrigin = `http://${backendName}:${backendPort}`
   const directBackendOrigin = `http://${backendHost}:${backendPort}`
   const frontendOrigin = `http://127.0.0.1:${frontendPort}`
@@ -216,7 +244,10 @@ test('packaged native services honor the contract without exposing their private
   const frontendEnvironment = {
     ...commonEnvironment,
     ELOVA_BACKEND_URL: backendOrigin,
-    HOSTALIASES: hostAliases,
+    NODE_OPTIONS: [
+      commonEnvironment.NODE_OPTIONS,
+      `--require=${lookupOverride}`,
+    ].filter(Boolean).join(' '),
     HOSTNAME: '127.0.0.1',
     PORT: String(frontendPort),
   }
