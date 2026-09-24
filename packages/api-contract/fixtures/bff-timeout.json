@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "BACKEND_TIMEOUT",
+    "message": "Service timed out"
+  }
+}

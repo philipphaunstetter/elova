@@ -1,0 +1,7 @@
+{
+  "status": "not_ready",
+  "checks": {
+    "database": "not_ready",
+    "migrations": "not_ready"
+  }
+}

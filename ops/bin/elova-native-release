@@ -1,0 +1,820 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly PROGRAM=${0##*/}
+readonly INSTALL_ROOT=/opt/elova
+readonly CONFIG_ROOT=/etc/elova
+readonly JOURNAL_ROOT=/var/lib/elova/releases
+readonly LOCK_ROOT=/run/lock
+readonly FRONTEND_PORT=3000
+readonly BACKEND_PORT=3001
+readonly HEALTH_TIMEOUT_SECONDS=60
+readonly HEALTH_REQUEST_TIMEOUT_SECONDS=9
+readonly HEALTH_DELAY_SECONDS=2
+readonly KEEP_RELEASES=3
+readonly RELEASE_DIGEST_FILE=.elova-artifact-sha256
+
+command_name=""
+service=""
+artifact=""
+sha256_file=""
+release=""
+apply=0
+dry_run_requested=0
+
+die() {
+  printf '%s: %s\n' "$PROGRAM" "$*" >&2
+  exit 64
+}
+
+usage() {
+  cat <<EOF
+Usage:
+  $PROGRAM preflight --service frontend|backend --artifact FILE --sha256-file FILE --release ID [--dry-run]
+  $PROGRAM stage     --service frontend|backend --artifact FILE --sha256-file FILE --release ID [--dry-run|--apply]
+  $PROGRAM migrate   --service backend --release ID [--dry-run|--apply]
+  $PROGRAM activate  --service frontend|backend --release ID [--dry-run|--apply]
+  $PROGRAM rollback  --service frontend|backend [--dry-run|--apply]
+
+Mutating commands are plans unless --apply is supplied. --apply requires root and
+uses a per-service deployment lock. preflight is read-only; --dry-run skips host
+checks but still verifies the archive, package identity, and SHA-256 digest.
+EOF
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+  [[ $# -gt 0 ]] || { usage >&2; exit 64; }
+  command_name=$1
+  shift
+  case "$command_name" in
+    preflight|stage|migrate|activate|rollback) ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown command: $command_name" ;;
+  esac
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --service) [[ $# -ge 2 ]] || die "--service requires a value"; service=$2; shift 2 ;;
+      --artifact) [[ $# -ge 2 ]] || die "--artifact requires a value"; artifact=$2; shift 2 ;;
+      --sha256-file) [[ $# -ge 2 ]] || die "--sha256-file requires a value"; sha256_file=$2; shift 2 ;;
+      --release) [[ $# -ge 2 ]] || die "--release requires a value"; release=$2; shift 2 ;;
+      --apply)
+        (( dry_run_requested == 0 )) || die "--apply and --dry-run are mutually exclusive"
+        apply=1
+        shift
+        ;;
+      --dry-run)
+        (( apply == 0 )) || die "--apply and --dry-run are mutually exclusive"
+        dry_run_requested=1
+        shift
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) die "unknown argument: $1" ;;
+    esac
+  done
+fi
+
+validate_service() {
+  case "$service" in frontend|backend) ;; *) die "--service must be frontend or backend" ;; esac
+}
+
+validate_release() {
+  [[ $release =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] ||
+    die "--release must be 1-128 letters, digits, dots, underscores, or hyphens"
+}
+
+package_name() {
+  case "$service" in
+    frontend) printf '%s\n' '@elova/frontend' ;;
+    backend) printf '%s\n' '@elova/backend' ;;
+  esac
+}
+
+service_user() { printf 'elova-%s\n' "$service"; }
+service_unit() { printf 'elova-%s.service\n' "$service"; }
+service_root() { printf '%s/%s\n' "$INSTALL_ROOT" "$service"; }
+env_file() { printf '%s/%s.env\n' "$CONFIG_ROOT" "$service"; }
+
+require_apply() {
+  (( apply == 1 )) || return 1
+  (( EUID == 0 )) || die "--apply must be run as root"
+  return 0
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
+}
+
+env_value() {
+  local key=$1 file=$2
+  awk -v key="$key" '
+    /^[[:space:]]*#/ { next }
+    {
+      line=$0
+      sub(/^[[:space:]]*/, "", line)
+      if (index(line, key "=") == 1) {
+        value=substr(line, length(key) + 2)
+        sub(/^[[:space:]]*/, "", value)
+        sub(/[[:space:]]*$/, "", value)
+        if ((substr(value,1,1) == "\"" && substr(value,length(value),1) == "\"") ||
+            (substr(value,1,1) == "\047" && substr(value,length(value),1) == "\047")) {
+          value=substr(value,2,length(value)-2)
+        }
+        found=value
+      }
+    }
+    END { if (found != "") print found; else exit 1 }
+  ' "$file"
+}
+
+env_has_key() {
+  local key=$1 file=$2
+  awk -v key="$key" '
+    /^[[:space:]]*#/ { next }
+    {
+      line=$0
+      sub(/^[[:space:]]*/, "", line)
+      if (index(line, key "=") == 1) found=1
+    }
+    END { if (found) exit 0; exit 1 }
+  ' "$file"
+}
+
+expected_digest() {
+  local digest
+  [[ -f $sha256_file && ! -L $sha256_file ]] || die "SHA-256 file must be a regular, non-symlink file: $sha256_file"
+  read -r digest _ < "$sha256_file" || die "cannot read SHA-256 file: $sha256_file"
+  [[ $digest =~ ^[[:xdigit:]]{64}$ ]] || die "SHA-256 file must start with exactly one 64-digit digest"
+  printf '%s\n' "${digest,,}"
+}
+
+check_archive_paths() {
+  local entry clean part top=""
+  while IFS= read -r entry; do
+    clean=${entry#./}
+    [[ -n $clean ]] || continue
+    [[ $clean != /* ]] || die "archive contains an absolute path: $entry"
+    IFS='/' read -ra parts <<< "$clean"
+    for part in "${parts[@]}"; do
+      [[ $part != '..' ]] || die "archive contains path traversal: $entry"
+    done
+    if [[ -z $top ]]; then
+      top=${parts[0]}
+    elif [[ ${parts[0]} != "$top" ]]; then
+      die "archive must contain one top-level release directory"
+    fi
+  done < <(tar -tzf "$artifact")
+  [[ -n $top ]] || die "artifact is empty"
+  printf '%s\n' "$top"
+}
+
+check_package_manifest() {
+  local package_dir=$1 require_migrate=${2:-0} expected
+  expected=$(package_name)
+  node - "$package_dir/package.json" "$expected" "$require_migrate" <<'NODE'
+const fs = require('node:fs');
+const path = require('node:path');
+const [manifestPath, expected, requireMigrate] = process.argv.slice(2);
+let manifest;
+try {
+  manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+} catch (error) {
+  console.error(`invalid package manifest: ${error.message}`);
+  process.exit(1);
+}
+if (manifest.name !== expected) {
+  console.error(`expected package ${expected}, found ${String(manifest.name)}`);
+  process.exit(1);
+}
+if (!manifest.scripts || typeof manifest.scripts.start !== 'string' || !manifest.scripts.start.trim()) {
+  console.error(`${expected} artifact has no start script`);
+  process.exit(1);
+}
+if (requireMigrate === '1') {
+  if (!manifest.scripts || typeof manifest.scripts.migrate !== 'string' || !manifest.scripts.migrate.trim()) {
+    console.error(`${expected} artifact has no explicit migrate script`);
+    process.exit(1);
+  }
+  const migrationsPath = path.join(path.dirname(manifestPath), 'migrations');
+  try {
+    if (!fs.statSync(migrationsPath).isDirectory()) throw new Error();
+  } catch {
+    console.error(`${expected} artifact has no migrations directory`);
+    process.exit(1);
+  }
+}
+NODE
+}
+
+# Extract into a caller-owned temporary directory after rejecting unsafe member paths.
+# Symlinks and special files are disallowed so a release cannot escape its immutable root.
+extract_and_verify() {
+  local destination=$1 require_migrate=${2:-0} expected actual top package_dir
+  [[ -f $artifact && ! -L $artifact ]] || die "artifact must be a regular, non-symlink file: $artifact"
+  require_command sha256sum
+  require_command tar
+  require_command node
+  expected=$(expected_digest)
+  actual=$(sha256sum "$artifact" | awk '{print $1}')
+  [[ $actual == "$expected" ]] || die "artifact SHA-256 mismatch (expected $expected, got $actual)"
+  top=$(check_archive_paths)
+  mkdir -p "$destination"
+  tar --extract --gzip --file "$artifact" --directory "$destination" \
+    --no-same-owner --no-same-permissions
+  if find "$destination" -type l -print -quit | grep -q .; then
+    die "artifact may not contain symbolic links"
+  fi
+  if find "$destination" \! -type f \! -type d -print -quit | grep -q .; then
+    die "artifact may contain only regular files and directories"
+  fi
+  package_dir="$destination/$top"
+  [[ -f $package_dir/package.json ]] || die "artifact top-level directory has no package.json"
+  check_package_manifest "$package_dir" "$require_migrate"
+  printf '%s\n' "$package_dir"
+}
+
+check_env_permissions() {
+  local file=$1 user=$2 mode owner group
+  [[ -f $file && ! -L $file ]] || die "environment file must be regular and non-symlink: $file"
+  mode=$(stat -c '%a' "$file")
+  owner=$(stat -c '%U' "$file")
+  group=$(stat -c '%G' "$file")
+  [[ $mode == 640 && $owner == root && $group == "$user" ]] ||
+    die "$file must be owned root:$user with mode 0640 (found $owner:$group $mode)"
+}
+
+check_frontend_env() {
+  local file=$1 url key
+  for key in DATABASE_URL ELOVA_SESSION_SECRET ELOVA_CREDENTIAL_KEY; do
+    if env_has_key "$key" "$file"; then
+      die "$file must not define backend-only $key"
+    fi
+  done
+  url=$(env_value ELOVA_BACKEND_URL "$file") || die "$file must define ELOVA_BACKEND_URL"
+  node - "$url" "$BACKEND_PORT" <<'NODE'
+const { isIP } = require('node:net');
+const [raw, expectedPort] = process.argv.slice(2);
+function isDnsLabel(value) {
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value);
+}
+function isMagicDnsName(host) {
+  const labels = host.split('.');
+  return labels.length >= 4 && host.endsWith('.ts.net') && labels.every(isDnsLabel);
+}
+function isTailnetHost(host) {
+  if (isIP(host) === 4) {
+    const [first, second] = host.split('.').map(Number);
+    return first === 100 && second >= 64 && second <= 127;
+  }
+  if (isIP(host) === 6) return host.startsWith('fd7a:115c:a1e0:');
+  return isMagicDnsName(host);
+}
+let url;
+try { url = new URL(raw); } catch { console.error('ELOVA_BACKEND_URL must be an absolute URL'); process.exit(1); }
+const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+if (url.protocol !== 'http:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+  console.error('ELOVA_BACKEND_URL must be a credential-free HTTP origin'); process.exit(1);
+}
+if (host === 'localhost' || host === '::1' || /^127\./.test(host) || !isTailnetHost(host)) {
+  console.error('production ELOVA_BACKEND_URL must use a Tailnet IP or fully qualified MagicDNS host'); process.exit(1);
+}
+if ((url.port || '80') !== expectedPort) {
+  console.error(`ELOVA_BACKEND_URL must use backend port ${expectedPort}`); process.exit(1);
+}
+NODE
+}
+
+check_database_url() {
+  local database_url=$1
+  ELOVA_DATABASE_URL_TO_VALIDATE="$database_url" node <<'NODE'
+const { isIP } = require('node:net');
+const raw = process.env.ELOVA_DATABASE_URL_TO_VALIDATE;
+function withoutBrackets(value) {
+  return value.startsWith('[') && value.endsWith(']') ? value.slice(1, -1) : value;
+}
+function canonicalIpv6(value) {
+  if (isIP(value) !== 6) return undefined;
+  return withoutBrackets(new URL(`http://[${value}]/`).hostname);
+}
+function isLoopbackHost(value) {
+  const host = withoutBrackets(value).toLowerCase();
+  if (host === 'localhost') return true;
+  if (isIP(host) === 4) return host.split('.')[0] === '127';
+  return canonicalIpv6(host) === '::1';
+}
+let url;
+try { url = new URL(raw); } catch { console.error('DATABASE_URL must be a valid PostgreSQL URL'); process.exit(1); }
+if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
+  console.error('DATABASE_URL must use the postgres or postgresql scheme'); process.exit(1);
+}
+const socketHosts = url.searchParams.getAll('host');
+const usesUnixSocket = url.hostname === '' && socketHosts.length === 1 &&
+  socketHosts[0].startsWith('/') && !socketHosts[0].includes('\0');
+const usesLoopback = socketHosts.length === 0 && isLoopbackHost(url.hostname);
+if (url.searchParams.has('hostaddr') || (!usesUnixSocket && !usesLoopback)) {
+  console.error('DATABASE_URL must use a same-host Unix socket or loopback address'); process.exit(1);
+}
+NODE
+}
+
+check_backend_env() {
+  local file=$1 host database_url session_secret credential_key
+  host=$(env_value ELOVA_BACKEND_HOST "$file") || die "$file must define ELOVA_BACKEND_HOST"
+  database_url=$(env_value DATABASE_URL "$file") || die "$file must define DATABASE_URL"
+  session_secret=$(env_value ELOVA_SESSION_SECRET "$file") || die "$file must define ELOVA_SESSION_SECRET"
+  credential_key=$(env_value ELOVA_CREDENTIAL_KEY "$file") || die "$file must define ELOVA_CREDENTIAL_KEY"
+  check_database_url "$database_url"
+  ELOVA_SECRET_TO_VALIDATE="$session_secret" node -e 'const raw=process.env.ELOVA_SECRET_TO_VALIDATE||""; const value=Buffer.from(raw, "base64"); if(value.length!==32 || value.toString("base64")!==raw) process.exit(1)' ||
+    die "ELOVA_SESSION_SECRET must be a base64-encoded 32-byte value"
+  ELOVA_SECRET_TO_VALIDATE="$credential_key" node -e 'const raw=process.env.ELOVA_SECRET_TO_VALIDATE||""; const value=Buffer.from(raw, "base64"); if(value.length!==32 || value.toString("base64")!==raw) process.exit(1)' ||
+    die "ELOVA_CREDENTIAL_KEY must be a base64-encoded 32-byte value"
+  [[ $session_secret != "$credential_key" ]] || die "ELOVA_SESSION_SECRET and ELOVA_CREDENTIAL_KEY must be different"
+  [[ $host != '0.0.0.0' && $host != '::' && $host != 'localhost' && $host != 127.* ]] ||
+    die "ELOVA_BACKEND_HOST may not be wildcard or loopback"
+  ip -o addr show dev tailscale0 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | grep -Fx -- "$host" >/dev/null ||
+    die "ELOVA_BACKEND_HOST is not assigned to tailscale0: $host"
+}
+
+host_preflight() {
+  local user unit file
+  user=$(service_user)
+  unit=$(service_unit)
+  file=$(env_file)
+  for command in flock systemctl systemd-analyze curl ip npm node ss tar sha256sum stat; do
+    require_command "$command"
+  done
+  getent passwd "$user" >/dev/null || die "missing non-login service user: $user"
+  [[ $(getent passwd "$user" | cut -d: -f7) =~ /(nologin|false)$ ]] || die "$user must use a non-login shell"
+  getent group "$user" >/dev/null || die "missing service group: $user"
+  check_env_permissions "$file" "$user"
+  [[ -f /etc/systemd/system/$unit ]] || die "unit is not installed: /etc/systemd/system/$unit"
+  systemd-analyze verify "/etc/systemd/system/$unit" >/dev/null
+  if [[ $service == frontend ]]; then
+    check_frontend_env "$file"
+  else
+    [[ -f /etc/systemd/system/elova-backend-migrate@.service ]] || die "backend migration unit is not installed"
+    systemd-analyze verify /etc/systemd/system/elova-backend-migrate@.service >/dev/null
+    check_backend_env "$file"
+  fi
+}
+
+artifact_preflight() {
+  local tmp require_migrate=0
+  [[ $service == backend ]] && require_migrate=1
+  tmp=$(mktemp -d)
+  trap 'rm -rf -- "$tmp"' RETURN
+  extract_and_verify "$tmp" "$require_migrate" >/dev/null
+  rm -rf -- "$tmp"
+  trap - RETURN
+}
+
+journal() {
+  local action=$1 target=${2:-none} status=${3:-ok} dir file timestamp
+  dir="$JOURNAL_ROOT/$service"
+  file="$dir/journal.jsonl"
+  install -d -o root -g "$(service_user)" -m 0750 "$dir" || return
+  timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ') || return
+  printf '{"timestamp":"%s","service":"%s","action":"%s","release":"%s","status":"%s"}\n' \
+    "$timestamp" "$service" "$action" "$target" "$status" >> "$file" || return
+  chown root:"$(service_user)" "$file" || return
+  chmod 0640 "$file"
+}
+
+acquire_lock() {
+  install -d -o root -g root -m 0755 "$LOCK_ROOT"
+  exec 9>"$LOCK_ROOT/elova-$service-deploy.lock"
+  flock -n 9 || die "another $service release operation holds the deployment lock"
+}
+
+run_preflight() {
+  validate_service
+  validate_release
+  [[ -n $artifact && -n $sha256_file ]] || die "preflight requires --artifact and --sha256-file"
+  artifact_preflight
+  if (( apply == 1 )); then
+    die "preflight is read-only; omit --apply"
+  fi
+  if (( dry_run_requested == 1 )); then
+    printf 'dry-run: artifact and digest valid for %s release %s\n' "$service" "$release"
+    printf 'dry-run: host checks skipped; rerun without --dry-run for explicit read-only host preflight\n'
+  else
+    host_preflight
+    printf 'preflight passed for %s release %s\n' "$service" "$release"
+  fi
+}
+
+run_stage() {
+  local root releases incoming tmp package_dir user release_digest marker
+  validate_service
+  validate_release
+  [[ -n $artifact && -n $sha256_file ]] || die "stage requires --artifact and --sha256-file"
+  artifact_preflight
+  if ! require_apply; then
+    printf 'dry-run: would acquire %s deployment lock\n' "$service"
+    printf 'dry-run: would stage verified %s artifact as immutable release %s\n' "$(package_name)" "$release"
+    printf 'dry-run: would not activate, migrate, or restart a service\n'
+    return
+  fi
+  host_preflight
+  acquire_lock
+  root=$(service_root)
+  releases="$root/releases"
+  incoming="$releases/.incoming-$release-$$"
+  [[ ! -e $releases/$release && ! -L $releases/$release ]] || die "release already exists: $release"
+  if [[ $service == backend ]]; then
+    marker="$JOURNAL_ROOT/backend/migrated/$release"
+    require_unused_migration_identity "$marker" "$release"
+  fi
+  user=$(service_user)
+  install -d -o root -g "$user" -m 0750 "$root" "$releases"
+  tmp=$(mktemp -d "$releases/.extract-$release-XXXXXX")
+  trap 'rm -rf -- "$tmp" "$incoming"' EXIT
+  package_dir=$(extract_and_verify "$tmp" 0)
+  release_digest=$(expected_digest)
+  [[ $(sha256sum "$artifact" | awk '{print $1}') == "$release_digest" ]] ||
+    die "artifact changed during staging"
+  mv -- "$package_dir" "$incoming"
+  printf '%s\n' "$release_digest" > "$incoming/$RELEASE_DIGEST_FILE"
+  chown -R root:"$user" "$incoming"
+  chmod -R u=rwX,g=rX,o= "$incoming"
+  mv -- "$incoming" "$releases/$release"
+  chmod -R a-w "$releases/$release"
+  journal stage "$release"
+  rm -rf -- "$tmp"
+  trap - EXIT
+  printf 'staged immutable %s release %s; it is not active\n' "$service" "$release"
+}
+
+run_migrate() {
+  local root marker_dir marker temporary unit artifact_digest
+  [[ $service == backend ]] || die "migrate requires --service backend"
+  validate_release
+  if ! require_apply; then
+    printf 'dry-run: would acquire backend deployment lock\n'
+    printf 'dry-run: would run only the explicit migration unit for release %s\n' "$release"
+    printf 'dry-run: would not activate or restart the backend service\n'
+    return
+  fi
+  host_preflight
+  acquire_lock
+  root=$(service_root)
+  [[ -d $root/releases/$release && ! -L $root/releases/$release ]] || die "staged backend release not found: $release"
+  check_package_manifest "$root/releases/$release" 1
+  marker_dir="$JOURNAL_ROOT/backend/migrated"
+  marker="$marker_dir/$release"
+  [[ ! -e $marker && ! -L $marker ]] || die "release already has a successful migration marker: $release"
+  artifact_digest=$(release_artifact_digest "$root/releases/$release")
+  unit="elova-backend-migrate@$release.service"
+  systemctl reset-failed "$unit" >/dev/null 2>&1 || true
+  if ! systemctl start "$unit"; then
+    journal migrate "$release" failed
+    die "migration unit failed; backend was not activated"
+  fi
+  install -d -o root -g elova-backend -m 0750 "$marker_dir"
+  temporary="$marker_dir/.${release}.new.$$"
+  trap 'rm -f -- "$temporary"' EXIT
+  printf '%s\n' "$artifact_digest" > "$temporary"
+  chown root:elova-backend "$temporary"
+  chmod 0440 "$temporary"
+  mv -- "$temporary" "$marker"
+  trap - EXIT
+  journal migrate "$release"
+  printf 'migration completed for backend release %s; it is not active\n' "$release"
+}
+
+health_url() {
+  local host
+  if [[ $service == frontend ]]; then
+    printf 'http://127.0.0.1:%s/api/v1/health/ready\n' "$FRONTEND_PORT"
+  else
+    host=$(env_value ELOVA_BACKEND_HOST "$(env_file)") || die "cannot read ELOVA_BACKEND_HOST"
+    if [[ $host == *:* ]]; then host="[$host]"; fi
+    printf 'http://%s:%s/v1/health/ready\n' "$host" "$BACKEND_PORT"
+  fi
+}
+
+listener_coordinates() {
+  local host
+  if [[ $service == frontend ]]; then
+    printf '127.0.0.1 %s\n' "$FRONTEND_PORT"
+  else
+    host=$(env_value ELOVA_BACKEND_HOST "$(env_file)") || return 1
+    printf '%s %s\n' "$host" "$BACKEND_PORT"
+  fi
+}
+
+pid_in_control_group() {
+  local pid=$1 control_group=$2 hierarchy controllers process_group
+  [[ $pid =~ ^[1-9][0-9]*$ && -r /proc/$pid/cgroup && -n $control_group && $control_group != / ]] || return 1
+  while IFS=: read -r hierarchy controllers process_group; do
+    if [[ $process_group == "$control_group" || $process_group == "$control_group/"* ]]; then
+      return 0
+    fi
+  done < "/proc/$pid/cgroup"
+  return 1
+}
+
+unit_owns_listener() {
+  local unit=$1 active_state main_pid control_group host port sockets line endpoint pid_entry pid
+  active_state=$(systemctl show "$unit" --property=ActiveState --value) || return 1
+  [[ $active_state == active ]] || return 1
+  main_pid=$(systemctl show "$unit" --property=MainPID --value) || return 1
+  control_group=$(systemctl show "$unit" --property=ControlGroup --value) || return 1
+  pid_in_control_group "$main_pid" "$control_group" || return 1
+  read -r host port < <(listener_coordinates) || return 1
+  sockets=$(ss -H -ltnp "sport = :$port" 2>/dev/null) || return 1
+  while IFS= read -r line; do
+    endpoint=$(awk '{print $4}' <<< "$line")
+    if [[ $endpoint != "$host:$port" && $endpoint != "[$host]:$port" ]]; then
+      continue
+    fi
+    while IFS= read -r pid_entry; do
+      pid=${pid_entry#pid=}
+      if pid_in_control_group "$pid" "$control_group"; then
+        return 0
+      fi
+    done < <(grep -oE 'pid=[0-9]+' <<< "$line" || true)
+  done <<< "$sockets"
+  return 1
+}
+
+validate_health_response() {
+  local headers=$1 body=$2
+  node - "$headers" "$body" "$service" <<'NODE'
+const fs = require('node:fs');
+const [headersPath, bodyPath, service] = process.argv.slice(2);
+let headers;
+let body;
+try {
+  const blocks = fs.readFileSync(headersPath, 'utf8').split(/\r?\n\r?\n/)
+    .filter((block) => /^HTTP\//i.test(block));
+  headers = blocks.at(-1) ?? '';
+  body = JSON.parse(fs.readFileSync(bodyPath, 'utf8'));
+} catch { process.exit(1); }
+if (!/^content-type:\s*application\/json(?:;|\s*$)/im.test(headers)) process.exit(1);
+if (service === 'backend' && !/^x-elova-api-version:\s*1\s*$/im.test(headers)) process.exit(1);
+if (!body || typeof body !== 'object' || Array.isArray(body) ||
+    Object.keys(body).sort().join(',') !== 'checks,status' || body.status !== 'ready') process.exit(1);
+if (!body.checks || typeof body.checks !== 'object' || Array.isArray(body.checks) ||
+    Object.keys(body.checks).sort().join(',') !== 'database,migrations' ||
+    body.checks.database !== 'ready' || body.checks.migrations !== 'ready') process.exit(1);
+NODE
+}
+
+wait_for_health() {
+  local unit=$1 url deadline remaining request_timeout sleep_time tmp headers body status
+  url=$(health_url)
+  tmp=$(mktemp -d)
+  headers="$tmp/headers"
+  body="$tmp/body"
+  deadline=$((SECONDS + HEALTH_TIMEOUT_SECONDS))
+  while (( SECONDS < deadline )); do
+    remaining=$((deadline - SECONDS))
+    request_timeout=$HEALTH_REQUEST_TIMEOUT_SECONDS
+    if (( request_timeout > remaining )); then request_timeout=$remaining; fi
+    : > "$headers"
+    : > "$body"
+    status=""
+    if unit_owns_listener "$unit" &&
+       status=$(curl --noproxy '*' --silent --show-error --max-time "$request_timeout" \
+         --dump-header "$headers" --output "$body" --write-out '%{http_code}' "$url") &&
+       [[ $status == 200 ]] && validate_health_response "$headers" "$body" &&
+       unit_owns_listener "$unit"; then
+      rm -rf -- "$tmp"
+      return 0
+    fi
+    remaining=$((deadline - SECONDS))
+    if (( remaining <= 0 )); then break; fi
+    sleep_time=$HEALTH_DELAY_SECONDS
+    if (( sleep_time > remaining )); then sleep_time=$remaining; fi
+    sleep "$sleep_time"
+  done
+  rm -rf -- "$tmp"
+  return 1
+}
+
+set_link() {
+  local root=$1 name=$2 target=$3 temporary
+  temporary="$root/.${name}.new.$$"
+  ln -s -- "$target" "$temporary"
+  mv -Tf -- "$temporary" "$root/$name"
+}
+
+link_release_name() {
+  local root=$1 link=$2 resolved
+  [[ -L $root/$link ]] || return 1
+  resolved=$(readlink -f -- "$root/$link")
+  case "$resolved" in "$root/releases/"*) basename -- "$resolved" ;; *) die "$link link escapes release root" ;; esac
+}
+
+backend_migration_count() {
+  local release_root=$1 migration_root name count=0
+  migration_root="$release_root/migrations"
+  [[ -d $migration_root && ! -L $migration_root ]] ||
+    die "backend release has no migrations directory: ${release_root##*/}"
+  while IFS= read -r name; do
+    if [[ $name =~ ^[0-9]{4}_[a-z0-9_]+\.sql$ ]]; then
+      ((count += 1))
+    fi
+  done < <(find "$migration_root" -mindepth 1 -maxdepth 1 -type f -printf '%f\n')
+  printf '%s\n' "$count"
+}
+
+release_artifact_digest() {
+  local release_root=$1 digest_file digest
+  digest_file="$release_root/$RELEASE_DIGEST_FILE"
+  [[ -f $digest_file && ! -L $digest_file ]] ||
+    die "release artifact digest is missing: ${release_root##*/}"
+  digest=$(<"$digest_file")
+  [[ $digest =~ ^[[:xdigit:]]{64}$ ]] ||
+    die "release artifact digest is invalid: ${release_root##*/}"
+  printf '%s\n' "${digest,,}"
+}
+
+require_unused_migration_identity() {
+  local marker=$1 release_name=$2
+  [[ ! -e $marker && ! -L $marker ]] ||
+    die "backend release identity already has a migration record: $release_name"
+}
+
+require_matching_migration_marker() {
+  local release_root=$1 marker=$2 artifact_digest marker_digest
+  [[ -f $marker && ! -L $marker ]] ||
+    die "backend release has no successful explicit migration marker: ${release_root##*/}"
+  marker_digest=$(<"$marker")
+  [[ $marker_digest =~ ^[[:xdigit:]]{64}$ ]] ||
+    die "backend migration marker is invalid: ${release_root##*/}"
+  artifact_digest=$(release_artifact_digest "$release_root")
+  [[ ${marker_digest,,} == "$artifact_digest" ]] ||
+    die "backend migration marker does not match staged artifact: ${release_root##*/}"
+}
+
+restore_release_state() {
+  local root=$1 old_release=$2 had_previous=$3 prior_previous=$4 unit=$5 was_active=$6
+  if [[ -n $old_release ]]; then
+    set_link "$root" current "releases/$old_release" || return 1
+  else
+    rm -f -- "$root/current" || return 1
+  fi
+  if (( had_previous == 1 )); then
+    set_link "$root" previous "releases/$prior_previous" || return 1
+  else
+    rm -f -- "$root/previous" || return 1
+  fi
+  if [[ -n $old_release && $was_active == 1 ]]; then
+    systemctl restart "$unit" && wait_for_health "$unit"
+  else
+    systemctl stop "$unit"
+  fi
+}
+
+prune_releases() {
+  local root=$1 current=$2 previous=${3:-} count=0 dir name
+  while IFS= read -r dir; do
+    name=${dir##*/}
+    if [[ $name == "$current" || $name == "$previous" || $name == .incoming-* || $name == .extract-* ]]; then
+      continue
+    fi
+    ((count+=1))
+    if (( count > KEEP_RELEASES - 2 )); then
+      chmod -R u+w "$dir"
+      rm -rf --one-file-system -- "$dir"
+      journal prune "$name"
+    fi
+  done < <(find "$root/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -rn | cut -d' ' -f2-)
+}
+
+run_activate() {
+  local root old="" prior_previous="" had_previous=0 url unit prior_service_active=0
+  local rollback_allowed=1 failure_message="" journal_status=0 old_migrations target_migrations
+  validate_service
+  validate_release
+  if ! require_apply; then
+    printf 'dry-run: would require staged release %s and acquire %s deployment lock\n' "$release" "$service"
+    if [[ $service == backend ]]; then
+      printf 'dry-run: would require an artifact-matching successful migration marker\n'
+      printf 'dry-run: would reject activation to a lower migration count before changing release links\n'
+    fi
+    printf 'dry-run: would atomically update current/previous, restart, converge readiness, and prune old releases\n'
+    return
+  fi
+  host_preflight
+  acquire_lock
+  root=$(service_root)
+  [[ -d $root/releases/$release && ! -L $root/releases/$release ]] || die "staged release not found: $release"
+  check_package_manifest "$root/releases/$release" 0
+  if [[ $service == backend ]]; then
+    require_matching_migration_marker \
+      "$root/releases/$release" "$JOURNAL_ROOT/backend/migrated/$release"
+  fi
+  old=$(link_release_name "$root" current || true)
+  [[ $old != "$release" ]] || die "release is already active: $release"
+  if prior_previous=$(link_release_name "$root" previous); then
+    had_previous=1
+  fi
+  if [[ $service == backend && -n $old ]]; then
+    old_migrations=$(backend_migration_count "$root/releases/$old")
+    target_migrations=$(backend_migration_count "$root/releases/$release")
+    if (( target_migrations < old_migrations )); then
+      die "backend activation to a lower migration count is prohibited; deploy a forward fix"
+    fi
+    if (( target_migrations > old_migrations )); then
+      rollback_allowed=0
+    fi
+  fi
+  unit=$(service_unit)
+  if systemctl is-active --quiet "$unit"; then
+    prior_service_active=1
+  fi
+  if [[ -n $old ]]; then
+    set_link "$root" previous "releases/$old"
+  fi
+  set_link "$root" current "releases/$release"
+  url=$(health_url)
+  if ! systemctl restart "$unit" || ! wait_for_health "$unit"; then
+    if (( rollback_allowed == 1 )); then
+      if restore_release_state \
+        "$root" "$old" "$had_previous" "$prior_previous" "$unit" "$prior_service_active"; then
+        failure_message="restart or readiness failed at $url; restored prior release links and prior service state"
+      else
+        failure_message="restart or readiness failed at $url; prior release restoration failed; operator intervention required"
+      fi
+    else
+      if systemctl stop "$unit"; then
+        failure_message="restart or readiness failed at $url; migration-count mismatch prohibits restoring release $old; service stopped; deploy a forward fix"
+      else
+        failure_message="restart or readiness failed at $url; migration-count mismatch prohibits restoring release $old; service stop failed; intervene and deploy a forward fix"
+      fi
+    fi
+    journal activate "$release" failed || journal_status=$?
+    if (( journal_status != 0 )); then
+      printf '%s: %s; failed to record activation failure\n' "$PROGRAM" "$failure_message" >&2
+      return "$journal_status"
+    fi
+    die "$failure_message"
+  fi
+  journal activate "$release"
+  prune_releases "$root" "$release" "$old"
+  printf 'activated %s release %s; readiness converged at %s\n' "$service" "$release" "$url"
+}
+
+run_rollback() {
+  local root current previous unit url current_migrations previous_migrations prior_service_active=0
+  local failure_message="" journal_status=0
+  validate_service
+  if ! require_apply; then
+    printf 'dry-run: would acquire %s deployment lock and swap current with previous\n' "$service"
+    if [[ $service == backend ]]; then
+      printf 'dry-run: would refuse any migration-count mismatch and require a forward fix\n'
+    fi
+    printf 'dry-run: would restart only %s after the atomic swap and require readiness convergence\n' "$(service_unit)"
+    return
+  fi
+  host_preflight
+  acquire_lock
+  root=$(service_root)
+  current=$(link_release_name "$root" current) || die "current release link is missing"
+  previous=$(link_release_name "$root" previous) || die "previous release link is missing"
+  [[ $current != "$previous" ]] || die "current and previous point to the same release"
+  if [[ $service == backend ]]; then
+    require_matching_migration_marker \
+      "$root/releases/$previous" "$JOURNAL_ROOT/backend/migrated/$previous"
+    current_migrations=$(backend_migration_count "$root/releases/$current")
+    previous_migrations=$(backend_migration_count "$root/releases/$previous")
+    [[ $current_migrations == "$previous_migrations" ]] ||
+      die "backend rollback across a migration-count mismatch is prohibited; deploy a forward fix"
+  fi
+  unit=$(service_unit)
+  if systemctl is-active --quiet "$unit"; then
+    prior_service_active=1
+  fi
+  set_link "$root" current "releases/$previous"
+  set_link "$root" previous "releases/$current"
+  url=$(health_url)
+  if ! systemctl restart "$unit" || ! wait_for_health "$unit"; then
+    if restore_release_state \
+      "$root" "$current" 1 "$previous" "$unit" "$prior_service_active"; then
+      failure_message="rollback restart or readiness failed at $url; restored release $current and prior service state"
+    else
+      failure_message="rollback restart or readiness failed at $url; prior release restoration failed; operator intervention required"
+    fi
+    journal rollback "$previous" failed || journal_status=$?
+    if (( journal_status != 0 )); then
+      printf '%s: %s; failed to record rollback failure\n' "$PROGRAM" "$failure_message" >&2
+      return "$journal_status"
+    fi
+    die "$failure_message"
+  fi
+  journal rollback "$previous"
+  printf 'rolled back %s from %s to %s; readiness converged at %s\n' "$service" "$current" "$previous" "$url"
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+  case "$command_name" in
+    preflight) run_preflight ;;
+    stage) run_stage ;;
+    migrate) run_migrate ;;
+    activate) run_activate ;;
+    rollback) run_rollback ;;
+  esac
+fi

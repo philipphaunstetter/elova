@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly PROGRAM=${0##*/}
+readonly ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+
+die() {
+  printf '%s: %s\n' "$PROGRAM" "$*" >&2
+  exit 64
+}
+
+[[ $# -eq 1 ]] || die "usage: $PROGRAM OUTPUT_DIRECTORY"
+
+output=$1
+
+archive_package() {
+  local package_root=$1 archive=$2
+  (
+    cd -- "$(dirname -- "$package_root")"
+    tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner --format=gnu \
+      -cf - "$(basename -- "$package_root")"
+  ) | gzip -n > "$archive"
+}
+
+for command in git npm node tar gzip sha256sum rm; do
+  command -v "$command" >/dev/null 2>&1 || die "required command not found: $command"
+done
+
+build_id=${ELOVA_BUILD_ID:-}
+if [[ -z $build_id ]]; then
+  build_id=$(git -C "$ROOT" rev-parse HEAD) || die "cannot derive immutable source identity"
+fi
+[[ $build_id =~ ^[A-Za-z0-9._-]{1,128}$ ]] || die "ELOVA_BUILD_ID must be an immutable source identifier"
+rm -rf -- "$ROOT/apps/backend/dist" "$ROOT/apps/frontend/.next"
+(
+  cd -- "$ROOT"
+  ELOVA_BUILD_ID="$build_id" npm run build
+)
+
+[[ -f $ROOT/apps/backend/dist/src/server.js ]] || die "backend build output is missing"
+[[ -f $ROOT/apps/frontend/.next/standalone/apps/frontend/server.js ]] || die "frontend standalone server is missing"
+[[ -d $ROOT/apps/frontend/.next/static ]] || die "frontend static output is missing"
+
+mkdir -p "$output"
+output=$(cd -- "$output" && pwd -P)
+work=$(mktemp -d "$output/.elova-package-native.XXXXXX")
+trap 'rm -rf -- "$work"' EXIT
+
+mkdir -p "$work/backend"
+pack_name=$(cd -- "$ROOT" && npm pack --workspace @elova/backend --pack-destination "$work" --silent)
+pack_name=${pack_name##*$'\n'}
+[[ -f $work/$pack_name ]] || die "backend package was not created"
+tar -xzf "$work/$pack_name" -C "$work/backend"
+node - "$ROOT" "$ROOT/apps/backend/package.json" "$work/backend/package" <<'NODE'
+const fs = require('node:fs');
+const path = require('node:path');
+const { createRequire } = require('node:module');
+const [rootInput, manifestPath, destination] = process.argv.slice(2);
+const root = fs.realpathSync(rootInput);
+const sourceManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+function resolveManifest(name, from) {
+  const requireFromPackage = createRequire(path.join(from, 'package.json'));
+  try {
+    return requireFromPackage.resolve(`${name}/package.json`);
+  } catch {
+    let directory = path.dirname(requireFromPackage.resolve(name));
+    while (directory.startsWith(root)) {
+      const candidate = path.join(directory, 'package.json');
+      if (fs.existsSync(candidate)) {
+        const metadata = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+        if (metadata.name === name) return candidate;
+      }
+      const parent = path.dirname(directory);
+      if (parent === directory) break;
+      directory = parent;
+    }
+    throw new Error(`cannot resolve runtime dependency manifest: ${name}`);
+  }
+}
+const queue = Object.keys(sourceManifest.dependencies ?? {}).map((name) => ({
+  name,
+  from: path.dirname(manifestPath),
+}));
+const copied = new Set();
+while (queue.length > 0) {
+  const { name, from } = queue.shift();
+  const manifest = resolveManifest(name, from);
+  const packageRoot = fs.realpathSync(path.dirname(manifest));
+  if (copied.has(packageRoot)) continue;
+  const relative = path.relative(root, packageRoot);
+  if (relative.startsWith('..') || !relative.split(path.sep).includes('node_modules')) {
+    throw new Error(`runtime dependency escaped the repository install: ${name}`);
+  }
+  copied.add(packageRoot);
+  fs.cpSync(packageRoot, path.join(destination, relative), {
+    recursive: true,
+    dereference: true,
+    filter(source) {
+      return path.basename(source) !== '.bin';
+    },
+  });
+  const metadata = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+  for (const dependency of Object.keys({
+    ...metadata.dependencies,
+    ...metadata.optionalDependencies,
+  })) {
+    try {
+      resolveManifest(dependency, packageRoot);
+      queue.push({ name: dependency, from: packageRoot });
+    } catch {
+      if (metadata.dependencies?.[dependency]) throw new Error(`missing runtime dependency: ${dependency}`);
+    }
+  }
+}
+NODE
+[[ -f $work/backend/package/node_modules/pg/package.json ]] || die "backend runtime dependencies were not bundled"
+
+frontend_package="$work/frontend/package"
+mkdir -p "$frontend_package"
+cp -aL "$ROOT/apps/frontend/.next/standalone/." "$frontend_package/"
+[[ -f $frontend_package/node_modules/next/package.json ]] || die "frontend runtime dependencies were not bundled"
+mkdir -p "$frontend_package/apps/frontend/.next/static"
+cp -aL "$ROOT/apps/frontend/.next/static/." "$frontend_package/apps/frontend/.next/static/"
+node - "$ROOT/apps/frontend/package.json" "$frontend_package/package.json" <<'NODE'
+const fs = require('node:fs');
+const [source, destination] = process.argv.slice(2);
+const { name, version, engines } = JSON.parse(fs.readFileSync(source, 'utf8'));
+fs.writeFileSync(destination, `${JSON.stringify({
+  name,
+  version,
+  private: true,
+  engines,
+  scripts: { start: 'node apps/frontend/server.js' },
+}, null, 2)}\n`);
+NODE
+
+for package_root in "$work/backend/package" "$frontend_package"; do
+  if find "$package_root" -type l -print -quit | grep -q .; then
+    die "packaged releases may not contain symbolic links"
+  fi
+done
+
+mkdir -p "$work/output"
+archive_package "$work/backend/package" "$work/output/elova-backend.tgz"
+archive_package "$frontend_package" "$work/output/elova-frontend.tgz"
+(
+  cd -- "$work/output"
+  sha256sum elova-backend.tgz > elova-backend.tgz.sha256
+  sha256sum elova-frontend.tgz > elova-frontend.tgz.sha256
+)
+
+for name in elova-backend.tgz elova-backend.tgz.sha256 elova-frontend.tgz elova-frontend.tgz.sha256; do
+  mv -f -- "$work/output/$name" "$output/$name"
+done
+
+printf 'created install-free native artifacts in %s\n' "$output"

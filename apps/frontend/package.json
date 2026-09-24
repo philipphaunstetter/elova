@@ -1,0 +1,27 @@
+{
+  "name": "@elova/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "npm run build:test && node --conditions=react-server --import tsx --test tests/*.test.ts",
+    "build:test": "ELOVA_BACKEND_URL=http://100.100.10.20:3001 next build",
+    "verify": "npm test"
+  },
+  "dependencies": {
+    "@elova/api-contract": "file:../../packages/api-contract",
+    "next": "16.3.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "server-only": "0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

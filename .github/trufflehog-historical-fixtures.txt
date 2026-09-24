@@ -1,0 +1,2 @@
+(^|/)apps/backend/test/config\.test\.ts$
+(^|/)ops/tests/test-native-release\.sh$

@@ -1,112 +1,40 @@
-# Elova - Workflow Observability for n8n
+# Elova vNext
 
-Monitor and analyze your n8n workflows with clear dashboards and reliable sync.
+Elova monitors n8n workflow definitions and execution outcomes. vNext runs as two independently built native services:
 
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker)](./QUICK_START.md)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
-[![n8n](https://img.shields.io/badge/n8n-Compatible-FF6D5A?logo=n8n)](https://n8n.io)
+- `apps/frontend` — the public VPS Next.js UI and same-origin BFF;
+- `apps/backend` — the private GX10 API, owner/session authority, n8n synchronization, sanitization boundary, and PostgreSQL persistence;
+- `packages/api-contract` — the canonical OpenAPI contract and generated client;
+- `ops` — native artifact packaging, guarded systemd templates, and operations guidance.
 
-## Quick Start (3 steps)
+Browsers call only the public frontend at `/api/v1/*`. Server-only BFF code uses `ELOVA_BACKEND_URL` to reach the private backend over the Tailnet; the private origin never enters browser code or API responses. `DATABASE_URL`, session keys, credential-encryption keys, n8n credentials, and all durable state belong only to the GX10 backend.
 
-1) Create or reuse docker-compose.yml
+PostgreSQL is the only vNext application store. It owns the sole operator-created administrator, signed sessions, immutable n8n provider identities, encrypted credentials, sanitized workflow definitions, sanitized execution history, synchronization cursors, and observability metrics. Raw n8n execution content and workflow-node configuration may exist only in bounded process memory while the versioned sanitizer transforms them; they are never written to a durable or external sink.
 
-See the example in this repo: [docker-compose.yml](./docker-compose.yml)
+## Local verification
 
-Or copy this minimal setup:
-
-```yaml
-version: '3.8'
-services:
-  elova:
-    image: ghcr.io/philipphaunstetter/n8n-analytics:latest
-    container_name: elova
-    restart: always
-    ports:
-      - "3000:3000" # change the first port if needed (e.g. 8080:3000)
-    environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - GENERIC_TIMEZONE=UTC
-      - TZ=UTC
-    volumes:
-      - elova_data:/app/data
-
-volumes:
-  elova_data:
-```
-
-2) Start Elova
+Node.js 20 or newer is required.
 
 ```bash
-docker compose up -d
+npm ci
+npm run generate
+npm run lint
+npm test
+ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/to/output
 ```
 
-3) Complete setup
+The example Tailnet address is build-time test input only; no network call is made during the frontend build. Packaging emits install-free frontend/backend archives and checksums without deploying them. PostgreSQL integration and staged-artifact startup tests run in CI with an ephemeral database.
 
-Open http://localhost:3000 and complete the setup wizard:
-- Enter your n8n URL and API key
-- Set your timezone
-- Optionally enable demo mode
+## Initial owner
 
-All configuration is stored in the application database—no .env is required for n8n credentials.
+There is no public signup or web bootstrap. After an operator has separately provisioned and migrated private PostgreSQL on GX10, the operator runs the packaged backend's `bootstrap-owner` command once with `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD` supplied through the protected host environment. The command performs one atomic owner write; failures before commit are retryable and every call after commitment is refused.
 
-### Port configuration
+## Operations
 
-Change the host port by editing the `ports` map:
+Read [`ops/docs/native-services-runbook.md`](ops/docs/native-services-runbook.md) before considering host work. Repository templates do not install, deploy, migrate, bootstrap an owner, start, or restart anything by themselves. Host, Tailnet, PostgreSQL, n8n, credential, owner-bootstrap, and deployment changes require separate authority.
 
-```yaml
-ports:
-  - "8080:3000"  # Access via http://localhost:8080
-```
+The legacy public Docker image remains externally available and untouched. vNext has no container build or image-publication path; retirement of the external legacy artifact is a separate decision.
 
-## Features
+## Deferred product scope
 
-- Real-time dashboard and key metrics
-- Execution history with modes and statuses
-- Workflow inventory (active/inactive/archived)
-- Robust sync engine with safe startup behavior
-- Container-first, SQLite by default
-
-## Documentation
-
-- [Quick Start](./QUICK_START.md)
-- [Docker Installation](./docs/DOCKER_INSTALLATION.md)
-- [Compose Variants](./docs/DOCKER_COMPOSE_FILES.md)
-- [Volume Persistence Notes](./docs/DOCKER_VOLUME_FIX.md)
-
-## Managing the container
-
-```bash
-# Status
-docker compose ps
-
-# Logs
-docker compose logs -f elova
-
-# Update to latest
-docker compose pull && docker compose up -d
-
-# Stop
-docker compose down
-```
-
-## Common issues
-
-Port already in use:
-
-```yaml
-ports:
-  - "3001:3000"
-```
-
-n8n connection:
-- Ensure the n8n API is enabled and reachable
-- Verify the API key is correct
-
-## Contributing
-
-We welcome contributions! Please see CONTRIBUTING.md.
-
-## License
-
-MIT License - see [LICENSE](./LICENSE).
+Workspace/multi-user flows, governance/Jev, scoring, and migration or deletion of any legacy data remain deferred. The current PostgreSQL schema intentionally represents one owner-operated installation; future workspace isolation requires a separately reviewed schema migration.

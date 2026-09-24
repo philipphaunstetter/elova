@@ -1,0 +1,224 @@
+name: Native vNext CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-vnext-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+
+jobs:
+  native-operations:
+    name: Native release helper and systemd templates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Check release shell syntax
+        run: bash -n ops/bin/elova-native-release ops/bin/elova-package-native ops/tests/test-native-release.sh
+      - name: Verify systemd service templates
+        run: >-
+          systemd-analyze verify
+          ops/systemd/elova-frontend.service
+          ops/systemd/elova-backend.service
+          ops/systemd/elova-backend-migrate@.service
+      - name: Exercise guarded release behavior
+        run: ops/tests/test-native-release.sh
+
+  frontend-quality:
+    name: Frontend lint, type, unit, and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Lint frontend independently
+        run: npm exec eslint -- apps/frontend
+      - name: Type-check frontend independently
+        run: npm exec tsc -- --noEmit -p apps/frontend/tsconfig.json
+      - name: Run frontend unit tests independently
+        run: npm test --workspace @elova/frontend
+      - name: Build frontend native artifact independently
+        run: npm run build --workspace @elova/frontend
+        env:
+          ELOVA_BACKEND_URL: http://100.100.10.20:3001
+
+  backend-quality:
+    name: Backend lint, type, unit, and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Lint backend independently
+        run: npm exec eslint -- apps/backend/src apps/backend/test
+      - name: Type-check backend independently
+        run: npm exec tsc -- --noEmit -p apps/backend/tsconfig.json
+      - name: Run backend unit tests independently
+        run: npm test --workspace @elova/backend
+      - name: Build backend native artifact independently
+        run: npm run build --workspace @elova/backend
+
+  contract-drift:
+    name: Contract compatibility and generated-client drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Verify frozen contract and fixtures
+        run: node --test tests/integration/contract.test.mjs
+      - name: Regenerate the accepted API client
+        run: npm run generate --workspace @elova/api-contract
+      - name: Reject generated contract or client drift
+        run: git diff --exit-code -- packages/api-contract
+
+  postgres-integration:
+    name: PostgreSQL migrations, native services, and BFF compatibility
+    runs-on: ubuntu-latest
+    needs: [frontend-quality, backend-quality, contract-drift, native-operations]
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: elova_test
+          POSTGRES_PASSWORD: elova_test_password
+          POSTGRES_DB: elova_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U elova_test -d elova_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://elova_test:elova_test_password@127.0.0.1:5432/elova_test
+      ELOVA_BUILD_ID: ${{ github.sha }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Package install-free native artifacts
+        run: npm run package:native -- "$RUNNER_TEMP/elova-native"
+        env:
+          ELOVA_BACKEND_URL: http://100.100.10.20:3001
+      - name: Verify native packaging removes stale output
+        run: |
+          printf 'stale backend output\n' > apps/backend/dist/src/stale-output.js
+          printf 'stale frontend output\n' > apps/frontend/.next/static/stale-output.txt
+          npm run package:native -- "$RUNNER_TEMP/elova-native-repeat"
+          tar -tzf "$RUNNER_TEMP/elova-native-repeat/elova-backend.tgz" > "$RUNNER_TEMP/elova-backend-files.txt"
+          tar -tzf "$RUNNER_TEMP/elova-native-repeat/elova-frontend.tgz" > "$RUNNER_TEMP/elova-frontend-files.txt"
+          if grep -Fq stale-output "$RUNNER_TEMP/elova-backend-files.txt"; then exit 1; fi
+          if grep -Fq stale-output "$RUNNER_TEMP/elova-frontend-files.txt"; then exit 1; fi
+        env:
+          ELOVA_BACKEND_URL: http://100.100.10.20:3001
+      - name: Verify artifacts satisfy the release-helper contract
+        run: |
+          ops/bin/elova-native-release stage --service backend \
+            --artifact "$RUNNER_TEMP/elova-native/elova-backend.tgz" \
+            --sha256-file "$RUNNER_TEMP/elova-native/elova-backend.tgz.sha256" \
+            --release "$GITHUB_SHA" --dry-run
+          ops/bin/elova-native-release stage --service frontend \
+            --artifact "$RUNNER_TEMP/elova-native/elova-frontend.tgz" \
+            --sha256-file "$RUNNER_TEMP/elova-native/elova-frontend.tgz.sha256" \
+            --release "$GITHUB_SHA" --dry-run
+      - name: Verify baseline migration and advisory locking
+        run: node --test tests/integration/postgres.test.mjs
+      - name: Verify startup, readiness, BFF failures, leakage, and shutdown from staged artifacts
+        run: node --test tests/integration/native-services.test.mjs
+        env:
+          ELOVA_NATIVE_ARTIFACT_DIR: ${{ runner.temp }}/elova-native
+
+  security:
+    name: Dependency and repository secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Scan production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Scan tracked files for committed secrets
+        uses: trufflesecurity/trufflehog@64d939a56362f519781c53ea09b27f8d1dc0140a
+        with:
+          version: 3.97.6@sha256:cc1a591e83fec7bf56f64c15beaaa5d8e3d179a4165a03a087d07165296ef7df
+          # Synthetic PostgreSQL URLs in older commits of these two test files
+          # cause unverified findings; scan their current contents separately.
+          extra_args: --results=verified,unknown --exclude-paths .github/trufflehog-historical-fixtures.txt
+      - name: Scan current test fixtures for secrets
+        run: |
+          docker run --rm \
+            -v "$PWD/apps/backend/test/config.test.ts:/fixtures/config.test.ts:ro" \
+            -v "$PWD/ops/tests/test-native-release.sh:/fixtures/test-native-release.sh:ro" \
+            ghcr.io/trufflesecurity/trufflehog:3.97.6@sha256:cc1a591e83fec7bf56f64c15beaaa5d8e3d179a4165a03a087d07165296ef7df \
+            filesystem /fixtures --fail --no-update --github-actions --results=verified,unknown
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    needs: [native-operations, frontend-quality, backend-quality, contract-drift, postgres-integration, security]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Verify generated API client is current
+        run: |
+          npm run generate
+          git diff --exit-code -- packages/api-contract
+      - name: Run complete repository validation
+        run: |
+          npm run lint
+          npm test
+          npm run build
+        env:
+          ELOVA_BACKEND_URL: http://100.100.10.20:3001

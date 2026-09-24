@@ -1,45 +1,31 @@
 {
-  "name": "elova",
+  "name": "elova-vnext",
   "version": "0.3.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "test:local": "./scripts/test-local.sh",
-    "lint": "eslint",
-    "release": "./scripts/release.sh"
+  "engines": {
+    "node": ">=20"
   },
-  "dependencies": {
-    "@headlessui/react": "^2.2.9",
-    "@heroicons/react": "^2.2.0",
-    "clsx": "^2.1.1",
-    "cronstrue": "^3.9.0",
-    "framer-motion": "^12.23.24",
-    "motion": "^12.23.24",
-    "next": "15.5.4",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "recharts": "^3.2.1",
-    "sqlite3": "^5.1.7",
-    "uuid": "^13.0.0",
-    "zod": "^4.1.12"
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "npm run build --workspace @elova/backend",
+    "build:frontend": "npm run build --workspace @elova/frontend",
+    "generate": "npm run generate --workspace @elova/api-contract",
+    "lint": "eslint apps/backend/src apps/backend/test apps/frontend tests/integration",
+    "package:native": "ops/bin/elova-package-native",
+    "test": "npm run test:backend && npm run test:frontend && node --test tests/integration/contract.test.mjs",
+    "test:backend": "npm run test --workspace @elova/backend",
+    "test:frontend": "npm run test --workspace @elova/frontend"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@types/uuid": "^10.0.0",
-    "eslint": "^9",
-    "eslint-config-next": "15.5.4",
-    "tailwindcss": "^4",
-    "typescript": "^5"
-  },
-  "overrides": {
-    "sqlite3": {
-      "node-gyp": "^10.0.0"
-    }
+    "@apidevtools/swagger-parser": "^12.1.0",
+    "@eslint/eslintrc": "^3.3.1",
+    "eslint": "^9.36.0",
+    "eslint-config-next": "16.3.6",
+    "js-yaml": "^4.2.0",
+    "typescript": "^5.9.2"
   }
 }

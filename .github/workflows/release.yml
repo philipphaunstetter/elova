@@ -139,12 +139,9 @@ jobs:
           "✅ **Release ${{ steps.version.outputs.tag }} Published**
           
           - GitHub Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }}
-          - Docker Images:
-            - \`newflowio/elova:latest\`
-            - \`newflowio/elova:${{ steps.version.outputs.tag }}\`
           - Changes synced back to \`staging\`
           
-          The CI/CD pipeline will now build and publish the Docker images."
+          Native service artifacts are built and deployed only through the separately authorized operations process."
 
   cleanup-release-branch:
     name: Delete release branch
