@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { BffFailure } from "@elova/api-client";
+import type { BffFailure } from "@elova/api-contract";
 import { getBackendOrigin, getPrivateEndpointTokens } from "./backend-config";
 
 const REQUEST_TIMEOUT_MS = 10_000;

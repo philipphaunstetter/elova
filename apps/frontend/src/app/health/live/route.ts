@@ -1,4 +1,4 @@
-import type { Liveness } from "@elova/api-client";
+import type { Liveness } from "@elova/api-contract";
 
 export const dynamic = "force-dynamic";
 

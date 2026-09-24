@@ -1,112 +1,34 @@
-# Elova - Workflow Observability for n8n
+# Elova vNext
 
-Monitor and analyze your n8n workflows with clear dashboards and reliable sync.
+Elova is being separated into independently built native services:
 
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker)](./QUICK_START.md)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
-[![n8n](https://img.shields.io/badge/n8n-Compatible-FF6D5A?logo=n8n)](https://n8n.io)
+- `apps/frontend` — the public VPS Next.js frontend and same-origin BFF;
+- `apps/backend` — the private GX10 API and PostgreSQL migration boundary;
+- `packages/api-contract` — the canonical OpenAPI contract, fixtures, and generated client;
+- `ops` — reviewed systemd templates and guarded runbook material only.
 
-## Quick Start (3 steps)
+Browsers call only the public frontend at `/api/v1/*`. Server-only BFF code uses `ELOVA_BACKEND_URL` to reach the private backend over the Tailnet. The browser bundle and responses must never contain that private origin. PostgreSQL access and `DATABASE_URL` belong only to the backend.
 
-1) Create or reuse docker-compose.yml
+## Local verification
 
-See the example in this repo: [docker-compose.yml](./docker-compose.yml)
-
-Or copy this minimal setup:
-
-```yaml
-version: '3.8'
-services:
-  elova:
-    image: ghcr.io/philipphaunstetter/n8n-analytics:latest
-    container_name: elova
-    restart: always
-    ports:
-      - "3000:3000" # change the first port if needed (e.g. 8080:3000)
-    environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - GENERIC_TIMEZONE=UTC
-      - TZ=UTC
-    volumes:
-      - elova_data:/app/data
-
-volumes:
-  elova_data:
-```
-
-2) Start Elova
+Node.js 20 or newer is required.
 
 ```bash
-docker compose up -d
+npm ci
+npm run generate
+npm run lint
+npm test
+ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run build
 ```
 
-3) Complete setup
+The example Tailnet address is build-time test input only; no network call is made during the frontend build. PostgreSQL integration and native startup tests run in CI with an ephemeral database.
 
-Open http://localhost:3000 and complete the setup wizard:
-- Enter your n8n URL and API key
-- Set your timezone
-- Optionally enable demo mode
+## Operations
 
-All configuration is stored in the application database—no .env is required for n8n credentials.
+Read [`ops/docs/native-services-runbook.md`](ops/docs/native-services-runbook.md) before considering any host work. Repository templates do not install, deploy, migrate, start, or restart anything by themselves. Host, Tailnet, PostgreSQL, n8n, credential, and deployment changes require separate authority.
 
-### Port configuration
+The legacy public Docker image remains externally available and untouched. vNext has no container build or image-publication path; retirement of the external legacy artifact is a separate decision.
 
-Change the host port by editing the `ports` map:
+## Scope of this foundation
 
-```yaml
-ports:
-  - "8080:3000"  # Access via http://localhost:8080
-```
-
-## Features
-
-- Real-time dashboard and key metrics
-- Execution history with modes and statuses
-- Workflow inventory (active/inactive/archived)
-- Robust sync engine with safe startup behavior
-- Container-first, SQLite by default
-
-## Documentation
-
-- [Quick Start](./QUICK_START.md)
-- [Docker Installation](./docs/DOCKER_INSTALLATION.md)
-- [Compose Variants](./docs/DOCKER_COMPOSE_FILES.md)
-- [Volume Persistence Notes](./docs/DOCKER_VOLUME_FIX.md)
-
-## Managing the container
-
-```bash
-# Status
-docker compose ps
-
-# Logs
-docker compose logs -f elova
-
-# Update to latest
-docker compose pull && docker compose up -d
-
-# Stop
-docker compose down
-```
-
-## Common issues
-
-Port already in use:
-
-```yaml
-ports:
-  - "3001:3000"
-```
-
-n8n connection:
-- Ensure the n8n API is enabled and reachable
-- Verify the API key is correct
-
-## Contributing
-
-We welcome contributions! Please see CONTRIBUTING.md.
-
-## License
-
-MIT License - see [LICENSE](./LICENSE).
+This slice establishes service separation, the private API/BFF boundary, native health/readiness, a minimum ordered PostgreSQL migration seam, and validation evidence. Workspace, governance/Jev, scoring, multi-user flows, content sanitization, and legacy product/data migration remain deferred.

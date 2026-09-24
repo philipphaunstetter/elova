@@ -1,7 +1,7 @@
 import "server-only";
 
-import { getReadiness, type Readiness } from "@elova/api-client";
-import { createClient } from "@elova/api-client/client";
+import { getReadiness, type Readiness } from "@elova/api-contract";
+import { createClient } from "@elova/api-contract/client";
 import { getBackendOrigin } from "./backend-config";
 
 const HEALTH_TIMEOUT_MS = 3_000;

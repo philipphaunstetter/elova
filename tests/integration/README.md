@@ -10,6 +10,6 @@ These tests exercise the frozen frontend/BFF/backend seam without publishing an 
 
 The workflow uses only synthetic local test values. `DATABASE_URL` is additionally constrained by the PostgreSQL test to the local `elova_test` database.
 
-## Integration-owner checkpoint
+## Generated-contract checkpoint
 
-The frozen baseline does not yet define API-client generation. Before combining this slice, `@elova/api-contract` must provide a deterministic `generate` script and commit its generated client/types. CI reruns that script and rejects any diff under `packages/api-contract`.
+`@elova/api-contract` owns the OpenAPI source and committed generated client/types. CI reruns its deterministic `generate` script and rejects any diff under `packages/api-contract`.
