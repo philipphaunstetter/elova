@@ -152,37 +152,69 @@ The helper invokes only `elova-backend-migrate@<release>.service`, waits for suc
 
 ### 3a. Bootstrap the sole owner separately
 
-Only after migration and separate authorization, an operator on GX10 may run the packaged backend command once. An operator shell does not automatically inherit the backend unit's environment file, and running plain `npm run bootstrap-owner` from a root shell is **not** the service-user procedure. Create a **root-owned mode 0600 file on tmpfs** (for example `/run/elova/operator-bootstrap/owner.env`, with parent directory mode 0700), copy the protected `/etc/elova/backend.env` into it, then supply `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD` via a separately approved secret handoff into that same file; use systemd `EnvironmentFile=` syntax. Do not put the password in shell history, process arguments, the persistent `/etc/elova/backend.env`, logs, tickets, or a disk-backed editor swap file. Do not use `sudoedit` if its temporary copy could be disk-backed. Confirm the transient file has only the four backend keys and those three bootstrap keys with the approved values; never reuse it.
+Only after migration and separate authorization, an operator on GX10 may run the packaged backend command once. An operator shell does not automatically inherit the backend unit's environment file, and running plain `npm run bootstrap-owner` from a root shell is **not** the service-user procedure. Prepare a **root-owned mode 0600 file on tmpfs** in a unique mode 0700 directory under `/run/elova/operator-bootstrap/`, copying the protected `/etc/elova/backend.env` into it. Supply `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD` via a separately approved secret handoff into that same file; use systemd `EnvironmentFile=` syntax. Do not put the password in shell history, process arguments, the persistent `/etc/elova/backend.env`, logs, tickets, or a disk-backed editor swap file. Do not use `sudoedit` if its temporary copy could be disk-backed. Confirm the transient file has only the four backend keys and those three bootstrap keys with the approved values; never reuse it.
 
-In the **same operator shell**, install the cleanup trap before creating the protected tmpfs copy (these commands do not supply bootstrap values). Stop if a file already exists: investigate any prior attempt before replacing it. Use the approved handoff to append the three bootstrap keys, then run as the unprivileged backend user (systemd reads the file before dropping privileges):
+In one **operator Bash shell**, execute this preparation step on GX10. It refuses stale entries from a previous attempt; investigate them and check owner state before another attempt. The cleanup trap is installed before the password file is created. Preparation does not supply bootstrap values:
 
-```sh
-bootstrap_file=/run/elova/operator-bootstrap/owner.env
-if sudo install -d -o root -g root -m 0700 /run/elova/operator-bootstrap &&
-   sudo test ! -e "$bootstrap_file" && sudo test ! -L "$bootstrap_file"; then
-  trap 'sudo rm -f -- "$bootstrap_file"' EXIT
+```bash
+prepare_owner_bootstrap() {
+  if [[ -n ${bootstrap_file:-} ]]; then
+    echo 'Bootstrap preparation already attempted in this shell; inspect and exit' >&2
+    return 1
+  fi
+  sudo install -d -o root -g root -m 0700 /run/elova/operator-bootstrap || return 1
+  local existing directory
+  existing=$(sudo find /run/elova/operator-bootstrap -mindepth 1 -maxdepth 1 -print -quit) || return 1
+  if [[ -n $existing ]]; then
+    echo 'Previous bootstrap files exist; inspect owner state and clean up before retrying' >&2
+    return 1
+  fi
+  directory=$(sudo mktemp -d /run/elova/operator-bootstrap/owner.XXXXXXXXXX) || return 1
+  bootstrap_file=$directory/owner.env
+  trap 'sudo rm -f -- "$bootstrap_file"; sudo rmdir -- "${bootstrap_file%/*}"' EXIT
   trap 'exit 129' HUP
   trap 'exit 130' INT
   trap 'exit 143' TERM
-  sudo install -o root -g root -m 0600 /etc/elova/backend.env "$bootstrap_file"
-  # STOP: securely append the three bootstrap values before running the next command.
-  bootstrap_status=0
-  sudo systemd-run --wait --collect --uid=elova-backend --gid=elova-backend \
-    --working-directory="/opt/elova/backend/releases/$release" \
-    --property=EnvironmentFile=/run/elova/operator-bootstrap/owner.env \
-    /usr/bin/env npm run bootstrap-owner || bootstrap_status=$?
-  sudo rm -f -- "$bootstrap_file" && trap - EXIT HUP INT TERM
-  if [ "$bootstrap_status" -ne 0 ]; then
-    echo 'Bootstrap outcome uncertain; inspect GX10 owner state before retrying' >&2
-    false
+  if ! sudo install -o root -g root -m 0600 /etc/elova/backend.env "$bootstrap_file"; then
+    echo 'Bootstrap preparation failed; exit and inspect the transient directory' >&2
+    return 1
   fi
-else
-  echo 'Bootstrap file exists or tmpfs directory is unavailable: inspect before retrying' >&2
-  false
-fi
+  bootstrap_prepared=1
+}
+prepare_owner_bootstrap
 ```
 
-Treat a nonzero exit or missing success acknowledgement as uncertain; remove the transient file even if the command fails, then check the owner count on GX10 before considering a retry. If the shell or `systemd-run --wait` is interrupted, verify the transient file is gone (`sudo rm -f -- /run/elova/operator-bootstrap/owner.env` if it remains), inspect the transient unit outcome and GX10 owner state, and only then consider a retry. A trap cannot handle a killed shell, a lost machine, or a failed removal, so manually check the tmpfs path after any interrupted session. The command takes a PostgreSQL transaction lock and commits exactly one owner. A failure before commitment is retryable; every call after commitment fails closed. If acknowledgement is uncertain, check PostgreSQL for an existing owner before retrying; do not assume no credentials were written. There is no web bootstrap or public signup. This runbook does not authorize executing the command, and the repository change performs no live bootstrap.
+**Stop here.** In that shell, check `bootstrap_prepared` is `1` and `bootstrap_file` names the newly created tmpfs file. Using the approved handoff, securely append the three bootstrap values to that file, verify them without printing secrets, and only then execute the separate invocation step below **in the same shell**. Never paste the invocation together with preparation or continue after a failed preparation. Systemd reads the environment file before dropping privileges to the backend user:
+
+```bash
+run_owner_bootstrap() {
+  if [[ ${bootstrap_prepared:-} != 1 || -z ${bootstrap_file:-} ]] ||
+     ! sudo test -f "$bootstrap_file" || sudo test -L "$bootstrap_file"; then
+    bootstrap_prepared=0
+    echo 'No valid preparation in this shell; do not run bootstrap' >&2
+    return 1
+  fi
+  bootstrap_prepared=0
+  local bootstrap_status=0
+  sudo systemd-run --wait --collect --uid=elova-backend --gid=elova-backend \
+    --working-directory="/opt/elova/backend/releases/$release" \
+    --property="EnvironmentFile=$bootstrap_file" \
+    /usr/bin/env npm run bootstrap-owner || bootstrap_status=$?
+  if ! sudo rm -f -- "$bootstrap_file" || ! sudo rmdir -- "${bootstrap_file%/*}"; then
+    echo 'Bootstrap cleanup failed; inspect the tmpfs directory before retrying' >&2
+    return 1
+  fi
+  trap - EXIT HUP INT TERM
+  unset bootstrap_file bootstrap_prepared
+  if (( bootstrap_status != 0 )); then
+    echo 'Bootstrap outcome uncertain; inspect GX10 owner state before retrying' >&2
+    return 1
+  fi
+}
+run_owner_bootstrap
+```
+
+Treat a nonzero exit or missing success acknowledgement as uncertain; remove the transient file even if the command fails, then check the owner count on GX10 before considering a retry. If the shell or `systemd-run --wait` is interrupted, verify the transient directory is gone; if it remains, remove only that attempt's file and directory after inspecting the transient unit outcome and GX10 owner state. A trap cannot handle a killed shell, a lost machine, or a failed removal, so manually inspect `/run/elova/operator-bootstrap/` after any interrupted session. The command takes a PostgreSQL transaction lock and commits exactly one owner. A failure before commitment is retryable; every call after commitment fails closed. If acknowledgement is uncertain, check PostgreSQL for an existing owner before retrying; do not assume no credentials were written. There is no web bootstrap or public signup. This runbook does not authorize executing the command, and the repository change performs no live bootstrap.
 
 There is deliberately **no down/destructive migration procedure**. If a forward migration fails, stop, preserve logs, leave the current release running, and escalate to the database/release owner. Restore or corrective-forward-migration decisions require separate authorization. Backend symlink rollback is prohibited whenever the current and retained releases have different migration counts, including additive changes. Exact-count readiness remains fail-closed; recovery across that boundary requires a forward fix.
 
