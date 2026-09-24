@@ -143,7 +143,7 @@ cd "/opt/elova/backend/releases/$release"
 npm run bootstrap-owner
 ```
 
-The command takes a PostgreSQL transaction lock and commits exactly one owner. A failure before commitment is retryable; every call after commitment fails closed. There is no web bootstrap or public signup. This runbook does not authorize executing the command, and the repository change performs no live bootstrap.
+The command takes a PostgreSQL transaction lock and commits exactly one owner. A failure before commitment is retryable; every call after commitment fails closed. If the command fails and commit acknowledgement is uncertain, check PostgreSQL for an existing owner before retrying; do not assume no credentials were written. There is no web bootstrap or public signup. This runbook does not authorize executing the command, and the repository change performs no live bootstrap.
 
 There is deliberately **no down/destructive migration procedure**. If a forward migration fails, stop, preserve logs, leave the current release running, and escalate to the database/release owner. Restore or corrective-forward-migration decisions require separate authorization. Backend symlink rollback is prohibited whenever the current and retained releases have different migration counts, including additive changes. Exact-count readiness remains fail-closed; recovery across that boundary requires a forward fix.
 

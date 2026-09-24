@@ -43,7 +43,7 @@ async function main(): Promise<void> {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   void main().catch(() => {
-    process.stderr.write('Initial owner bootstrap failed. No credentials were written.\n')
+    process.stderr.write('Initial owner bootstrap failed; commit outcome may be unknown. Check PostgreSQL for an existing owner before retrying.\n')
     process.exitCode = 1
   })
 }

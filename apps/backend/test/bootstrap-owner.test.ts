@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
 import { bootstrapOwner } from '../src/bootstrap-owner.js'
 import { OwnerAlreadyExistsError, type Owner, type PostgresRepository } from '../src/repository.js'
 import { verifyPassword } from '../src/security.js'
@@ -29,4 +31,21 @@ test('operator bootstrap refuses permanently after repository commitment', async
     bootstrapOwner(repository, { email: 'owner@example.test', displayName: 'Owner', password: 'correct horse battery staple' }),
     OwnerAlreadyExistsError,
   )
+})
+
+test('bootstrap command never claims an owner was absent after a failed attempt', () => {
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL('../src/bootstrap-owner.js', import.meta.url))], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      DATABASE_URL: 'invalid-database-url',
+      ELOVA_BOOTSTRAP_EMAIL: 'owner@example.test',
+      ELOVA_BOOTSTRAP_NAME: 'Owner',
+      ELOVA_BOOTSTRAP_PASSWORD: 'synthetic test password',
+    },
+  })
+  assert.equal(result.status, 1)
+  assert.match(result.stderr, /commit outcome may be unknown/i)
+  assert.match(result.stderr, /check PostgreSQL for an existing owner before retrying/i)
+  assert.equal(result.stdout, '')
 })
