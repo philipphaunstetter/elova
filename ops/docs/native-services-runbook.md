@@ -38,8 +38,9 @@ Do not continue until every applicable item is true. The helper's `preflight` re
 
 - PostgreSQL already exists on GX10, is backed up, and accepts the backend only through a same-host Unix socket or TCP loopback. Remote database hosts are rejected; TLS is not mandatory for these same-host transports. Database provisioning, roles, grants, socket/listener policy, backup policy, and credentials are outside this slice.
 - `DATABASE_URL` references the intended production database and least-privilege runtime/migration role chosen by the operator, with either an explicit loopback host or an absolute Unix-socket `host` query parameter. It appears only in `/etc/elova/backend.env`; frontend preflight rejects any definition in `/etc/elova/frontend.env`, and it must never enter a frontend artifact, journal, command line, or log.
+- `ELOVA_SESSION_SECRET` and `ELOVA_CREDENTIAL_KEY` are independent, base64-encoded 32-byte values delivered out of band. They appear only in the protected backend environment. Losing either requires an explicit session or credential recovery decision; never rotate them casually.
 - Ordered forward migrations for the release have been reviewed and tested against a restored backup. A migration-count change is an irreversible application-release boundary: the retained backend cannot be restored, and recovery requires a forward fix.
-- Any n8n endpoints and credentials needed by the backend already exist and are added to the backend environment file only. This change performs no n8n action.
+- n8n origins and credentials are entered only after owner login in authenticated settings. Origins are immutable provider identities; a different n8n instance requires a separate connection so prior histories are never mixed or deleted.
 
 ## Release artifact contract
 
@@ -132,6 +133,17 @@ sudo "$helper" migrate --service backend --release "$release" --apply
 ```
 
 The helper invokes only `elova-backend-migrate@<release>.service`, waits for success, and writes the verified staged-artifact digest into a release-specific success marker outside the artifact. A release identity with an existing migration record cannot be staged again, and activation refuses a missing or artifact-mismatched marker. It does **not** activate or restart the API. The API unit runs only `npm start`; it never invokes migration implicitly.
+
+### 3a. Bootstrap the sole owner separately
+
+Only after migration and separate authorization, an operator on GX10 may run the packaged backend command once with `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD` supplied through a protected transient environment. Do not put the bootstrap password in shell history, process arguments, the persistent environment file, logs, or tickets.
+
+```sh
+cd "/opt/elova/backend/releases/$release"
+npm run bootstrap-owner
+```
+
+The command takes a PostgreSQL transaction lock and commits exactly one owner. A failure before commitment is retryable; every call after commitment fails closed. There is no web bootstrap or public signup. This runbook does not authorize executing the command, and the repository change performs no live bootstrap.
 
 There is deliberately **no down/destructive migration procedure**. If a forward migration fails, stop, preserve logs, leave the current release running, and escalate to the database/release owner. Restore or corrective-forward-migration decisions require separate authorization. Backend symlink rollback is prohibited whenever the current and retained releases have different migration counts, including additive changes. Exact-count readiness remains fail-closed; recovery across that boundary requires a forward fix.
 

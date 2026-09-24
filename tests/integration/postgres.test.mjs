@@ -10,11 +10,15 @@ const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url))
 const backendRoot = join(repositoryRoot, 'apps/backend')
 const migrationsModulePath = join(backendRoot, 'dist/src/migrations.js')
 const databaseModulePath = join(backendRoot, 'dist/src/database.js')
+const repositoryModulePath = join(backendRoot, 'dist/src/repository.js')
+const bootstrapModulePath = join(backendRoot, 'dist/src/bootstrap-owner.js')
 const requireFromBackend = createRequire(join(backendRoot, 'package.json'))
 const { Pool } = requireFromBackend('pg')
 const { applyMigrations, loadMigrations, migrationsAreCompatible } =
   await import(pathToFileURL(migrationsModulePath).href)
 const { PostgresGateway } = await import(pathToFileURL(databaseModulePath).href)
+const { PostgresRepository, OwnerAlreadyExistsError } = await import(pathToFileURL(repositoryModulePath).href)
+const { bootstrapOwner } = await import(pathToFileURL(bootstrapModulePath).href)
 
 const databaseUrl = process.env.DATABASE_URL
 assert.ok(
@@ -76,9 +80,9 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
     join(backendRoot, 'migrations'),
   )
   assert.deepEqual(
-    baselineMigrations,
-    [],
-    'the separation foundation must not create product schema',
+    baselineMigrations.map((migration) => migration.name),
+    ['0001_postgres_authority.sql'],
+    'vNext must create its complete PostgreSQL authority through one ordered baseline',
   )
 
   await Promise.all([
@@ -89,13 +93,40 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
   const history = await pool.query(
     'SELECT name, checksum FROM schema_migrations ORDER BY name',
   )
-  assert.deepEqual(history.rows, [])
+  assert.deepEqual(history.rows, baselineMigrations.map(({ name, checksum }) => ({ name, checksum })))
   assert.equal(await migrationsAreCompatible(pool, baselineMigrations), true)
 
-  const migrationTable = await pool.query(
-    "SELECT to_regclass('public.schema_migrations') AS table_name",
+  const tables = await pool.query(
+    `SELECT table_name FROM information_schema.tables
+     WHERE table_schema = 'public' ORDER BY table_name`,
   )
-  assert.equal(migrationTable.rows[0]?.table_name, 'schema_migrations')
+  assert.deepEqual(tables.rows.map((row) => row.table_name), [
+    'executions', 'n8n_providers', 'owners', 'schema_migrations', 'sessions',
+    'sync_cursors', 'sync_runs', 'workflows',
+  ])
+  const privacyConstraints = await pool.query(
+    `SELECT table_name, column_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND column_name IN ('privacy_mode', 'sanitizer_version', 'content_digest')
+     ORDER BY table_name, column_name`,
+  )
+  assert.equal(privacyConstraints.rowCount, 6, 'workflow and execution evidence records privacy metadata')
+
+  const repository = new PostgresRepository(pool)
+  const owner = await bootstrapOwner(repository, {
+    email: 'owner@example.test',
+    displayName: 'Initial Owner',
+    password: 'correct horse battery staple',
+  })
+  assert.equal(owner.email, 'owner@example.test')
+  await assert.rejects(
+    bootstrapOwner(repository, {
+      email: 'other@example.test',
+      displayName: 'Other Owner',
+      password: 'another correct battery staple',
+    }),
+    OwnerAlreadyExistsError,
+    'operator bootstrap closes permanently after the atomic owner commit',
+  )
 
   await pool.query(
     "INSERT INTO schema_migrations (name, checksum) VALUES ('0001_future.sql', repeat('1', 64))",

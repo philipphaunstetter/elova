@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Elova private backend API
-  version: 1.0.0
-  description: Canonical contract between the public VPS BFF and the private GX10 backend.
+  version: 1.1.0
+  description: Canonical contract between the public VPS BFF and the private GX10 PostgreSQL-backed service.
 servers:
   - url: /v1
     description: Relative server URL; private deployment origins are never contract data.
@@ -10,89 +10,259 @@ paths:
   /health/live:
     get:
       operationId: getLiveness
-      summary: Report process liveness
       security: []
       responses:
-        "200":
-          description: The backend process can serve requests.
-          headers:
-            X-Elova-Api-Version:
-              $ref: "#/components/headers/ApiVersion"
-            X-Request-Id:
-              $ref: "#/components/headers/RequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Liveness"
+        "200": { $ref: "#/components/responses/LivenessResponse" }
   /health/ready:
     get:
       operationId: getReadiness
-      summary: Report PostgreSQL and migration readiness
       security: []
       responses:
+        "200": { $ref: "#/components/responses/ReadinessResponse" }
+        "503": { $ref: "#/components/responses/ReadinessResponse" }
+  /auth/login:
+    post:
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, maxLength: 320 }
+                password: { type: string, minLength: 12, maxLength: 256 }
+      responses:
         "200":
-          description: The backend is ready to receive application traffic.
+          description: Signed owner session established.
           headers:
-            X-Elova-Api-Version:
-              $ref: "#/components/headers/ApiVersion"
-            X-Request-Id:
-              $ref: "#/components/headers/RequestId"
+            Set-Cookie: { schema: { type: string } }
+            X-Elova-Api-Version: { $ref: "#/components/headers/ApiVersion" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "400": { $ref: "#/components/responses/ErrorResponse" }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+        "429": { $ref: "#/components/responses/ErrorResponse" }
+  /auth/logout:
+    post:
+      operationId: logout
+      responses:
+        "204": { description: Session revoked. }
+  /auth/session:
+    get:
+      operationId: getSession
+      responses:
+        "200":
+          description: Current signed owner session.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+  /providers:
+    get:
+      operationId: listProviders
+      responses:
+        "200":
+          description: Immutable n8n provider identities.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Readiness"
-        "503":
-          description: A required backend dependency or schema is not ready.
-          headers:
-            X-Elova-Api-Version:
-              $ref: "#/components/headers/ApiVersion"
-            X-Request-Id:
-              $ref: "#/components/headers/RequestId"
+                type: object
+                required: [providers]
+                properties:
+                  providers:
+                    type: array
+                    items: { $ref: "#/components/schemas/Provider" }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+    post:
+      operationId: createProvider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, baseUrl, apiKey]
+              properties:
+                name: { type: string, maxLength: 120 }
+                baseUrl: { type: string, format: uri, maxLength: 2048 }
+                apiKey: { type: string, maxLength: 4096 }
+      responses:
+        "201":
+          description: Provider connection created with encrypted credentials.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Readiness"
+                type: object
+                required: [provider]
+                properties:
+                  provider: { $ref: "#/components/schemas/Provider" }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+        "409": { $ref: "#/components/responses/ErrorResponse" }
+        "422": { $ref: "#/components/responses/ErrorResponse" }
+  /providers/{providerId}/sync:
+    post:
+      operationId: synchronizeProvider
+      parameters:
+        - name: providerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Sanitized workflow and execution evidence synchronized.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workflows, executions]
+                properties:
+                  workflows: { type: integer, minimum: 0 }
+                  executions: { type: integer, minimum: 0 }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+        "404": { $ref: "#/components/responses/ErrorResponse" }
+        "502": { $ref: "#/components/responses/ErrorResponse" }
+  /workflows:
+    get:
+      operationId: listWorkflows
+      responses:
+        "200":
+          description: Sanitized workflow summaries.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+  /executions:
+    get:
+      operationId: listExecutions
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 200 }
+      responses:
+        "200":
+          description: Sanitized execution summaries.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+  /dashboard/metrics:
+    get:
+      operationId: getDashboardMetrics
+      responses:
+        "200":
+          description: Execution outcome metrics from PostgreSQL.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardMetrics" }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
 components:
+  securitySchemes:
+    ownerSession:
+      type: apiKey
+      in: cookie
+      name: elova_session
   headers:
     ApiVersion:
       description: Major private API contract version.
-      schema:
-        type: string
-        const: "1"
+      schema: { type: string, const: "1" }
     RequestId:
       description: Opaque correlation identifier; contains no endpoint or secret material.
-      schema:
-        type: string
-        minLength: 1
-        maxLength: 128
+      schema: { type: string, minLength: 1, maxLength: 128 }
+  responses:
+    LivenessResponse:
+      description: The backend process can serve requests.
+      headers:
+        X-Elova-Api-Version: { $ref: "#/components/headers/ApiVersion" }
+        X-Request-Id: { $ref: "#/components/headers/RequestId" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Liveness" }
+    ReadinessResponse:
+      description: PostgreSQL and ordered migrations readiness.
+      headers:
+        X-Elova-Api-Version: { $ref: "#/components/headers/ApiVersion" }
+        X-Request-Id: { $ref: "#/components/headers/RequestId" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Readiness" }
+    ErrorResponse:
+      description: Stable non-sensitive error envelope.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
   schemas:
     Liveness:
       type: object
       additionalProperties: false
       required: [status]
       properties:
-        status:
-          type: string
-          const: live
+        status: { type: string, const: live }
     Readiness:
       type: object
       additionalProperties: false
       required: [status, checks]
       properties:
-        status:
-          type: string
-          enum: [ready, not_ready]
+        status: { type: string, enum: [ready, not_ready] }
         checks:
           type: object
           additionalProperties: false
           required: [database, migrations]
           properties:
-            database:
-              type: string
-              enum: [ready, not_ready]
-            migrations:
-              type: string
-              enum: [ready, not_ready]
+            database: { type: string, enum: [ready, not_ready] }
+            migrations: { type: string, enum: [ready, not_ready] }
+    Owner:
+      type: object
+      additionalProperties: false
+      required: [id, email, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+    Session:
+      type: object
+      additionalProperties: false
+      required: [user]
+      properties:
+        user: { $ref: "#/components/schemas/Owner" }
+    Provider:
+      type: object
+      additionalProperties: false
+      required: [id, name, baseUrl, status, createdAt, lastSyncedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        baseUrl: { type: string, format: uri }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastSyncedAt: { type: [string, "null"], format: date-time }
+    DashboardMetrics:
+      type: object
+      additionalProperties: false
+      required: [totalExecutions, successfulExecutions, failedExecutions, successRate, averageDurationMs]
+      properties:
+        totalExecutions: { type: integer, minimum: 0 }
+        successfulExecutions: { type: integer, minimum: 0 }
+        failedExecutions: { type: integer, minimum: 0 }
+        successRate: { type: [number, "null"], minimum: 0, maximum: 1 }
+        averageDurationMs: { type: [integer, "null"], minimum: 0 }
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code: { type: string, pattern: "^[A-Z][A-Z0-9_]{1,63}$" }
+            message: { type: string, minLength: 1, maxLength: 160 }
     BffFailure:
       type: object
       additionalProperties: false
@@ -103,11 +273,7 @@ components:
           additionalProperties: false
           required: [code, message]
           properties:
-            code:
-              type: string
-              enum: [BACKEND_UNAVAILABLE, BACKEND_TIMEOUT]
-            message:
-              type: string
-              enum:
-                - Service temporarily unavailable
-                - Service timed out
+            code: { type: string, enum: [BACKEND_UNAVAILABLE, BACKEND_TIMEOUT] }
+            message: { type: string, enum: [Service temporarily unavailable, Service timed out] }
+security:
+  - ownerSession: []

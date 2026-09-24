@@ -239,6 +239,8 @@ dns.promises.lookup = async function lookup(hostname, options = {}) {
   const backendEnvironment = {
     ...commonEnvironment,
     ELOVA_BACKEND_HOST: backendHost,
+    ELOVA_SESSION_SECRET: Buffer.alloc(32, 17).toString('base64'),
+    ELOVA_CREDENTIAL_KEY: Buffer.alloc(32, 23).toString('base64'),
     PORT: String(backendPort),
   }
   const frontendEnvironment = {

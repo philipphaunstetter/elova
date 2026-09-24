@@ -129,22 +129,34 @@ test("preserves known versioned backend client errors", async () => {
   assert.equal(response.headers.has("etag"), false);
 });
 
-test("rejects unversioned or malformed backend client errors", async () => {
-  for (const headers of [
-    new Headers({ "content-type": "application/json" }),
-    new Headers({ "content-type": "application/json", "x-elova-api-version": "1" }),
-  ]) {
-    const response = await proxyToBackend(
-      browserRequest("/api/v1/health/live", { method: "POST" }),
-      ["health", "live"],
-      async () => new Response(
-        JSON.stringify({ error: { code: "METHOD_NOT_ALLOWED", message: `${PRIVATE_URL} failed` } }),
-        { status: 405, headers },
-      ),
-    );
-    assert.equal(response.status, 502);
-    assert.equal((await response.text()).includes(PRIVATE_URL), false);
-  }
+test("requires a versioned, structurally safe backend client error", async () => {
+  const unversioned = await proxyToBackend(
+    browserRequest("/api/v1/health/live", { method: "POST" }),
+    ["health", "live"],
+    async () => Response.json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, { status: 405 }),
+  );
+  assert.equal(unversioned.status, 502);
+
+  const sanitized = await proxyToBackend(
+    browserRequest("/api/v1/health/live", { method: "POST" }),
+    ["health", "live"],
+    async () => new Response(
+      JSON.stringify({ error: { code: "METHOD_NOT_ALLOWED", message: `${PRIVATE_URL} failed` } }),
+      { status: 405, headers: { "content-type": "application/json", "x-elova-api-version": "1" } },
+    ),
+  );
+  assert.equal(sanitized.status, 405);
+  assert.equal((await sanitized.text()).includes(PRIVATE_URL), false);
+
+  const malformed = await proxyToBackend(
+    browserRequest("/api/v1/health/live", { method: "POST" }),
+    ["health", "live"],
+    async () => Response.json(
+      { error: { code: "lowercase-code", message: "unsafe" } },
+      { status: 405, headers: { "x-elova-api-version": "1" } },
+    ),
+  );
+  assert.equal(malformed.status, 502);
 });
 
 test("does not expose private redirect targets", async () => {

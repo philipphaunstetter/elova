@@ -1,64 +1,47 @@
-# vNext frontend/backend separation contract
-
-Status: **frozen for the first separation slice**. Changes require the integration owner and regeneration of accepted client artifacts.
+# vNext frontend/backend and PostgreSQL authority contract
 
 ## Repository ownership
 
 | Path | Owner | Boundary |
 | --- | --- | --- |
-| `apps/frontend/**` | frontend/BFF slice | Public VPS service. Browser UI and same-origin BFF only; no database, n8n, sync, or private-backend implementation. |
-| `apps/backend/**` | backend/integration slice | Private GX10 HTTP API, PostgreSQL access, migrations, synchronization, and jobs. No browser bundle. |
-| `packages/api-contract/**` | integration owner | Canonical OpenAPI source, fixtures, generated types/client, and compatibility checks. Generated files are never hand-edited. |
-| `ops/bin/**`, `ops/systemd/**`, `ops/docs/**` | native-operations slice | Native packaging, guarded release helper, systemd templates, and the [operations runbook](../../ops/docs/native-services-runbook.md). Host mutations require separate authority and an explicit `--apply` gate. |
-| `.github/workflows/ci.yml`, `tests/integration/**` | CI-evidence slice | Independent builds plus contract, browser-boundary, startup/health, failure, and leakage evidence. |
+| `apps/frontend/**` | public frontend/BFF | VPS UI and same-origin BFF only; no database, n8n credential, synchronization, sanitizer, or private-backend implementation. |
+| `apps/backend/**` | private backend | GX10 API, sole-owner identity/session authority, PostgreSQL migrations, encrypted n8n connections, synchronization, sanitization, and observability queries. |
+| `packages/api-contract/**` | integration owner | Canonical OpenAPI source and generated client. Generated files are never hand-edited. |
+| `ops/**` | native operations | Build-only packaging, guarded release tooling, systemd templates, and runbook. Host mutation remains separately authorized. |
+| `.github/workflows/ci.yml`, `tests/integration/**` | integration evidence | Independent builds, PostgreSQL schema, contract, BFF, startup/failure, sanitization, and protected `build` evidence. |
 
-Shared files (`package.json`, lockfile, TypeScript/lint configuration, this contract, and generated artifacts) are integration-owner reconciliation points. Workers must not independently redefine them.
-
-## Canonical names and request path
+## Network and configuration boundary
 
 - Browser-visible same-origin API base: `/api/v1`.
 - Private backend API base: `/v1`.
-- Frontend-only private origin variable: `ELOVA_BACKEND_URL` (required in production). It has no `NEXT_PUBLIC_` alias and must not be copied into HTML, JavaScript, source maps, error bodies, redirects, or proxied response headers.
-- Backend-only database variable: `DATABASE_URL` (required by backend runtime and migrations). It must never be accepted by or exposed from the frontend.
-- Frontend artifact/service: `@elova/frontend`, `elova-frontend.service`.
-- Backend artifact/service: `@elova/backend`, `elova-backend.service`.
-- Contract package: `@elova/api-contract`.
-- Frontend bind variables: `HOSTNAME` and `PORT` (production defaults are specified by the unit template, not application code).
-- Backend bind variables: `ELOVA_BACKEND_HOST` and `PORT` (the unit template must bind only the intended Tailnet address, never `0.0.0.0` by default).
+- `ELOVA_BACKEND_URL` exists only in the frontend server process and accepts a private Tailnet HTTP origin in production.
+- `DATABASE_URL`, `ELOVA_SESSION_SECRET`, and `ELOVA_CREDENTIAL_KEY` exist only in the GX10 backend environment. PostgreSQL accepts only same-host Unix-socket or loopback connections.
+- Browsers never receive or call GX10. Tailnet transport does not replace the signed owner session enforced by every product endpoint.
 
-The browser calls only `https://<public-vps>/api/v1/...`. The frontend server removes `/api` and calls `${ELOVA_BACKEND_URL}/v1/...` across the Tailnet. PostgreSQL is reachable only by the backend through a same-host GX10 Unix socket or loopback connection. Tailnet transport identity does not replace application authentication or workspace authorization.
+The BFF applies same-origin browser checks, one bounded request/response deadline, streaming byte limits, explicit request/response header allowlists, API-version validation, structured error validation, and private-origin redaction. It forwards signed session cookies but never database or credential configuration.
 
-## BFF behavior
+## PostgreSQL-only state boundary
 
-The BFF:
+PostgreSQL is the only active vNext application store. Ordered migration `0001_postgres_authority.sql` owns:
 
-1. constructs the private URL exclusively in server-only code;
-2. forwards method, body, cookies, `authorization`, `content-type`, `accept`, CSRF header, and request/correlation ID under explicit size and timeout limits;
-3. does not forward hop-by-hop headers or caller-supplied host/forwarding headers;
-4. returns only an allowlist of response headers (`content-type`, `cache-control`, `etag`, `set-cookie`, `x-request-id`, `retry-after`);
-5. never returns an upstream `Location`, stack, hostname, origin, or raw network error;
-6. preserves only known, versioned backend `400`, `404`, and `405` envelopes after structured sanitization;
-7. maps timeout to the stable `504` envelope and other upstream unavailability to the stable `502` envelope in `packages/api-contract/fixtures`.
+- the sole operator-created owner and revocable signed sessions;
+- immutable n8n provider identities and encrypted API credentials;
+- sanitized workflow definitions and node configuration;
+- sanitized execution history and outcome metadata;
+- synchronization cursors/runs and dashboard metrics.
 
-There is no browser CORS path to GX10. Production accepts only an HTTP `ELOVA_BACKEND_URL` using a Tailnet IP or fully qualified MagicDNS `.ts.net` name; local development may use HTTP loopback only under an explicit development environment.
+There is no SQLite dependency, runtime path, startup schema mutation, web first-owner claim, or public signup. The operator bootstrap command takes a PostgreSQL transaction lock, atomically creates one owner, permits retry only before commit, and refuses every later call.
 
-## Frozen API seam
+Provider origins cannot be replaced. A different n8n instance is represented by another provider so histories do not mix and no old workflow/execution record is migrated or deleted implicitly.
 
-`packages/api-contract/openapi.yaml` is authoritative. The first slice freezes:
+## Sanitization boundary
 
-- `GET /v1/health/live`: process liveness only;
-- `GET /v1/health/ready`: readiness, including PostgreSQL reachability and migration compatibility;
-- stable success and BFF-failure envelopes;
-- an `X-Elova-Api-Version: 1` compatibility header on backend responses.
+Raw workflow and execution responses are bounded to process memory while being transformed. The backend sanitizes both workflow-node configuration and execution content before every repository call. Stored records carry `privacy_mode=sanitized_only`, sanitizer version, and deterministic digest. Keys and values associated with headers, bodies, queries, credentials, tokens, personal values, binary data, and other non-structural content are redacted. A failed fetch, parse, or sanitization stores no raw fallback.
 
-No product endpoint is invented in this foundation. Existing v2 calls are converted behind the same-origin BFF as they are extracted; server-owned API/data/sync logic cannot remain in the frontend service.
+## Contract and validation
 
-## Integration checkpoints and serialization
+`packages/api-contract/openapi.yaml` is authoritative for health, login/session, providers, synchronization, workflows, executions, and metrics. The generated client is regenerated and checked for drift. The strict protected `build` job depends on native operations, frontend/backend validation, contract drift, PostgreSQL/native integration, and security scanning, then repeats full repository generation, lint, test, and build on the exact head.
 
-Main ancestry has been reconciled into the v2 base; the independent service and operations slices have been integrated. `packages/api-contract/openapi.yaml` remains the sole API source: regenerate its client from the final contract rather than editing generated files. [Native CI](../../.github/workflows/ci.yml) owns the independent build, contract-drift, migration, startup/readiness, BFF-boundary, and security evidence. The final reviewed head must be green, unchanged, in scope, and mergeable before the sole PR to `main` is merged.
+## Deferred scope
 
-Contract/schema changes, generated client output, root dependency/lockfile reconciliation, ordered PostgreSQL migrations, legacy data migration, and the final branch/PR/merge remain serialized integration-owner decisions. Host, Tailnet, PostgreSQL, n8n, registry, and public-image state are outside this slice.
-
-## Explicit deferrals
-
-Workspaces, organization/member flows, governance/Jev, scoring, execution/workflow sanitization modes, product redesign, and legacy-data migration are not part of this first separation slice. The service boundaries must leave seams for them, but no schema or UI for them is introduced here. The existing public Docker artifact is not changed or retired by this repository contract.
+Workspace/multi-user schema and flows, governance/Jev, scoring, legacy data migration or deletion, live owner bootstrap, live n8n synchronization, deployment, and external legacy Docker-image retirement remain outside this repository change. The current schema deliberately serves one owner-operated installation.

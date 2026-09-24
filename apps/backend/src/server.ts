@@ -1,8 +1,10 @@
 import { once } from 'node:events'
+import { ElovaApplication } from './application.js'
 import { loadConfig } from './config.js'
 import { PostgresGateway } from './database.js'
 import { createBackendServer } from './http-server.js'
 import { loadMigrations } from './migrations.js'
+import { PostgresRepository } from './repository.js'
 
 function listen(
   server: ReturnType<typeof createBackendServer>,
@@ -28,7 +30,9 @@ async function main(): Promise<void> {
   const config = loadConfig()
   const migrations = await loadMigrations(config.migrationsDirectory)
   const database = new PostgresGateway(config.databaseUrl, migrations)
-  const server = createBackendServer(database)
+  const repository = new PostgresRepository(database.pool)
+  const application = new ElovaApplication(repository, config.sessionSecret, config.credentialKey)
+  const server = createBackendServer(database, application)
   let shuttingDown = false
 
   const shutdown = async () => {

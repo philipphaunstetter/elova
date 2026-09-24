@@ -18,15 +18,22 @@ async function fixture(name) {
   )
 }
 
-test('the canonical private API is valid and exposes only health operations', async () => {
+test('the canonical private API is valid and owns PostgreSQL-backed product operations', async () => {
   await SwaggerParser.validate(fileURLToPath(openapiUrl))
 
   assert.equal(packageMetadata.name, '@elova/api-contract')
   assert.equal(openapi.openapi, '3.1.0')
   assert.deepEqual(openapi.servers.map((server) => server.url), ['/v1'])
-  assert.deepEqual(Object.keys(openapi.paths), ['/health/live', '/health/ready'])
+  assert.deepEqual(Object.keys(openapi.paths), [
+    '/health/live', '/health/ready', '/auth/login', '/auth/logout', '/auth/session',
+    '/providers', '/providers/{providerId}/sync', '/workflows', '/executions',
+    '/dashboard/metrics',
+  ])
   assert.equal(openapi.paths['/health/live'].get.operationId, 'getLiveness')
   assert.equal(openapi.paths['/health/ready'].get.operationId, 'getReadiness')
+  assert.equal(openapi.paths['/auth/login'].post.operationId, 'login')
+  assert.equal(openapi.paths['/providers'].post.operationId, 'createProvider')
+  assert.equal(openapi.paths['/providers/{providerId}/sync'].post.operationId, 'synchronizeProvider')
 
   for (const [path, statuses] of [
     ['/health/live', ['200']],
@@ -35,14 +42,7 @@ test('the canonical private API is valid and exposes only health operations', as
     const responses = openapi.paths[path].get.responses
     assert.deepEqual(Object.keys(responses), statuses)
     for (const response of Object.values(responses)) {
-      assert.equal(
-        response.headers['X-Elova-Api-Version'].$ref,
-        '#/components/headers/ApiVersion',
-      )
-      assert.equal(
-        response.headers['X-Request-Id'].$ref,
-        '#/components/headers/RequestId',
-      )
+      assert.match(response.$ref, /^#\/components\/responses\/(?:Liveness|Readiness)Response$/)
     }
   }
 
@@ -50,6 +50,7 @@ test('the canonical private API is valid and exposes only health operations', as
     type: 'string',
     const: '1',
   })
+  assert.equal(openapi.components.securitySchemes.ownerSession.name, 'elova_session')
 })
 
 test('health fixtures match the frozen success envelopes', async () => {

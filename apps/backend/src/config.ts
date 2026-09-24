@@ -6,6 +6,8 @@ export interface BackendConfig {
   port: number
   databaseUrl: string
   migrationsDirectory: string
+  sessionSecret: string
+  credentialKey: string
 }
 
 function required(name: string, value: string | undefined): string {
@@ -42,7 +44,7 @@ function parseHost(value: string | undefined): string {
   return host
 }
 
-function parseDatabaseUrl(value: string | undefined): string {
+export function parseDatabaseUrl(value: string | undefined): string {
   const databaseUrl = required('DATABASE_URL', value)
   let url: URL
   try {
@@ -79,11 +81,24 @@ function parsePort(value: string | undefined): number {
   return port
 }
 
+function parseSecret(name: string, value: string | undefined): string {
+  const secret = required(name, value)
+  if (Buffer.from(secret, 'base64').length !== 32 || Buffer.from(secret, 'base64').toString('base64') !== secret) {
+    throw new Error(`${name} must be a base64-encoded 32-byte secret`)
+  }
+  return secret
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig {
+  const sessionSecret = parseSecret('ELOVA_SESSION_SECRET', env.ELOVA_SESSION_SECRET)
+  const credentialKey = parseSecret('ELOVA_CREDENTIAL_KEY', env.ELOVA_CREDENTIAL_KEY)
+  if (sessionSecret === credentialKey) throw new Error('Session and credential secrets must be different')
   return {
     host: parseHost(env.ELOVA_BACKEND_HOST),
     port: parsePort(env.PORT),
     databaseUrl: parseDatabaseUrl(env.DATABASE_URL),
     migrationsDirectory: resolve(process.cwd(), 'migrations'),
+    sessionSecret,
+    credentialKey,
   }
 }

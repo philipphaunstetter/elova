@@ -16,6 +16,40 @@ export type Readiness = {
     };
 };
 
+export type Owner = {
+    id: string;
+    email: string;
+    displayName: string;
+};
+
+export type Session = {
+    user: Owner;
+};
+
+export type Provider = {
+    id: string;
+    name: string;
+    baseUrl: string;
+    status: string;
+    createdAt: string;
+    lastSyncedAt: string | null;
+};
+
+export type DashboardMetrics = {
+    totalExecutions: number;
+    successfulExecutions: number;
+    failedExecutions: number;
+    successRate: number | null;
+    averageDurationMs: number | null;
+};
+
+export type ErrorEnvelope = {
+    error: {
+        code: string;
+        message: string;
+    };
+};
+
 export type BffFailure = {
     error: {
         code: 'BACKEND_UNAVAILABLE' | 'BACKEND_TIMEOUT';
@@ -48,7 +82,7 @@ export type GetReadinessData = {
 
 export type GetReadinessErrors = {
     /**
-     * A required backend dependency or schema is not ready.
+     * PostgreSQL and ordered migrations readiness.
      */
     503: Readiness;
 };
@@ -57,9 +91,271 @@ export type GetReadinessError = GetReadinessErrors[keyof GetReadinessErrors];
 
 export type GetReadinessResponses = {
     /**
-     * The backend is ready to receive application traffic.
+     * PostgreSQL and ordered migrations readiness.
      */
     200: Readiness;
 };
 
 export type GetReadinessResponse = GetReadinessResponses[keyof GetReadinessResponses];
+
+export type LoginData = {
+    body: {
+        email: string;
+        password: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/auth/login';
+};
+
+export type LoginErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    429: ErrorEnvelope;
+};
+
+export type LoginError = LoginErrors[keyof LoginErrors];
+
+export type LoginResponses = {
+    /**
+     * Signed owner session established.
+     */
+    200: Session;
+};
+
+export type LoginResponse = LoginResponses[keyof LoginResponses];
+
+export type LogoutData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/logout';
+};
+
+export type LogoutResponses = {
+    /**
+     * Session revoked.
+     */
+    204: void;
+};
+
+export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
+
+export type GetSessionData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/session';
+};
+
+export type GetSessionErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+};
+
+export type GetSessionError = GetSessionErrors[keyof GetSessionErrors];
+
+export type GetSessionResponses = {
+    /**
+     * Current signed owner session.
+     */
+    200: Session;
+};
+
+export type GetSessionResponse = GetSessionResponses[keyof GetSessionResponses];
+
+export type ListProvidersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/providers';
+};
+
+export type ListProvidersErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+};
+
+export type ListProvidersError = ListProvidersErrors[keyof ListProvidersErrors];
+
+export type ListProvidersResponses = {
+    /**
+     * Immutable n8n provider identities.
+     */
+    200: {
+        providers: Array<Provider>;
+    };
+};
+
+export type ListProvidersResponse = ListProvidersResponses[keyof ListProvidersResponses];
+
+export type CreateProviderData = {
+    body: {
+        name: string;
+        baseUrl: string;
+        apiKey: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/providers';
+};
+
+export type CreateProviderErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    422: ErrorEnvelope;
+};
+
+export type CreateProviderError = CreateProviderErrors[keyof CreateProviderErrors];
+
+export type CreateProviderResponses = {
+    /**
+     * Provider connection created with encrypted credentials.
+     */
+    201: {
+        provider: Provider;
+    };
+};
+
+export type CreateProviderResponse = CreateProviderResponses[keyof CreateProviderResponses];
+
+export type SynchronizeProviderData = {
+    body?: never;
+    path: {
+        providerId: string;
+    };
+    query?: never;
+    url: '/providers/{providerId}/sync';
+};
+
+export type SynchronizeProviderErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    404: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    502: ErrorEnvelope;
+};
+
+export type SynchronizeProviderError = SynchronizeProviderErrors[keyof SynchronizeProviderErrors];
+
+export type SynchronizeProviderResponses = {
+    /**
+     * Sanitized workflow and execution evidence synchronized.
+     */
+    200: {
+        workflows: number;
+        executions: number;
+    };
+};
+
+export type SynchronizeProviderResponse = SynchronizeProviderResponses[keyof SynchronizeProviderResponses];
+
+export type ListWorkflowsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/workflows';
+};
+
+export type ListWorkflowsErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+};
+
+export type ListWorkflowsError = ListWorkflowsErrors[keyof ListWorkflowsErrors];
+
+export type ListWorkflowsResponses = {
+    /**
+     * Sanitized workflow summaries.
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type ListWorkflowsResponse = ListWorkflowsResponses[keyof ListWorkflowsResponses];
+
+export type ListExecutionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+    };
+    url: '/executions';
+};
+
+export type ListExecutionsErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+};
+
+export type ListExecutionsError = ListExecutionsErrors[keyof ListExecutionsErrors];
+
+export type ListExecutionsResponses = {
+    /**
+     * Sanitized execution summaries.
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type ListExecutionsResponse = ListExecutionsResponses[keyof ListExecutionsResponses];
+
+export type GetDashboardMetricsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/dashboard/metrics';
+};
+
+export type GetDashboardMetricsErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+};
+
+export type GetDashboardMetricsError = GetDashboardMetricsErrors[keyof GetDashboardMetricsErrors];
+
+export type GetDashboardMetricsResponses = {
+    /**
+     * Execution outcome metrics from PostgreSQL.
+     */
+    200: DashboardMetrics;
+};
+
+export type GetDashboardMetricsResponse = GetDashboardMetricsResponses[keyof GetDashboardMetricsResponses];

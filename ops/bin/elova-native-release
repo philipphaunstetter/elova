@@ -244,10 +244,12 @@ check_env_permissions() {
 }
 
 check_frontend_env() {
-  local file=$1 url
-  if env_has_key DATABASE_URL "$file"; then
-    die "$file must not define backend-only DATABASE_URL"
-  fi
+  local file=$1 url key
+  for key in DATABASE_URL ELOVA_SESSION_SECRET ELOVA_CREDENTIAL_KEY; do
+    if env_has_key "$key" "$file"; then
+      die "$file must not define backend-only $key"
+    fi
+  done
   url=$(env_value ELOVA_BACKEND_URL "$file") || die "$file must define ELOVA_BACKEND_URL"
   node - "$url" "$BACKEND_PORT" <<'NODE'
 const { isIP } = require('node:net');
@@ -316,10 +318,17 @@ NODE
 }
 
 check_backend_env() {
-  local file=$1 host database_url
+  local file=$1 host database_url session_secret credential_key
   host=$(env_value ELOVA_BACKEND_HOST "$file") || die "$file must define ELOVA_BACKEND_HOST"
   database_url=$(env_value DATABASE_URL "$file") || die "$file must define DATABASE_URL"
+  session_secret=$(env_value ELOVA_SESSION_SECRET "$file") || die "$file must define ELOVA_SESSION_SECRET"
+  credential_key=$(env_value ELOVA_CREDENTIAL_KEY "$file") || die "$file must define ELOVA_CREDENTIAL_KEY"
   check_database_url "$database_url"
+  ELOVA_SECRET_TO_VALIDATE="$session_secret" node -e 'const raw=process.env.ELOVA_SECRET_TO_VALIDATE||""; const value=Buffer.from(raw, "base64"); if(value.length!==32 || value.toString("base64")!==raw) process.exit(1)' ||
+    die "ELOVA_SESSION_SECRET must be a base64-encoded 32-byte value"
+  ELOVA_SECRET_TO_VALIDATE="$credential_key" node -e 'const raw=process.env.ELOVA_SECRET_TO_VALIDATE||""; const value=Buffer.from(raw, "base64"); if(value.length!==32 || value.toString("base64")!==raw) process.exit(1)' ||
+    die "ELOVA_CREDENTIAL_KEY must be a base64-encoded 32-byte value"
+  [[ $session_secret != "$credential_key" ]] || die "ELOVA_SESSION_SECRET and ELOVA_CREDENTIAL_KEY must be different"
   [[ $host != '0.0.0.0' && $host != '::' && $host != 'localhost' && $host != 127.* ]] ||
     die "ELOVA_BACKEND_HOST may not be wildcard or loopback"
   ip -o addr show dev tailscale0 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | grep -Fx -- "$host" >/dev/null ||

@@ -142,6 +142,14 @@ grep -Fq 'must not define backend-only DATABASE_URL' "$TMP/out" ||
   fail 'frontend database variable refusal was not explicit'
 ok 'frontend preflight rejects backend-only database configuration'
 
+printf 'ELOVA_BACKEND_URL=http://100.100.10.20:3001\nELOVA_SESSION_SECRET=frontend-must-not-receive-this\n' > "$frontend_env"
+if (check_frontend_env "$frontend_env") >"$TMP/out" 2>&1; then
+  fail 'frontend environment accepted backend session configuration'
+fi
+grep -Fq 'must not define backend-only ELOVA_SESSION_SECRET' "$TMP/out" ||
+  fail 'frontend session variable refusal was not explicit'
+ok 'frontend preflight rejects backend-only session configuration'
+
 for local_database in \
   'postgresql://localhost:5432/elova?sslmode=disable' \
   'postgresql://127.0.0.1:5432/elova' \

@@ -23,11 +23,7 @@ const FORWARDED_RESPONSE_HEADERS = [
   "retry-after",
   "x-request-id",
 ] as const;
-const KNOWN_CLIENT_ERRORS = new Map<number, { code: string; message: string }>([
-  [400, { code: "BAD_REQUEST", message: "Bad request" }],
-  [404, { code: "NOT_FOUND", message: "Not found" }],
-  [405, { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" }],
-]);
+const FORWARDED_CLIENT_ERROR_STATUSES = new Set([400, 401, 403, 404, 405, 409, 413, 422, 429]);
 
 function json(body: unknown, status: number, headers?: Headers): Response {
   const responseHeaders = new Headers(headers);
@@ -165,15 +161,14 @@ async function readSanitizedJson(
   return { parsed, serialized };
 }
 
-function isKnownClientError(status: number, value: unknown): boolean {
-  const expected = KNOWN_CLIENT_ERRORS.get(status);
-  if (!expected || !value || typeof value !== "object" || Array.isArray(value)) return false;
+function isSafeClientError(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   if (Object.keys(value).length !== 1 || !("error" in value)) return false;
   const error = value.error;
   if (!error || typeof error !== "object" || Array.isArray(error)) return false;
-  return Object.keys(error).length === 2 &&
-    "code" in error && error.code === expected.code &&
-    "message" in error && error.message === expected.message;
+  if (Object.keys(error).length !== 2 || !("code" in error) || !("message" in error)) return false;
+  return typeof error.code === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(error.code) &&
+    typeof error.message === "string" && error.message.length >= 1 && error.message.length <= 160;
 }
 
 async function requestBody(request: Request, signal: AbortSignal): Promise<ArrayBuffer | undefined> {
@@ -252,14 +247,14 @@ export async function proxyToBackend(
     if (upstream.status === 504) return failure("timeout");
     if (!hasExpectedApiVersion(upstream)) return failure("unavailable");
 
-    if (KNOWN_CLIENT_ERRORS.has(upstream.status)) {
+    if (FORWARDED_CLIENT_ERROR_STATUSES.has(upstream.status)) {
       try {
         const { parsed, serialized } = await readSanitizedJson(
           upstream,
           privateTokens,
           controller.signal,
         );
-        if (!isKnownClientError(upstream.status, parsed)) return failure("unavailable");
+        if (!isSafeClientError(parsed)) return failure("unavailable");
         return new Response(serialized, {
           status: upstream.status,
           headers: safeResponseHeaders(upstream, privateTokens),

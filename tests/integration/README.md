@@ -1,15 +1,16 @@
 # vNext native integration evidence
 
-These tests exercise the frozen frontend/BFF/backend seam without publishing an image or contacting deployed Elova infrastructure.
+These tests exercise the frontend/BFF/backend/PostgreSQL boundary without publishing an image or contacting deployed infrastructure.
 
-- The independent frontend, backend, native-operations, contract, integration, and security job results are the executable CI evidence. The PostgreSQL service image is only ephemeral test infrastructure.
-- `contract.test.mjs` validates the OpenAPI document, then checks its normalized paths, operations, version headers, schemas, and accepted response fixtures.
-- `postgres.test.mjs` runs concurrent migrations against the workflow's ephemeral PostgreSQL service. Its intentionally slow DDL probe only succeeds for both callers when migration execution is serialized, then it verifies the product-schema-free migration seam and drift-sensitive readiness state.
-- `native-services.test.mjs` extracts the install-free archives accepted by the release helper, runs their packaged migration/start commands without installing dependencies, checks backend and proxied health compatibility, inspects browser assets for private values, verifies generic 502/504 envelopes, and checks shutdown statuses (see the [operations runbook](../../ops/docs/native-services-runbook.md) for service semantics).
+- Independent frontend, backend, native-operations, contract, PostgreSQL/native-integration, and security jobs feed the strict protected `build` job.
+- `contract.test.mjs` validates normalized OpenAPI product and health operations plus stable public failure fixtures.
+- `postgres.test.mjs` proves migration advisory locking, checksum drift rejection, the complete PostgreSQL-only authority schema, privacy metadata, atomic first-owner commitment, permanent bootstrap closure, and bounded readiness failure.
+- Backend behavior tests prove signed-session login/rejection, encrypted n8n credentials, immutable private provider origins, and sanitization before repository calls.
+- `native-services.test.mjs` extracts install-free archives, runs packaged migration/start commands, checks backend and proxied readiness, inspects browser assets for private values, verifies generic failures, and checks shutdown behavior.
 - The pinned TruffleHog action scans repository history and tracked content, failing CI on verified or unknown secret findings.
 
-The workflow uses only synthetic local test values. `DATABASE_URL` is additionally constrained by the PostgreSQL test to the local `elova_test` database.
+All values are synthetic and local. No test contacts a real n8n instance, host, credential, database, or deployment.
 
 ## Generated-contract checkpoint
 
-`@elova/api-contract` owns the OpenAPI source and committed generated client/types. CI reruns its deterministic `generate` script and rejects any diff under `packages/api-contract`.
+`@elova/api-contract` owns the OpenAPI source and committed generated client/types. CI reruns generation and rejects any diff under `packages/api-contract`.

@@ -3,12 +3,32 @@ import { resolve } from 'node:path'
 import { test } from 'node:test'
 import { loadConfig } from '../src/config.js'
 
+const secureEnv = (values: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
+  ELOVA_SESSION_SECRET: Buffer.alloc(32, 7).toString('base64'),
+  ELOVA_CREDENTIAL_KEY: Buffer.alloc(32, 8).toString('base64'),
+  ...values,
+})
+
 test('configuration fails closed without a database URL', () => {
-  assert.throws(() => loadConfig({}), /DATABASE_URL is required/)
+  assert.throws(() => loadConfig(secureEnv()), /DATABASE_URL is required/)
+})
+
+test('backend fails closed without independent session and credential secrets', () => {
+  const database = { DATABASE_URL: 'postgres://127.0.0.1/elova' }
+  assert.throws(() => loadConfig(database), /ELOVA_SESSION_SECRET is required/)
+  assert.throws(
+    () => loadConfig({ ...database, ELOVA_SESSION_SECRET: Buffer.alloc(32, 7).toString('base64') }),
+    /ELOVA_CREDENTIAL_KEY is required/,
+  )
+  const same = Buffer.alloc(32, 7).toString('base64')
+  assert.throws(
+    () => loadConfig({ ...database, ELOVA_SESSION_SECRET: same, ELOVA_CREDENTIAL_KEY: same }),
+    /must be different/,
+  )
 })
 
 test('backend defaults to loopback, a bounded port, and packaged migrations', () => {
-  const config = loadConfig({ DATABASE_URL: 'postgres://127.0.0.1/elova' })
+  const config = loadConfig(secureEnv({ DATABASE_URL: 'postgres://127.0.0.1/elova' }))
   assert.equal(config.host, '127.0.0.1')
   assert.equal(config.port, 4100)
   assert.equal(config.migrationsDirectory, resolve(process.cwd(), 'migrations'))
@@ -16,7 +36,7 @@ test('backend defaults to loopback, a bounded port, and packaged migrations', ()
 
 test('invalid ports are rejected', () => {
   assert.throws(
-    () => loadConfig({ DATABASE_URL: 'postgres://127.0.0.1/elova', PORT: '70000' }),
+    () => loadConfig(secureEnv({ DATABASE_URL: 'postgres://127.0.0.1/elova', PORT: '70000' })),
     /PORT must be an integer/,
   )
 })
@@ -35,10 +55,10 @@ test('wildcard binds are rejected in every supported literal form', () => {
     '0:0:0:0:0:0:0.0.0.0',
   ]) {
     assert.throws(
-      () => loadConfig({
+      () => loadConfig(secureEnv({
         DATABASE_URL: 'postgres://127.0.0.1/elova',
         ELOVA_BACKEND_HOST: host,
-      }),
+      })),
       /must not use a wildcard/,
     )
   }
@@ -53,7 +73,7 @@ test('database URLs accept only explicit same-host transports', () => {
     'postgresql://[0:0:0:0:0:0:0:1]:5432/elova',
     'postgresql:///elova?host=%2Fvar%2Frun%2Fpostgresql',
   ]) {
-    assert.equal(loadConfig({ DATABASE_URL: databaseUrl }).databaseUrl, databaseUrl)
+    assert.equal(loadConfig(secureEnv({ DATABASE_URL: databaseUrl })).databaseUrl, databaseUrl)
   }
 
   for (const databaseUrl of [
@@ -66,7 +86,7 @@ test('database URLs accept only explicit same-host transports', () => {
     'postgresql:///elova?host=%2Fvar%2Frun%2Fpostgresql&hostaddr=127.0.0.1',
   ]) {
     assert.throws(
-      () => loadConfig({ DATABASE_URL: databaseUrl }),
+      () => loadConfig(secureEnv({ DATABASE_URL: databaseUrl })),
       /must use a same-host Unix socket or loopback address/,
     )
   }
@@ -74,7 +94,7 @@ test('database URLs accept only explicit same-host transports', () => {
 
 test('non-PostgreSQL database URLs are rejected', () => {
   assert.throws(
-    () => loadConfig({ DATABASE_URL: 'sqlite:///tmp/elova.db' }),
+    () => loadConfig(secureEnv({ DATABASE_URL: 'sqlite:///tmp/elova.db' })),
     /must use the postgres or postgresql scheme/,
   )
 })
