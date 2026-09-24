@@ -1,0 +1,159 @@
+name: Native vNext CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-vnext-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+
+jobs:
+  workflow-policy:
+    name: Workflow has no image publication path
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Verify native-only workflow policy
+        run: node --test tests/integration/ci-policy.test.mjs
+
+  frontend-quality:
+    name: Frontend lint, type, unit, and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Lint frontend independently
+        run: npm exec eslint -- apps/frontend
+      - name: Type-check frontend independently
+        run: npm exec tsc -- --noEmit -p apps/frontend/tsconfig.json
+      - name: Run frontend unit tests independently
+        run: npm test --workspace @elova/frontend
+      - name: Build frontend native artifact independently
+        run: npm run build --workspace @elova/frontend
+        env:
+          ELOVA_BACKEND_URL: http://10.255.255.1:4100
+
+  backend-quality:
+    name: Backend lint, type, unit, and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Lint backend independently
+        run: npm exec eslint -- apps/backend/src apps/backend/test
+      - name: Type-check backend independently
+        run: npm exec tsc -- --noEmit -p apps/backend/tsconfig.json
+      - name: Run backend unit tests independently
+        run: npm test --workspace @elova/backend
+      - name: Build backend native artifact independently
+        run: npm run build --workspace @elova/backend
+
+  contract-drift:
+    name: Contract compatibility and generated-client drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Verify frozen contract and fixtures
+        run: node --test tests/integration/contract.test.mjs
+      - name: Regenerate the accepted API client
+        run: npm run generate --workspace @elova/api-contract
+      - name: Reject generated contract or client drift
+        run: git diff --exit-code -- packages/api-contract
+
+  postgres-integration:
+    name: PostgreSQL migrations, native services, and BFF compatibility
+    runs-on: ubuntu-latest
+    needs: [frontend-quality, backend-quality, contract-drift, workflow-policy]
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: elova_test
+          POSTGRES_PASSWORD: elova_test_password
+          POSTGRES_DB: elova_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U elova_test -d elova_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://elova_test:elova_test_password@127.0.0.1:5432/elova_test
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build backend native artifact
+        run: npm run build --workspace @elova/backend
+      - name: Build frontend native artifact
+        run: npm run build --workspace @elova/frontend
+        env:
+          ELOVA_BACKEND_URL: http://10.255.255.1:4100
+      - name: Verify baseline migration and advisory locking
+        run: node --test tests/integration/postgres.test.mjs
+      - name: Verify startup, readiness, BFF failures, leakage, and shutdown
+        run: node --test tests/integration/native-services.test.mjs
+
+  security:
+    name: Dependency and repository secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Scan production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Scan tracked files for committed secrets
+        run: node --test tests/integration/secrets.test.mjs
+      - name: Review dependency changes
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
