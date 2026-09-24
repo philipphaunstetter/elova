@@ -1,6 +1,6 @@
 # Elova native frontend/backend operations
 
-Status: reviewed templates only. **Nothing in `ops/` is installed or executed on a host by this repository change.** This change does not create users, install packages, deploy releases, run migrations, start or restart services, or alter the VPS, GX10, Tailnet, DNS, firewall, PostgreSQL, Docker Hub, credentials, n8n, or any external system.
+Status: native artifact packaging plus reviewed host templates. Packaging runs only in the build workspace. **Nothing in `ops/` is installed or executed on the VPS or GX10 by this repository change.** This change does not create users, install packages, deploy releases, run migrations, start or restart services, or alter the VPS, GX10, Tailnet, DNS, firewall, PostgreSQL, Docker Hub, credentials, n8n, or any external system.
 
 The first vNext slice runs without containers:
 
@@ -43,7 +43,7 @@ Do not continue until every applicable item is true. The helper's `preflight` re
 
 ## Release artifact contract
 
-The integration build supplies one gzip tar archive plus a separately transported SHA-256 file. The archive:
+The integration build runs `npm run package:native -- <output-directory>` and supplies one gzip tar archive plus a separately transported SHA-256 file per service. The archive:
 
 1. contains exactly one top-level directory;
 2. contains no symlinks, special files, absolute paths, or `..` traversal;
@@ -52,6 +52,14 @@ The integration build supplies one gzip tar archive plus a separately transporte
 5. for the backend, has an explicit `migrate` script and a release-owned `migrations/` directory; the script applies those ordered migrations and exits nonzero on incompatibility.
 
 The SHA file starts with the archive's 64-digit SHA-256 digest. Credentials and environment files are never in the archive. A release ID should be an immutable build identifier such as the full Git commit SHA; it is limited to letters, digits, dots, underscores, and hyphens.
+
+From a locked checkout with dependencies installed, create both prebuilt, install-free archives and checksums with:
+
+```sh
+ELOVA_BACKEND_URL=http://10.255.255.1:4100 npm run package:native -- /path/to/output
+```
+
+The build-only private URL is synthetic and is not a deployment target. The command emits `elova-frontend.tgz`, `elova-backend.tgz`, and a matching `.sha256` file for each. It does not install or deploy anything. CI validates both archives through the release helper, extracts them into isolated staging directories, runs the packaged migration command, and starts the packaged services without dependency installation before checking health and the BFF boundary.
 
 Releases are staged under `/opt/elova/<service>/releases/<release-id>`, root-owned and non-writable. `current` and `previous` are relative symlinks. Each operation takes `/run/lock/elova-<service>-deploy.lock`. The append-only operational record is `/var/lib/elova/releases/<service>/journal.jsonl`; it contains no secrets. Activation retains `current`, `previous`, and at most one additional recent release.
 
@@ -66,7 +74,7 @@ These are instructions for a separately authorized maintenance window, not actio
    systemd-analyze verify ops/systemd/elova-frontend.service \
      ops/systemd/elova-backend.service \
      ops/systemd/elova-backend-migrate@.service
-   bash -n ops/bin/elova-native-release ops/tests/test-native-release.sh
+   bash -n ops/bin/elova-native-release ops/bin/elova-package-native ops/tests/test-native-release.sh
    ops/tests/test-native-release.sh
    ```
 
@@ -136,7 +144,7 @@ sudo "$helper" activate --service frontend --release "$release" --dry-run
 sudo "$helper" activate --service frontend --release "$release" --apply
 ```
 
-Use `--service backend` on GX10. Activation atomically preserves the old `current` as `previous`, changes `current`, restarts only the named service, and polls the fixed readiness path for up to 60 seconds. A failed convergence restores the prior links and service state before recording failure when restoration does not cross a backend migration-count boundary. When counts differ, the helper leaves the migrated release selected, stops the unhealthy service, records failure, and requires a forward fix instead of restoring an incompatible release. Inspect `journalctl -u elova-frontend.service` or the corresponding backend/migration unit without copying environment values into tickets.
+Use `--service backend` on GX10. Before changing links, activation rejects any backend target with fewer migrations than the current release and requires a forward fix. Otherwise activation atomically preserves the old `current` as `previous`, changes `current`, restarts only the named service, and polls the fixed readiness path for up to 60 seconds. A failed convergence restores the prior links and service state before recording failure when restoration does not cross a backend migration-count boundary. When counts differ, the helper leaves the migrated release selected, stops the unhealthy service, records failure, and requires a forward fix instead of restoring an incompatible release. Inspect `journalctl -u elova-frontend.service` or the corresponding backend/migration unit without copying environment values into tickets.
 
 Recommended order is backend stage → explicit backend migration → backend activation/readiness → frontend stage → frontend activation/readiness. Coordinate compatibility so either frontend can safely use either retained backend during the window.
 

@@ -25,7 +25,10 @@ test("forwards same-origin requests to the private /v1 path without forwarding h
   const fakeFetch: typeof fetch = async (input, init) => {
     capturedUrl = input.toString();
     capturedHeaders = new Headers(init?.headers);
-    return Response.json({ status: "live" }, { headers: { "x-request-id": "request-1" } });
+    return Response.json(
+      { status: "live" },
+      { headers: { "x-elova-api-version": "1", "x-request-id": "request-1" } },
+    );
   };
 
   const response = await proxyToBackend(
@@ -110,10 +113,32 @@ test("does not expose private redirect targets", async () => {
   assert.equal((await response.text()).includes(PRIVATE_URL), false);
 });
 
+test("rejects successful responses without the expected API version", async () => {
+  for (const version of [null, "2"]) {
+    const fakeFetch: typeof fetch = async () => {
+      const headers = new Headers();
+      if (version) headers.set("x-elova-api-version", version);
+      return Response.json({ status: "live" }, { headers });
+    };
+
+    const response = await proxyToBackend(browserRequest(), ["health", "live"], fakeFetch);
+    assert.equal(response.status, 502);
+    assert.deepEqual(await response.json(), {
+      error: { code: "BACKEND_UNAVAILABLE", message: "Service temporarily unavailable" },
+    });
+  }
+});
+
 test("redacts the configured endpoint from successful JSON and safe-header candidates", async () => {
   const fakeFetch: typeof fetch = async () => Response.json(
     { status: "live", diagnostic: `${PRIVATE_URL}/v1`, backendPort: "8787" },
-    { headers: { etag: `\"${PRIVATE_URL}\"`, "set-cookie": `origin=${PRIVATE_URL}` } },
+    {
+      headers: {
+        etag: `\"${PRIVATE_URL}\"`,
+        "set-cookie": `origin=${PRIVATE_URL}`,
+        "x-elova-api-version": "1",
+      },
+    },
   );
 
   const response = await proxyToBackend(browserRequest(), ["health", "live"], fakeFetch);

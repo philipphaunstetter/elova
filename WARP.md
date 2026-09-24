@@ -5,7 +5,7 @@
 - `apps/frontend`: public Next.js UI and same-origin BFF. It must not import database, n8n, synchronization, or backend runtime code.
 - `apps/backend`: private API, PostgreSQL access, migrations, and future synchronization/jobs.
 - `packages/api-contract`: authoritative OpenAPI, fixtures, and generated client. Change the OpenAPI first and regenerate; never hand-edit generated files.
-- `ops`: templates and documentation only. Repository work must not mutate hosts or services.
+- `ops`: deterministic native artifact packaging plus templates and documentation. Repository work must not mutate hosts or services.
 
 `ELOVA_BACKEND_URL` is server-only. Never create a `NEXT_PUBLIC_` equivalent or render it in HTML, browser JavaScript, responses, redirects, logs, or errors. `DATABASE_URL` belongs only to the backend.
 
@@ -16,8 +16,8 @@ npm ci
 npm run generate
 npm run lint
 npm test
-ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run build
-bash -n ops/bin/elova-native-release ops/tests/test-native-release.sh
+ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/to/output
+bash -n ops/bin/elova-native-release ops/bin/elova-package-native ops/tests/test-native-release.sh
 ops/tests/test-native-release.sh
 ```
 

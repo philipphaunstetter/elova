@@ -28,7 +28,7 @@ async function resetDatabase(pool) {
   await pool.query('CREATE SCHEMA public')
 }
 
-test('ordered baseline migrations serialize through a PostgreSQL advisory lock', async (context) => {
+test('the migration seam serializes changes and keeps readiness fail-closed', async (context) => {
   const pool = new Pool({ connectionString: databaseUrl, max: 6 })
   const probeDirectory = await mkdtemp(join(tmpdir(), 'elova-advisory-lock-'))
   context.after(async () => {
@@ -56,13 +56,29 @@ test('ordered baseline migrations serialize through a PostgreSQL advisory lock',
   assert.equal(probeHistory.rowCount, 1)
   assert.equal(await migrationsAreCompatible(pool, probeMigrations), true)
 
+  await pool.query(
+    "UPDATE schema_migrations SET checksum = repeat('0', 64) WHERE name = $1",
+    [probeMigrations[0].name],
+  )
+  assert.equal(
+    await migrationsAreCompatible(pool, probeMigrations),
+    false,
+    'readiness must reject drifted migration history',
+  )
+  await pool.query(
+    'UPDATE schema_migrations SET checksum = $1 WHERE name = $2',
+    [probeMigrations[0].checksum, probeMigrations[0].name],
+  )
+  assert.equal(await migrationsAreCompatible(pool, probeMigrations), true)
+
   await resetDatabase(pool)
   const baselineMigrations = await loadMigrations(
     join(backendRoot, 'migrations'),
   )
-  assert.ok(
-    baselineMigrations.length > 0,
-    'the backend must ship at least one baseline migration',
+  assert.deepEqual(
+    baselineMigrations,
+    [],
+    'the separation foundation must not create product schema',
   )
 
   await Promise.all([
@@ -73,41 +89,23 @@ test('ordered baseline migrations serialize through a PostgreSQL advisory lock',
   const history = await pool.query(
     'SELECT name, checksum FROM schema_migrations ORDER BY name',
   )
-  assert.deepEqual(
-    history.rows.map(({ name }) => name),
-    baselineMigrations.map(({ name }) => name),
-  )
+  assert.deepEqual(history.rows, [])
   assert.equal(await migrationsAreCompatible(pool, baselineMigrations), true)
 
-  const baselineTable = await pool.query(
-    "SELECT to_regclass('public.service_metadata') AS table_name",
+  const migrationTable = await pool.query(
+    "SELECT to_regclass('public.schema_migrations') AS table_name",
   )
-  assert.equal(baselineTable.rows[0]?.table_name, 'service_metadata')
+  assert.equal(migrationTable.rows[0]?.table_name, 'schema_migrations')
 
   await pool.query(
-    "UPDATE schema_migrations SET checksum = repeat('0', 64) WHERE name = $1",
-    [baselineMigrations[0].name],
-  )
-  assert.equal(
-    await migrationsAreCompatible(pool, baselineMigrations),
-    false,
-    'readiness must reject drifted migration history',
-  )
-  await pool.query(
-    'UPDATE schema_migrations SET checksum = $1 WHERE name = $2',
-    [baselineMigrations[0].checksum, baselineMigrations[0].name],
-  )
-  assert.equal(await migrationsAreCompatible(pool, baselineMigrations), true)
-
-  await pool.query(
-    "INSERT INTO schema_migrations (name, checksum) VALUES ('0002_future.sql', repeat('1', 64))",
+    "INSERT INTO schema_migrations (name, checksum) VALUES ('0001_future.sql', repeat('1', 64))",
   )
   assert.equal(
     await migrationsAreCompatible(pool, baselineMigrations),
     false,
     'readiness must reject migration-count mismatches',
   )
-  await pool.query("DELETE FROM schema_migrations WHERE name = '0002_future.sql'")
+  await pool.query("DELETE FROM schema_migrations WHERE name = '0001_future.sql'")
 
   const locker = await pool.connect()
   const gateway = new PostgresGateway(databaseUrl, baselineMigrations)

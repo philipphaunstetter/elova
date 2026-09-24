@@ -6,6 +6,10 @@
   "engines": {
     "node": ">=20"
   },
+  "files": [
+    "dist/src",
+    "migrations"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/server.js",

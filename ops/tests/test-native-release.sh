@@ -63,6 +63,11 @@ fi
 grep -Fq -- '--release must be' "$TMP/out" || fail 'unsafe release refusal was not explicit'
 ok 'unsafe release identifiers are refused'
 
+out=$("$HELPER" activate --service backend --release test-forward --dry-run) || fail 'backend activation dry-run failed'
+grep -Fq 'reject activation to a lower migration count' <<< "$out" || fail 'activation plan omitted lower-migration refusal'
+grep -Fq 'before changing release links' <<< "$out" || fail 'activation plan did not preserve release links'
+ok 'backend activation refuses lower migration counts before mutation'
+
 mkdir -p "$TMP/no-migrate/package"
 printf '{"name":"@elova/backend","scripts":{"start":"node server.js"}}\n' > "$TMP/no-migrate/package/package.json"
 printf 'process.exit(0)\n' > "$TMP/no-migrate/package/server.js"

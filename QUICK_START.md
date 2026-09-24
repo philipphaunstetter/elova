@@ -9,7 +9,7 @@ npm ci
 npm run generate
 npm run lint
 npm test
-ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run build
+ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/to/output
 ```
 
 ## Run the backend locally

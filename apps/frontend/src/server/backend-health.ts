@@ -2,6 +2,7 @@ import "server-only";
 
 import { getReadiness, type Readiness } from "@elova/api-contract";
 import { createClient } from "@elova/api-contract/client";
+import { hasExpectedApiVersion } from "./api-version";
 import { getBackendOrigin } from "./backend-config";
 
 const HEALTH_TIMEOUT_MS = 3_000;
@@ -30,7 +31,12 @@ export async function backendIsReady(): Promise<boolean> {
       signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
     });
 
-    return result.response?.status === 200 && isReadiness(result.data) && result.data.status === "ready";
+    return (
+      result.response?.status === 200 &&
+      hasExpectedApiVersion(result.response) &&
+      isReadiness(result.data) &&
+      result.data.status === "ready"
+    );
   } catch {
     return false;
   }

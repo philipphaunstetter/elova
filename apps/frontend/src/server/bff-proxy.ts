@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { BffFailure } from "@elova/api-contract";
+import { hasExpectedApiVersion } from "./api-version";
 import { getBackendOrigin, getPrivateEndpointTokens } from "./backend-config";
 
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -148,6 +149,7 @@ export async function proxyToBackend(
     if (upstream.status === 504) return failure("timeout");
     return failure("unavailable", upstream.status === 503 ? 503 : 502);
   }
+  if (!hasExpectedApiVersion(upstream)) return failure("unavailable");
   if (upstream.status === 204 || upstream.status === 205) {
     return new Response(null, { status: upstream.status, headers: safeResponseHeaders(upstream, privateTokens) });
   }

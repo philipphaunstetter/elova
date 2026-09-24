@@ -13,15 +13,42 @@ test("uses the generated readiness operation against the private /v1 base", asyn
   let requested = "";
   globalThis.fetch = (async (input) => {
     requested = input instanceof Request ? input.url : input.toString();
-    return Response.json({
-      status: "ready",
-      checks: { database: "ready", migrations: "ready" },
-    });
+    return Response.json(
+      {
+        status: "ready",
+        checks: { database: "ready", migrations: "ready" },
+      },
+      { headers: { "x-elova-api-version": "1" } },
+    );
   }) as typeof fetch;
 
   try {
     assert.equal(await backendIsReady(), true);
     assert.equal(requested, `${PRIVATE_URL}/v1/health/ready`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("fails closed for missing or incompatible API versions", async () => {
+  const originalFetch = globalThis.fetch;
+  let version: string | null = null;
+  globalThis.fetch = (async () => {
+    const headers = new Headers();
+    if (version) headers.set("x-elova-api-version", version);
+    return Response.json(
+      {
+        status: "ready",
+        checks: { database: "ready", migrations: "ready" },
+      },
+      { headers },
+    );
+  }) as typeof fetch;
+
+  try {
+    assert.equal(await backendIsReady(), false);
+    version = "2";
+    assert.equal(await backendIsReady(), false);
   } finally {
     globalThis.fetch = originalFetch;
   }

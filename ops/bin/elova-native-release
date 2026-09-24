@@ -466,7 +466,10 @@ run_activate() {
   validate_release
   if ! require_apply; then
     printf 'dry-run: would require staged release %s and acquire %s deployment lock\n' "$release" "$service"
-    [[ $service == backend ]] && printf 'dry-run: would require the explicit successful migration marker\n'
+    if [[ $service == backend ]]; then
+      printf 'dry-run: would require the explicit successful migration marker\n'
+      printf 'dry-run: would reject activation to a lower migration count before changing release links\n'
+    fi
     printf 'dry-run: would atomically update current/previous, restart, converge readiness, and prune old releases\n'
     return
   fi
@@ -486,7 +489,10 @@ run_activate() {
   if [[ $service == backend && -n $old ]]; then
     old_migrations=$(backend_migration_count "$root/releases/$old")
     target_migrations=$(backend_migration_count "$root/releases/$release")
-    if [[ $old_migrations != "$target_migrations" ]]; then
+    if (( target_migrations < old_migrations )); then
+      die "backend activation to a lower migration count is prohibited; deploy a forward fix"
+    fi
+    if (( target_migrations > old_migrations )); then
       rollback_allowed=0
     fi
   fi

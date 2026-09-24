@@ -1,19 +1,19 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { readFile, readdir } from 'node:fs/promises'
+import { execFile, spawn } from 'node:child_process'
+import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { createServer } from 'node:http'
-import { networkInterfaces } from 'node:os'
+import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 import { test } from 'node:test'
+import { promisify } from 'node:util'
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url))
-const frontendRoot = join(repositoryRoot, 'apps/frontend')
-const backendRoot = join(repositoryRoot, 'apps/backend')
 const frontendPort = 43100
 const backendPort = 43200
+const execFileAsync = promisify(execFile)
 
 function privateAddress() {
   for (const addresses of Object.values(networkInterfaces())) {
@@ -33,29 +33,38 @@ function privateAddress() {
   )
 }
 
-async function nativeStartCommand(packageRoot) {
+async function nativeScriptCommand(packageRoot, scriptName) {
   const metadata = JSON.parse(
     await readFile(join(packageRoot, 'package.json'), 'utf8'),
   )
-  const script = metadata.scripts?.start
-  assert.ok(script, `${metadata.name} must define its native start command`)
+  const script = metadata.scripts?.[scriptName]
+  assert.ok(script, `${metadata.name} must define its native ${scriptName} command`)
   assert.doesNotMatch(
     script,
     /[;&|`$<>]/,
-    'start command must not require a shell',
+    `${scriptName} command must not require a shell`,
   )
   const [executable, ...args] = script.trim().split(/\s+/)
 
   if (executable === 'node') return [process.execPath, args]
-  if (executable === 'next') {
-    return [
-      process.execPath,
-      [join(repositoryRoot, 'node_modules/next/dist/bin/next'), ...args],
-    ]
-  }
   throw new Error(
-    `unsupported native start executable for ${metadata.name}: ${executable}`,
+    `unsupported native ${scriptName} executable for ${metadata.name}: ${executable}`,
   )
+}
+
+async function extractArtifact(artifactDirectory, service, stagingRoot) {
+  const destination = join(stagingRoot, service)
+  await mkdir(destination)
+  await execFileAsync('tar', [
+    '-xzf',
+    join(artifactDirectory, `elova-${service}.tgz`),
+    '--directory',
+    destination,
+  ])
+  const packageRoot = join(destination, 'package')
+  const metadata = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8'))
+  assert.equal(metadata.name, `@elova/${service}`)
+  return packageRoot
 }
 
 function managedProcess(command, args, options) {
@@ -154,7 +163,7 @@ async function browserFiles(directory) {
   return files
 }
 
-async function inspectBrowserArtifacts(origin, markers) {
+async function inspectBrowserArtifacts(origin, markers, staticRoot) {
   const response = await fetch(origin, { redirect: 'follow' })
   assert.equal(response.status, 200)
   const html = await response.text()
@@ -175,7 +184,6 @@ async function inspectBrowserArtifacts(origin, markers) {
     assert.equal(assetResponse.status, 200, `browser asset is missing: ${path}`)
   }
 
-  const staticRoot = join(frontendRoot, '.next/static')
   const files = await browserFiles(staticRoot)
   assert.ok(files.length > 0, 'frontend build must contain browser artifacts')
   for (const path of files) {
@@ -185,7 +193,14 @@ async function inspectBrowserArtifacts(origin, markers) {
   }
 }
 
-test('native services honor the contract without exposing their private boundary', async (context) => {
+test('packaged native services honor the contract without exposing their private boundary', async (context) => {
+  const artifactDirectory = process.env.ELOVA_NATIVE_ARTIFACT_DIR
+  assert.ok(artifactDirectory, 'ELOVA_NATIVE_ARTIFACT_DIR must identify packaged release artifacts')
+  const stagingRoot = await mkdtemp(join(tmpdir(), 'elova-native-artifacts-'))
+  context.after(() => rm(stagingRoot, { recursive: true, force: true }))
+  const backendRoot = await extractArtifact(artifactDirectory, 'backend', stagingRoot)
+  const frontendRoot = await extractArtifact(artifactDirectory, 'frontend', stagingRoot)
+
   const backendHost = privateAddress()
   const backendOrigin = `http://${backendHost}:${backendPort}`
   const frontendOrigin = `http://127.0.0.1:${frontendPort}`
@@ -193,29 +208,39 @@ test('native services honor the contract without exposing their private boundary
     ...process.env,
     NODE_ENV: 'production',
   }
+  assert.ok(commonEnvironment.DATABASE_URL, 'DATABASE_URL must identify the ephemeral PostgreSQL service')
+  const backendEnvironment = {
+    ...commonEnvironment,
+    ELOVA_BACKEND_HOST: backendHost,
+    PORT: String(backendPort),
+  }
+  const frontendEnvironment = {
+    ...commonEnvironment,
+    ELOVA_BACKEND_URL: backendOrigin,
+    HOSTNAME: '127.0.0.1',
+    PORT: String(frontendPort),
+  }
+
+  const [migrationExecutable, migrationArguments] =
+    await nativeScriptCommand(backendRoot, 'migrate')
+  await execFileAsync(migrationExecutable, migrationArguments, {
+    cwd: backendRoot,
+    env: backendEnvironment,
+  })
 
   const [backendExecutable, backendArguments] =
-    await nativeStartCommand(backendRoot)
+    await nativeScriptCommand(backendRoot, 'start')
   const [frontendExecutable, frontendArguments] =
-    await nativeStartCommand(frontendRoot)
+    await nativeScriptCommand(frontendRoot, 'start')
 
   const backend = managedProcess(backendExecutable, backendArguments, {
     cwd: backendRoot,
-    env: {
-      ...commonEnvironment,
-      ELOVA_BACKEND_HOST: backendHost,
-      PORT: String(backendPort),
-    },
+    env: backendEnvironment,
   })
 
   const frontend = managedProcess(frontendExecutable, frontendArguments, {
     cwd: frontendRoot,
-    env: {
-      ...commonEnvironment,
-      ELOVA_BACKEND_URL: backendOrigin,
-      HOSTNAME: '127.0.0.1',
-      PORT: String(frontendPort),
-    },
+    env: frontendEnvironment,
   })
 
   const hangingUpstream = createServer(() => {})
@@ -262,7 +287,11 @@ test('native services honor the contract without exposing their private boundary
     'elova_test_password',
   ]
   assertNoPrivateLeak(serializedResponse(correlated, proxiedText), leakMarkers)
-  await inspectBrowserArtifacts(frontendOrigin, leakMarkers)
+  await inspectBrowserArtifacts(
+    frontendOrigin,
+    leakMarkers,
+    join(frontendRoot, 'apps/frontend/.next/static'),
+  )
 
   await stopGracefully(backend, 'backend')
 

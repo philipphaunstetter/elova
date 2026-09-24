@@ -34,7 +34,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
       - name: Check release shell syntax
-        run: bash -n ops/bin/elova-native-release ops/tests/test-native-release.sh
+        run: bash -n ops/bin/elova-native-release ops/bin/elova-package-native ops/tests/test-native-release.sh
       - name: Verify systemd service templates
         run: >-
           systemd-analyze verify
@@ -141,16 +141,31 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
-      - name: Build backend native artifact
-        run: npm run build --workspace @elova/backend
-      - name: Build frontend native artifact
-        run: npm run build --workspace @elova/frontend
+      - name: Package install-free native artifacts
+        run: npm run package:native -- "$RUNNER_TEMP/elova-native"
         env:
           ELOVA_BACKEND_URL: http://10.255.255.1:4100
+      - name: Verify native packaging is reproducible
+        run: |
+          ops/bin/elova-package-native "$RUNNER_TEMP/elova-native-repeat"
+          cmp "$RUNNER_TEMP/elova-native/elova-backend.tgz" "$RUNNER_TEMP/elova-native-repeat/elova-backend.tgz"
+          cmp "$RUNNER_TEMP/elova-native/elova-frontend.tgz" "$RUNNER_TEMP/elova-native-repeat/elova-frontend.tgz"
+      - name: Verify artifacts satisfy the release-helper contract
+        run: |
+          ops/bin/elova-native-release stage --service backend \
+            --artifact "$RUNNER_TEMP/elova-native/elova-backend.tgz" \
+            --sha256-file "$RUNNER_TEMP/elova-native/elova-backend.tgz.sha256" \
+            --release "$GITHUB_SHA" --dry-run
+          ops/bin/elova-native-release stage --service frontend \
+            --artifact "$RUNNER_TEMP/elova-native/elova-frontend.tgz" \
+            --sha256-file "$RUNNER_TEMP/elova-native/elova-frontend.tgz.sha256" \
+            --release "$GITHUB_SHA" --dry-run
       - name: Verify baseline migration and advisory locking
         run: node --test tests/integration/postgres.test.mjs
-      - name: Verify startup, readiness, BFF failures, leakage, and shutdown
+      - name: Verify startup, readiness, BFF failures, leakage, and shutdown from staged artifacts
         run: node --test tests/integration/native-services.test.mjs
+        env:
+          ELOVA_NATIVE_ARTIFACT_DIR: ${{ runner.temp }}/elova-native
 
   security:
     name: Dependency and repository secret scanning
