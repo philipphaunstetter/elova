@@ -35,7 +35,7 @@ test("allows the backend readiness checks to use their full budget", async () =>
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input) => {
     const signal = input instanceof Request ? input.signal : undefined;
-    await delay(3_200, undefined, { signal });
+    await delay(6_300, undefined, { signal });
     return Response.json(
       {
         status: "ready",

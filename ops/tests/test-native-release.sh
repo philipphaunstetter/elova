@@ -134,6 +134,14 @@ for rejected_origin in \
 done
 ok 'frontend preflight accepts only Tailnet HTTP origins'
 
+printf 'ELOVA_BACKEND_URL=http://100.100.10.20:3001\nDATABASE_URL=postgresql://frontend-must-not-receive-this\n' > "$frontend_env"
+if (check_frontend_env "$frontend_env") >"$TMP/out" 2>&1; then
+  fail 'frontend environment accepted backend database configuration'
+fi
+grep -Fq 'must not define backend-only DATABASE_URL' "$TMP/out" ||
+  fail 'frontend database variable refusal was not explicit'
+ok 'frontend preflight rejects backend-only database configuration'
+
 for local_database in \
   'postgresql://user:secret@localhost:5432/elova?sslmode=disable' \
   'postgresql://user:secret@127.0.0.1:5432/elova' \

@@ -9,7 +9,7 @@ readonly LOCK_ROOT=/run/lock
 readonly FRONTEND_PORT=3000
 readonly BACKEND_PORT=3001
 readonly HEALTH_TIMEOUT_SECONDS=60
-readonly HEALTH_REQUEST_TIMEOUT_SECONDS=6
+readonly HEALTH_REQUEST_TIMEOUT_SECONDS=9
 readonly HEALTH_DELAY_SECONDS=2
 readonly KEEP_RELEASES=3
 readonly RELEASE_DIGEST_FILE=.elova-artifact-sha256
@@ -127,6 +127,19 @@ env_value() {
   ' "$file"
 }
 
+env_has_key() {
+  local key=$1 file=$2
+  awk -v key="$key" '
+    /^[[:space:]]*#/ { next }
+    {
+      line=$0
+      sub(/^[[:space:]]*/, "", line)
+      if (index(line, key "=") == 1) found=1
+    }
+    END { if (found) exit 0; exit 1 }
+  ' "$file"
+}
+
 expected_digest() {
   local digest
   [[ -f $sha256_file && ! -L $sha256_file ]] || die "SHA-256 file must be a regular, non-symlink file: $sha256_file"
@@ -232,6 +245,9 @@ check_env_permissions() {
 
 check_frontend_env() {
   local file=$1 url
+  if env_has_key DATABASE_URL "$file"; then
+    die "$file must not define backend-only DATABASE_URL"
+  fi
   url=$(env_value ELOVA_BACKEND_URL "$file") || die "$file must define ELOVA_BACKEND_URL"
   node - "$url" "$BACKEND_PORT" <<'NODE'
 const { isIP } = require('node:net');

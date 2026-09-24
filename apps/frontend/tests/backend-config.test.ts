@@ -52,6 +52,7 @@ test("local development permits only explicit loopback or Tailnet origins", () =
   mutableEnvironment.NODE_ENV = "development";
   for (const allowedUrl of [
     "http://127.0.0.1:3001",
+    "http://127.255.255.254:3001",
     "http://localhost:3001",
     "http://[::1]:3001",
     "http://100.100.10.20:3001",
@@ -63,6 +64,7 @@ test("local development permits only explicit loopback or Tailnet origins", () =
   for (const rejectedUrl of [
     "http://10.0.0.2:3001",
     "http://192.168.0.2:3001",
+    "http://127.attacker.example:3001",
     "http://api.example.com:3001",
   ]) {
     mutableEnvironment.ELOVA_BACKEND_URL = rejectedUrl;

@@ -37,7 +37,7 @@ Do not continue until every applicable item is true. The helper's `preflight` re
 ### PostgreSQL and integrations
 
 - PostgreSQL already exists on GX10, is backed up, and accepts the backend only through a same-host Unix socket or TCP loopback. Remote database hosts are rejected; TLS is not mandatory for these same-host transports. Database provisioning, roles, grants, socket/listener policy, backup policy, and credentials are outside this slice.
-- `DATABASE_URL` references the intended production database and least-privilege runtime/migration role chosen by the operator, with either an explicit loopback host or an absolute Unix-socket `host` query parameter. It appears only in `/etc/elova/backend.env`; it must never enter the frontend environment, artifact, journal, command line, or logs.
+- `DATABASE_URL` references the intended production database and least-privilege runtime/migration role chosen by the operator, with either an explicit loopback host or an absolute Unix-socket `host` query parameter. It appears only in `/etc/elova/backend.env`; frontend preflight rejects any definition in `/etc/elova/frontend.env`, and it must never enter a frontend artifact, journal, command line, or log.
 - Ordered forward migrations for the release have been reviewed and tested against a restored backup. A migration-count change is an irreversible application-release boundary: the retained backend cannot be restored, and recovery requires a forward fix.
 - Any n8n endpoints and credentials needed by the backend already exist and are added to the backend environment file only. This change performs no n8n action.
 
@@ -169,4 +169,4 @@ Use `--service backend` on GX10. Backend rollback also requires that the previou
 - `/var/lib/elova/releases/<service>/journal.jsonl`
 - resolved `current` and `previous` symlink targets and the deployed artifact digest
 
-A liveness response proves only that the process serves requests. Readiness is the activation gate because backend readiness includes PostgreSQL reachability and migration compatibility. The two backend dependency queries each have a two-second limit, the frontend allows five seconds for the complete backend check, and the release probe allows six seconds for the frontend wrapper and response handling.
+A liveness response proves only that the process serves requests. Readiness is the activation gate because backend readiness includes PostgreSQL reachability and migration compatibility. The backend allows up to three seconds to connect to PostgreSQL and two seconds for each of its two dependency queries. The frontend allows eight seconds for that complete backend check, and the release probe allows nine seconds for the frontend wrapper and response handling.

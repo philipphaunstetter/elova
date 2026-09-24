@@ -48,7 +48,8 @@ export function getBackendOrigin(): URL {
   }
 
   const hostname = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
-  const isLoopback = hostname === "localhost" || hostname === "::1" || hostname.startsWith("127.");
+  const isIpv4Loopback = isIP(hostname) === 4 && Number(hostname.split(".")[0]) === 127;
+  const isLoopback = hostname === "localhost" || hostname === "::1" || isIpv4Loopback;
   const isDevelopmentLoopback = process.env.NODE_ENV === "development" && isLoopback;
   if (!isTailnetHostname(hostname) && !isDevelopmentLoopback) {
     throw new BackendConfigurationError();
