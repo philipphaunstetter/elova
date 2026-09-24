@@ -16,12 +16,9 @@ npm ci
 npm run generate
 npm run lint
 npm test
-ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/to/output
-bash -n ops/bin/elova-native-release ops/bin/elova-package-native ops/tests/test-native-release.sh
-ops/tests/test-native-release.sh
 ```
 
-CI adds ephemeral PostgreSQL migration tests, native startup/readiness and BFF failure tests, browser-artifact leakage inspection, dependency audit, and repository secret scanning.
+See the [README](README.md#local-verification) for packaging and the [native operations runbook](ops/docs/native-services-runbook.md#review-and-install-the-templates) for shell/template checks. CI adds ephemeral PostgreSQL migration tests, native startup/readiness and BFF failure tests, browser-artifact leakage inspection, dependency audit, and repository secret scanning.
 
 ## Runtime policy
 
