@@ -1,0 +1,164 @@
+# Elova native frontend/backend operations
+
+Status: reviewed templates only. **Nothing in `ops/` is installed or executed on a host by this repository change.** This change does not create users, install packages, deploy releases, run migrations, start or restart services, or alter the VPS, GX10, Tailnet, DNS, firewall, PostgreSQL, Docker Hub, credentials, n8n, or any external system.
+
+The first vNext slice runs without containers:
+
+| Host | Unix user (non-login) | Package identity | Unit | Bind | Readiness |
+| --- | --- | --- | --- | --- | --- |
+| Public VPS | `elova-frontend` | `@elova/frontend` | `elova-frontend.service` | `127.0.0.1:3000` only | `http://127.0.0.1:3000/api/v1/health/ready` |
+| Private GX10 | `elova-backend` | `@elova/backend` | `elova-backend.service` | the address in `ELOVA_BACKEND_HOST` on `tailscale0`, port `3001` | `http://<tailnet-address>:3001/v1/health/ready` |
+
+The frontend's public TLS reverse proxy is outside this slice. It must proxy browser requests to the loopback frontend; it must never expose GX10 directly. PostgreSQL is reachable only from the backend. Tailnet transport identity does not replace application authentication or workspace authorization.
+
+## Preconditions owned by the operator
+
+Do not continue until every applicable item is true. The helper's `preflight` reads and verifies these conditions but does not create them.
+
+### Both hosts
+
+- A supported Linux/systemd host exists and has `systemd-analyze`, Node.js, npm, `tar`, `sha256sum`, `curl`, `flock`, and `ip` available on the unit/helper paths.
+- Time synchronization and host patching are in place.
+- A root operator has reviewed the templates and the exact release digest.
+- The dedicated user and same-named group exist with a non-login shell and no password. They are different users; neither is a member of the other service group. For example, an operator may use `useradd --system --user-group --home-dir /nonexistent --no-create-home --shell /usr/sbin/nologin elova-frontend` on the VPS and the corresponding `elova-backend` command on GX10.
+- `/etc/elova` and the relevant environment file have been created outside all release artifacts. The file is a regular, non-symlink file owned `root:<service-user>` with mode `0640`; `/etc/elova` should be root-owned mode `0750` or stricter.
+- The reviewed unit(s) are installed under `/etc/systemd/system/`, and systemd has been reloaded. Installing units and enabling services are manual, separately authorized host changes—not actions performed here.
+- `/opt/elova/ops/bin/elova-native-release` is an operator-reviewed copy of the helper. Release directories are on one local filesystem so a symlink rename is atomic.
+- Backups, monitoring, log retention, capacity, and an incident rollback owner are in place.
+
+### Tailnet, DNS, and firewall
+
+- The VPS and GX10 are already enrolled in the intended Tailnet. Their identity, device approval, key expiry, ownership, and ACL/grant policy have been reviewed.
+- GX10 has a stable address assigned to `tailscale0`; this exact address is `ELOVA_BACKEND_HOST`. Wildcard and loopback binds are rejected.
+- The VPS can reach GX10 TCP port `3001` over the Tailnet, and no public interface can reach that port. Any host or network firewall changes require separate authorization.
+- `ELOVA_BACKEND_URL` is the credential-free private GX10 Tailnet origin with explicit port `3001`. Production must not use a public or loopback origin and must not create a `NEXT_PUBLIC_` alias.
+- Public DNS/TLS and the VPS reverse proxy are already configured separately. No DNS or proxy configuration is included here.
+
+### PostgreSQL and integrations
+
+- PostgreSQL already exists, is backed up, and accepts an authenticated TLS connection from the GX10 backend only. Database provisioning, roles, grants, network access, TLS, backup policy, and credentials are outside this slice.
+- `DATABASE_URL` references the intended production database and least-privilege runtime/migration role chosen by the operator. It appears only in `/etc/elova/backend.env`; it must never enter the frontend environment, artifact, journal, command line, or logs.
+- Ordered forward migrations for the release have been reviewed, tested against a restored backup, and proven compatible with both the new release and the release retained for rollback.
+- Any n8n endpoints and credentials needed by the backend already exist and are added to the backend environment file only. This change performs no n8n action.
+
+## Release artifact contract
+
+The integration build supplies one gzip tar archive plus a separately transported SHA-256 file. The archive:
+
+1. contains exactly one top-level directory;
+2. contains no symlinks, special files, absolute paths, or `..` traversal;
+3. is complete and prebuilt—deployment never runs dependency installation or build scripts;
+4. has a top-level `package.json` named exactly `@elova/frontend` or `@elova/backend` with a `start` script;
+5. for the backend, has an explicit `migrate` script that applies ordered, forward-compatible migrations and exits nonzero on incompatibility.
+
+The SHA file starts with the archive's 64-digit SHA-256 digest. Credentials and environment files are never in the archive. A release ID should be an immutable build identifier such as the full Git commit SHA; it is limited to letters, digits, dots, underscores, and hyphens.
+
+Releases are staged under `/opt/elova/<service>/releases/<release-id>`, root-owned and non-writable. `current` and `previous` are relative symlinks. Each operation takes `/run/lock/elova-<service>-deploy.lock`. The append-only operational record is `/var/lib/elova/releases/<service>/journal.jsonl`; it contains no secrets. Activation retains `current`, `previous`, and at most one additional recent release.
+
+## Review and install the templates
+
+These are instructions for a separately authorized maintenance window, not actions performed by this change.
+
+1. Review `ops/systemd/*.service`, `ops/bin/elova-native-release`, and the environment examples.
+2. Check the repository copies without installing them:
+
+   ```sh
+   systemd-analyze verify ops/systemd/elova-frontend.service \
+     ops/systemd/elova-backend.service \
+     ops/systemd/elova-backend-migrate@.service
+   bash -n ops/bin/elova-native-release ops/tests/test-native-release.sh
+   ops/tests/test-native-release.sh
+   ```
+
+3. After separately authorizing host changes, install only the relevant files. On the VPS that is the frontend unit; on GX10 that is the backend and migration units. Preserve root ownership and non-writable modes.
+4. Create the environment file from the relevant example. Replace every example value; never deploy the example credentials or addresses. Do not put `HOSTNAME` or `PORT` in the frontend file—the unit pins loopback port 3000. Do not put `PORT` in the backend file—the unit pins port 3001.
+5. Run `systemd-analyze verify` on the installed units, then `systemctl daemon-reload`. Enabling or starting units is a distinct operator decision and is not part of template installation.
+
+The units run with dedicated users, a strict read-only filesystem view, no capabilities, no privilege escalation, private temporary/devices, protected kernel/control-group settings, a restrictive umask, graceful `SIGTERM` with a 30-second stop timeout, and `Restart=on-failure`. Writable state is restricted to systemd-managed `/var/lib/elova/<service>` and `/run/elova/<service>` paths. Application startup never runs a migration.
+
+## Guarded deployment sequence
+
+Set local shell variables without embedding secrets:
+
+```sh
+helper=/opt/elova/ops/bin/elova-native-release
+artifact=/path/from/trusted-transfer/elova-release.tgz
+digest=/path/from/trusted-transfer/elova-release.tgz.sha256
+release=<full-build-commit-sha>
+```
+
+### 1. Dry-run and explicit preflight
+
+Dry-run validates the digest, archive safety, package identity, and start script without examining or changing a host:
+
+```sh
+sudo "$helper" preflight --service frontend --artifact "$artifact" --sha256-file "$digest" --release "$release" --dry-run
+```
+
+Then run the explicit read-only host preflight by omitting `--dry-run`. It verifies tools, non-login user, installed units, environment ownership/mode, required variables, and (for backend) that the bind address is assigned to `tailscale0`:
+
+```sh
+sudo "$helper" preflight --service frontend --artifact "$artifact" --sha256-file "$digest" --release "$release"
+```
+
+Use `--service backend` on GX10. Resolve every failure; do not bypass a check.
+
+### 2. Stage an immutable release
+
+First inspect the plan, then use the explicit mutation gate:
+
+```sh
+sudo "$helper" stage --service frontend --artifact "$artifact" --sha256-file "$digest" --release "$release" --dry-run
+sudo "$helper" stage --service frontend --artifact "$artifact" --sha256-file "$digest" --release "$release" --apply
+```
+
+Staging verifies the SHA again, extracts into a temporary directory, checks package identity, removes write permission, records the event, and stops. It does not change a symlink, migrate, or touch a service.
+
+### 3. Run the backend migration explicitly
+
+There is no migration for the frontend. On GX10, review the migration plan and current database backup before running:
+
+```sh
+sudo "$helper" migrate --service backend --release "$release" --dry-run
+sudo "$helper" migrate --service backend --release "$release" --apply
+```
+
+The helper invokes only `elova-backend-migrate@<release>.service`, waits for success, and writes a release-specific success marker outside the artifact. It does **not** activate or restart the API. Backend activation refuses a release without this marker. The API unit runs only `npm start`; it never invokes migration implicitly.
+
+There is deliberately **no down/destructive migration procedure**. If a forward migration fails, stop, preserve logs, leave the current release running, and escalate to the database/release owner. Restore or corrective-forward-migration decisions require separate authorization. Symlink rollback is permitted only when the retained application release is schema-compatible.
+
+### 4. Activate and converge health
+
+After migration (backend) and within the authorized service window:
+
+```sh
+sudo "$helper" activate --service frontend --release "$release" --dry-run
+sudo "$helper" activate --service frontend --release "$release" --apply
+```
+
+Use `--service backend` on GX10. Activation atomically preserves the old `current` as `previous`, changes `current`, restarts only the named service, and polls the fixed readiness path for up to 60 seconds. A failed convergence restores the prior symlink and service state and records a failed event. Inspect `journalctl -u elova-frontend.service` or the corresponding backend/migration unit without copying environment values into tickets.
+
+Recommended order is backend stage → explicit backend migration → backend activation/readiness → frontend stage → frontend activation/readiness. Coordinate compatibility so either frontend can safely use either retained backend during the window.
+
+## Symlink rollback
+
+Rollback changes no database state and runs no migration. Confirm schema compatibility first. Review the plan and the `previous` target, then:
+
+```sh
+sudo "$helper" rollback --service frontend --dry-run
+sudo readlink -f /opt/elova/frontend/{current,previous}
+sudo "$helper" rollback --service frontend --apply
+```
+
+Use `--service backend` on GX10. Backend rollback also requires that the previous release has a successful migration marker. The helper swaps `current` and `previous`, restarts only that service, and requires readiness. On failed readiness it restores the pre-rollback links. Never attempt a down migration as part of rollback.
+
+## Evidence and incident checks
+
+- `systemctl status elova-frontend.service` / `elova-backend.service`
+- `journalctl -u <unit> --since <window>` and the migration instance on GX10
+- `curl --fail http://127.0.0.1:3000/api/v1/health/ready` on VPS
+- `curl --fail http://<tailnet-address>:3001/v1/health/live` and `/v1/health/ready` on GX10
+- `/var/lib/elova/releases/<service>/journal.jsonl`
+- resolved `current` and `previous` symlink targets and the deployed artifact digest
+
+A liveness response proves only that the process serves requests. Readiness is the activation gate because backend readiness includes PostgreSQL reachability and migration compatibility.
