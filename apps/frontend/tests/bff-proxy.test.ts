@@ -80,6 +80,7 @@ test("turns an upstream 503 into a minimal response without headers, cookies, or
         location: `${PRIVATE_URL}/admin`,
         "set-cookie": `backend=${PRIVATE_URL}; Path=/`,
         server: "gx10",
+        "x-elova-api-version": "1",
         "x-internal-host": "gx10.internal",
       },
     },
@@ -99,6 +100,51 @@ test("turns an upstream 503 into a minimal response without headers, cookies, or
   assert.equal(text.includes("100.100.10.20"), false);
   assert.equal(text.includes("8787"), false);
   assert.equal(text.includes("postgres.internal"), false);
+});
+
+test("preserves known versioned backend client errors", async () => {
+  const fakeFetch: typeof fetch = async () => Response.json(
+    { error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } },
+    {
+      status: 405,
+      headers: {
+        etag: `\"${PRIVATE_URL}\"`,
+        "x-elova-api-version": "1",
+        "x-request-id": "method-error-1",
+      },
+    },
+  );
+
+  const response = await proxyToBackend(
+    browserRequest("/api/v1/health/live", { method: "POST" }),
+    ["health", "live"],
+    fakeFetch,
+  );
+
+  assert.equal(response.status, 405);
+  assert.deepEqual(await response.json(), {
+    error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" },
+  });
+  assert.equal(response.headers.get("x-request-id"), "method-error-1");
+  assert.equal(response.headers.has("etag"), false);
+});
+
+test("rejects unversioned or malformed backend client errors", async () => {
+  for (const headers of [
+    new Headers({ "content-type": "application/json" }),
+    new Headers({ "content-type": "application/json", "x-elova-api-version": "1" }),
+  ]) {
+    const response = await proxyToBackend(
+      browserRequest("/api/v1/health/live", { method: "POST" }),
+      ["health", "live"],
+      async () => new Response(
+        JSON.stringify({ error: { code: "METHOD_NOT_ALLOWED", message: `${PRIVATE_URL} failed` } }),
+        { status: 405, headers },
+      ),
+    );
+    assert.equal(response.status, 502);
+    assert.equal((await response.text()).includes(PRIVATE_URL), false);
+  }
 });
 
 test("does not expose private redirect targets", async () => {

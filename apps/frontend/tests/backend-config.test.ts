@@ -48,8 +48,28 @@ test("production accepts only Tailnet IP and MagicDNS origins", () => {
   }
 });
 
-test("local development permits an explicitly configured loopback origin", () => {
+test("local development permits only explicit loopback or Tailnet origins", () => {
   mutableEnvironment.NODE_ENV = "development";
+  for (const allowedUrl of [
+    "http://127.0.0.1:3001",
+    "http://localhost:3001",
+    "http://[::1]:3001",
+    "http://100.100.10.20:3001",
+  ]) {
+    mutableEnvironment.ELOVA_BACKEND_URL = allowedUrl;
+    assert.equal(getBackendOrigin().origin, allowedUrl);
+  }
+
+  for (const rejectedUrl of [
+    "http://10.0.0.2:3001",
+    "http://192.168.0.2:3001",
+    "http://api.example.com:3001",
+  ]) {
+    mutableEnvironment.ELOVA_BACKEND_URL = rejectedUrl;
+    assert.throws(() => getBackendOrigin(), /Private backend is not configured/);
+  }
+
+  mutableEnvironment.NODE_ENV = "test";
   mutableEnvironment.ELOVA_BACKEND_URL = "http://127.0.0.1:3001";
-  assert.equal(getBackendOrigin().origin, "http://127.0.0.1:3001");
+  assert.throws(() => getBackendOrigin(), /Private backend is not configured/);
 });

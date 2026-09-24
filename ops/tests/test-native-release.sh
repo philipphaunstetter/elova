@@ -204,4 +204,43 @@ fi
 systemctl_status=0
 ok 'failed release restoration preserves state and propagates failure'
 
+owned_pid=$$
+listener_pid=$owned_pid
+pid_in_control_group() { [[ $1 == "$owned_pid" && $2 == /test-unit ]]; }
+systemctl() {
+  case "$3" in
+    --property=ActiveState) printf 'active\n' ;;
+    --property=MainPID) printf '%s\n' "$owned_pid" ;;
+    --property=ControlGroup) printf '/test-unit\n' ;;
+    *) return 1 ;;
+  esac
+}
+ss() {
+  printf 'LISTEN 0 511 127.0.0.1:3000 0.0.0.0:* users:(("node",pid=%s,fd=20))\n' "$listener_pid"
+}
+service=frontend
+unit_owns_listener elova-frontend.service || fail 'unit-owned listener was rejected'
+listener_pid=999999
+if unit_owns_listener elova-frontend.service; then
+  fail 'listener outside the unit control group was accepted'
+fi
+ok 'readiness ownership requires the named unit listener'
+
+health_headers="$TMP/health.headers"
+health_body="$TMP/health.body"
+printf 'HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\n\r\n' > "$health_headers"
+printf '{"status":"ready","checks":{"database":"ready","migrations":"ready"}}' > "$health_body"
+validate_health_response "$health_headers" "$health_body" || fail 'frontend readiness contract was rejected'
+service=backend
+if validate_health_response "$health_headers" "$health_body"; then
+  fail 'backend readiness without an API version was accepted'
+fi
+printf 'HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nX-Elova-Api-Version: 1\r\n\r\n' > "$health_headers"
+validate_health_response "$health_headers" "$health_body" || fail 'backend readiness contract was rejected'
+printf '{"status":"not_ready","checks":{"database":"ready","migrations":"ready"}}' > "$health_body"
+if validate_health_response "$health_headers" "$health_body"; then
+  fail 'not-ready response passed the activation contract'
+fi
+ok 'activation accepts only the expected readiness contract'
+
 printf '1..%d\n' "$pass"

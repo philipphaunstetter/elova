@@ -50,7 +50,8 @@ export function getBackendOrigin(): URL {
 
   const hostname = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   const isLoopback = hostname === "localhost" || hostname === "::1" || hostname.startsWith("127.");
-  if (process.env.NODE_ENV === "production" && (isLoopback || !isTailnetHostname(hostname))) {
+  const isDevelopmentLoopback = process.env.NODE_ENV === "development" && isLoopback;
+  if (!isTailnetHostname(hostname) && !isDevelopmentLoopback) {
     throw new BackendConfigurationError();
   }
 

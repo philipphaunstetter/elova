@@ -37,7 +37,8 @@ The BFF:
 3. does not forward hop-by-hop headers or caller-supplied host/forwarding headers;
 4. returns only an allowlist of response headers (`content-type`, `cache-control`, `etag`, `set-cookie`, `x-request-id`, `retry-after`);
 5. never returns an upstream `Location`, stack, hostname, origin, or raw network error;
-6. maps timeout to the stable `504` envelope and other upstream unavailability to the stable `502` envelope in `packages/api-contract/fixtures`.
+6. preserves only known, versioned backend `400`, `404`, and `405` envelopes after structured sanitization;
+7. maps timeout to the stable `504` envelope and other upstream unavailability to the stable `502` envelope in `packages/api-contract/fixtures`.
 
 There is no browser CORS path to GX10. Production accepts only an HTTP `ELOVA_BACKEND_URL` using a Tailnet IP or MagicDNS name; local development may use HTTP loopback only under an explicit development environment.
 

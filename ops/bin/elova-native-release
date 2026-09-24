@@ -316,7 +316,7 @@ host_preflight() {
   user=$(service_user)
   unit=$(service_unit)
   file=$(env_file)
-  for command in flock systemctl systemd-analyze curl ip npm node tar sha256sum stat; do
+  for command in flock systemctl systemd-analyze curl ip npm node ss tar sha256sum stat; do
     require_command "$command"
   done
   getent passwd "$user" >/dev/null || die "missing non-login service user: $user"
@@ -469,15 +469,94 @@ health_url() {
   fi
 }
 
+listener_coordinates() {
+  local host
+  if [[ $service == frontend ]]; then
+    printf '127.0.0.1 %s\n' "$FRONTEND_PORT"
+  else
+    host=$(env_value ELOVA_BACKEND_HOST "$(env_file)") || return 1
+    printf '%s %s\n' "$host" "$BACKEND_PORT"
+  fi
+}
+
+pid_in_control_group() {
+  local pid=$1 control_group=$2 hierarchy controllers process_group
+  [[ $pid =~ ^[1-9][0-9]*$ && -r /proc/$pid/cgroup && -n $control_group && $control_group != / ]] || return 1
+  while IFS=: read -r hierarchy controllers process_group; do
+    if [[ $process_group == "$control_group" || $process_group == "$control_group/"* ]]; then
+      return 0
+    fi
+  done < "/proc/$pid/cgroup"
+  return 1
+}
+
+unit_owns_listener() {
+  local unit=$1 active_state main_pid control_group host port sockets line endpoint pid_entry pid
+  active_state=$(systemctl show "$unit" --property=ActiveState --value) || return 1
+  [[ $active_state == active ]] || return 1
+  main_pid=$(systemctl show "$unit" --property=MainPID --value) || return 1
+  control_group=$(systemctl show "$unit" --property=ControlGroup --value) || return 1
+  pid_in_control_group "$main_pid" "$control_group" || return 1
+  read -r host port < <(listener_coordinates) || return 1
+  sockets=$(ss -H -ltnp "sport = :$port" 2>/dev/null) || return 1
+  while IFS= read -r line; do
+    endpoint=$(awk '{print $4}' <<< "$line")
+    if [[ $endpoint != "$host:$port" && $endpoint != "[$host]:$port" ]]; then
+      continue
+    fi
+    while IFS= read -r pid_entry; do
+      pid=${pid_entry#pid=}
+      if pid_in_control_group "$pid" "$control_group"; then
+        return 0
+      fi
+    done < <(grep -oE 'pid=[0-9]+' <<< "$line" || true)
+  done <<< "$sockets"
+  return 1
+}
+
+validate_health_response() {
+  local headers=$1 body=$2
+  node - "$headers" "$body" "$service" <<'NODE'
+const fs = require('node:fs');
+const [headersPath, bodyPath, service] = process.argv.slice(2);
+let headers;
+let body;
+try {
+  const blocks = fs.readFileSync(headersPath, 'utf8').split(/\r?\n\r?\n/)
+    .filter((block) => /^HTTP\//i.test(block));
+  headers = blocks.at(-1) ?? '';
+  body = JSON.parse(fs.readFileSync(bodyPath, 'utf8'));
+} catch { process.exit(1); }
+if (!/^content-type:\s*application\/json(?:;|\s*$)/im.test(headers)) process.exit(1);
+if (service === 'backend' && !/^x-elova-api-version:\s*1\s*$/im.test(headers)) process.exit(1);
+if (!body || typeof body !== 'object' || Array.isArray(body) ||
+    Object.keys(body).sort().join(',') !== 'checks,status' || body.status !== 'ready') process.exit(1);
+if (!body.checks || typeof body.checks !== 'object' || Array.isArray(body.checks) ||
+    Object.keys(body.checks).sort().join(',') !== 'database,migrations' ||
+    body.checks.database !== 'ready' || body.checks.migrations !== 'ready') process.exit(1);
+NODE
+}
+
 wait_for_health() {
-  local url deadline remaining request_timeout sleep_time
+  local unit=$1 url deadline remaining request_timeout sleep_time tmp headers body status
   url=$(health_url)
+  tmp=$(mktemp -d)
+  headers="$tmp/headers"
+  body="$tmp/body"
   deadline=$((SECONDS + HEALTH_TIMEOUT_SECONDS))
   while (( SECONDS < deadline )); do
     remaining=$((deadline - SECONDS))
     request_timeout=$HEALTH_REQUEST_TIMEOUT_SECONDS
     if (( request_timeout > remaining )); then request_timeout=$remaining; fi
-    if curl --noproxy '*' --fail --silent --show-error --max-time "$request_timeout" "$url" >/dev/null; then
+    : > "$headers"
+    : > "$body"
+    status=""
+    if unit_owns_listener "$unit" &&
+       status=$(curl --noproxy '*' --silent --show-error --max-time "$request_timeout" \
+         --dump-header "$headers" --output "$body" --write-out '%{http_code}' "$url") &&
+       [[ $status == 200 ]] && validate_health_response "$headers" "$body" &&
+       unit_owns_listener "$unit"; then
+      rm -rf -- "$tmp"
       return 0
     fi
     remaining=$((deadline - SECONDS))
@@ -486,6 +565,7 @@ wait_for_health() {
     if (( sleep_time > remaining )); then sleep_time=$remaining; fi
     sleep "$sleep_time"
   done
+  rm -rf -- "$tmp"
   return 1
 }
 
@@ -627,7 +707,7 @@ run_activate() {
   fi
   set_link "$root" current "releases/$release"
   url=$(health_url)
-  if ! systemctl restart "$unit" || ! wait_for_health; then
+  if ! systemctl restart "$unit" || ! wait_for_health "$unit"; then
     if (( rollback_allowed == 1 )); then
       if restore_release_state \
         "$root" "$old" "$had_previous" "$prior_previous" "$unit" "$prior_service_active"; then
@@ -687,7 +767,7 @@ run_rollback() {
   set_link "$root" current "releases/$previous"
   set_link "$root" previous "releases/$current"
   url=$(health_url)
-  if ! systemctl restart "$unit" || ! wait_for_health; then
+  if ! systemctl restart "$unit" || ! wait_for_health "$unit"; then
     if restore_release_state \
       "$root" "$current" 1 "$previous" "$unit" "$prior_service_active"; then
       failure_message="rollback restart or readiness failed at $url; restored release $current and prior service state"

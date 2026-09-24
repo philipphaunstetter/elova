@@ -23,6 +23,11 @@ const FORWARDED_RESPONSE_HEADERS = [
   "retry-after",
   "x-request-id",
 ] as const;
+const KNOWN_CLIENT_ERRORS = new Map<number, { code: string; message: string }>([
+  [400, { code: "BAD_REQUEST", message: "Bad request" }],
+  [404, { code: "NOT_FOUND", message: "Not found" }],
+  [405, { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" }],
+]);
 
 function json(body: unknown, status: number, headers?: Headers): Response {
   const responseHeaders = new Headers(headers);
@@ -145,6 +150,32 @@ async function readLimitedBody(
   return body.slice(0, total).buffer;
 }
 
+async function readSanitizedJson(
+  upstream: Response,
+  privateTokens: string[],
+  signal: AbortSignal,
+): Promise<{ parsed: unknown; serialized: string }> {
+  const contentType = upstream.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!contentType.includes("json")) throw new TypeError("Invalid JSON response");
+
+  const bytes = await readLimitedBody(upstream.body, MAX_RESPONSE_BYTES, signal);
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+  const serialized = JSON.stringify(sanitizeJson(parsed, privateTokens));
+  if (serialized === undefined) throw new TypeError("Invalid JSON response");
+  return { parsed, serialized };
+}
+
+function isKnownClientError(status: number, value: unknown): boolean {
+  const expected = KNOWN_CLIENT_ERRORS.get(status);
+  if (!expected || !value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (Object.keys(value).length !== 1 || !("error" in value)) return false;
+  const error = value.error;
+  if (!error || typeof error !== "object" || Array.isArray(error)) return false;
+  return Object.keys(error).length === 2 &&
+    "code" in error && error.code === expected.code &&
+    "message" in error && error.message === expected.message;
+}
+
 async function requestBody(request: Request, signal: AbortSignal): Promise<ArrayBuffer | undefined> {
   if (request.method === "GET" || request.method === "HEAD") return undefined;
 
@@ -218,33 +249,42 @@ export async function proxyToBackend(
     }
 
     if (upstream.status >= 300 && upstream.status < 400) return failure("unavailable");
+    if (upstream.status === 504) return failure("timeout");
+    if (!hasExpectedApiVersion(upstream)) return failure("unavailable");
+
+    if (KNOWN_CLIENT_ERRORS.has(upstream.status)) {
+      try {
+        const { parsed, serialized } = await readSanitizedJson(
+          upstream,
+          privateTokens,
+          controller.signal,
+        );
+        if (!isKnownClientError(upstream.status, parsed)) return failure("unavailable");
+        return new Response(serialized, {
+          status: upstream.status,
+          headers: safeResponseHeaders(upstream, privateTokens),
+        });
+      } catch {
+        return failure(timedOut ? "timeout" : "unavailable");
+      }
+    }
+
     if (!upstream.ok) {
-      if (upstream.status === 504) return failure("timeout");
       return failure("unavailable", upstream.status === 503 ? 503 : 502);
     }
-    if (!hasExpectedApiVersion(upstream)) return failure("unavailable");
     if (upstream.status === 204 || upstream.status === 205) {
       return new Response(null, { status: upstream.status, headers: safeResponseHeaders(upstream, privateTokens) });
     }
 
-    const contentType = upstream.headers.get("content-type")?.toLowerCase() ?? "";
-    if (!contentType.includes("json")) return failure("unavailable");
-
-    let sanitized: string;
     try {
-      const bytes = await readLimitedBody(upstream.body, MAX_RESPONSE_BYTES, controller.signal);
-      const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
-      const serialized = JSON.stringify(sanitizeJson(parsed, privateTokens));
-      if (serialized === undefined) throw new TypeError("Invalid JSON response");
-      sanitized = serialized;
+      const { serialized } = await readSanitizedJson(upstream, privateTokens, controller.signal);
+      return new Response(serialized, {
+        status: upstream.status,
+        headers: safeResponseHeaders(upstream, privateTokens),
+      });
     } catch {
       return failure(timedOut ? "timeout" : "unavailable");
     }
-
-    return new Response(sanitized, {
-      status: upstream.status,
-      headers: safeResponseHeaders(upstream, privateTokens),
-    });
   } finally {
     clearTimeout(timer);
   }

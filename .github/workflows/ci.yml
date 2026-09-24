@@ -142,8 +142,10 @@ jobs:
           printf 'stale backend output\n' > apps/backend/dist/src/stale-output.js
           printf 'stale frontend output\n' > apps/frontend/.next/static/stale-output.txt
           npm run package:native -- "$RUNNER_TEMP/elova-native-repeat"
-          if tar -tzf "$RUNNER_TEMP/elova-native-repeat/elova-backend.tgz" | grep -Fq stale-output; then exit 1; fi
-          if tar -tzf "$RUNNER_TEMP/elova-native-repeat/elova-frontend.tgz" | grep -Fq stale-output; then exit 1; fi
+          tar -tzf "$RUNNER_TEMP/elova-native-repeat/elova-backend.tgz" > "$RUNNER_TEMP/elova-backend-files.txt"
+          tar -tzf "$RUNNER_TEMP/elova-native-repeat/elova-frontend.tgz" > "$RUNNER_TEMP/elova-frontend-files.txt"
+          if grep -Fq stale-output "$RUNNER_TEMP/elova-backend-files.txt"; then exit 1; fi
+          if grep -Fq stale-output "$RUNNER_TEMP/elova-frontend-files.txt"; then exit 1; fi
         env:
           ELOVA_BACKEND_URL: http://100.100.10.20:3001
       - name: Verify artifacts satisfy the release-helper contract

@@ -17,7 +17,7 @@ Do not continue until every applicable item is true. The helper's `preflight` re
 
 ### Both hosts
 
-- A supported Linux/systemd host exists and has `systemd-analyze`, Node.js, npm, `tar`, `sha256sum`, `curl`, `flock`, and `ip` available on the unit/helper paths.
+- A supported Linux/systemd host exists and has `systemd-analyze`, Node.js, npm, `tar`, `sha256sum`, `curl`, `flock`, `ip`, and `ss` available on the unit/helper paths.
 - Time synchronization and host patching are in place.
 - A root operator has reviewed the templates and the exact release digest.
 - The dedicated user and same-named group exist with a non-login shell and no password. They are different users; neither is a member of the other service group. For example, an operator may use `useradd --system --user-group --home-dir /nonexistent --no-create-home --shell /usr/sbin/nologin elova-frontend` on the VPS and the corresponding `elova-backend` command on GX10.
@@ -144,7 +144,7 @@ sudo "$helper" activate --service frontend --release "$release" --dry-run
 sudo "$helper" activate --service frontend --release "$release" --apply
 ```
 
-Use `--service backend` on GX10. Before changing links, activation rejects any backend target with fewer migrations than the current release and requires a forward fix. Otherwise activation atomically preserves the old `current` as `previous`, changes `current`, restarts only the named service, and polls the fixed readiness path for up to 60 seconds. A failed convergence restores the prior links and preserves whether the prior service was active or stopped before recording failure when restoration does not cross a backend migration-count boundary; any restoration failure is reported as requiring operator intervention. When counts differ, the helper leaves the migrated release selected, stops the unhealthy service, records failure, and requires a forward fix instead of restoring an incompatible release. Inspect `journalctl -u elova-frontend.service` or the corresponding backend/migration unit without copying environment values into tickets.
+Use `--service backend` on GX10. Before changing links, activation rejects any backend target with fewer migrations than the current release and requires a forward fix. Otherwise activation atomically preserves the old `current` as `previous`, changes `current`, restarts only the named service, and polls the fixed readiness path for up to 60 seconds. Convergence requires the listener process to belong to the named systemd unit and the response to match the ready JSON contract; backend readiness must also carry `X-Elova-Api-Version: 1`. A failed convergence restores the prior links and preserves whether the prior service was active or stopped before recording failure when restoration does not cross a backend migration-count boundary; any restoration failure is reported as requiring operator intervention. When counts differ, the helper leaves the migrated release selected, stops the unhealthy service, records failure, and requires a forward fix instead of restoring an incompatible release. Inspect `journalctl -u elova-frontend.service` or the corresponding backend/migration unit without copying environment values into tickets.
 
 Recommended order is backend stage → explicit backend migration → backend activation/readiness → frontend stage → frontend activation/readiness. Coordinate compatibility so either frontend can safely use either retained backend during the window.
 
