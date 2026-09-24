@@ -9,8 +9,8 @@ Status: **frozen for the first separation slice**. Changes require the integrati
 | `apps/frontend/**` | frontend/BFF slice | Public VPS service. Browser UI and same-origin BFF only; no database, n8n, sync, or private-backend implementation. |
 | `apps/backend/**` | backend/integration slice | Private GX10 HTTP API, PostgreSQL access, migrations, synchronization, and jobs. No browser bundle. |
 | `packages/api-contract/**` | integration owner | Canonical OpenAPI source, fixtures, generated types/client, and compatibility checks. Generated files are never hand-edited. |
-| `deploy/systemd/**`, `docs/operations/**` | native-operations slice | Guarded systemd templates and native build/start/rollback runbook. No host mutation scripts. |
-| `.github/workflows/**`, `scripts/verify-*.mjs` | CI-evidence slice | Independent builds plus contract, browser-boundary, startup/health, failure, and leakage evidence. |
+| `ops/bin/**`, `ops/systemd/**`, `ops/docs/**` | native-operations slice | Native packaging, guarded release helper, systemd templates, and the [operations runbook](../../ops/docs/native-services-runbook.md). Host mutations require separate authority and an explicit `--apply` gate. |
+| `.github/workflows/ci.yml`, `tests/integration/**` | CI-evidence slice | Independent builds plus contract, browser-boundary, startup/health, failure, and leakage evidence. |
 
 Shared files (`package.json`, lockfile, TypeScript/lint configuration, this contract, and generated artifacts) are integration-owner reconciliation points. Workers must not independently redefine them.
 
@@ -19,7 +19,7 @@ Shared files (`package.json`, lockfile, TypeScript/lint configuration, this cont
 - Browser-visible same-origin API base: `/api/v1`.
 - Private backend API base: `/v1`.
 - Frontend-only private origin variable: `ELOVA_BACKEND_URL` (required in production). It has no `NEXT_PUBLIC_` alias and must not be copied into HTML, JavaScript, source maps, error bodies, redirects, or proxied response headers.
-- Backend-only database variable: `DATABASE_URL` (required outside tests). It must never be accepted by or exposed from the frontend.
+- Backend-only database variable: `DATABASE_URL` (required by backend runtime and migrations). It must never be accepted by or exposed from the frontend.
 - Frontend artifact/service: `@elova/frontend`, `elova-frontend.service`.
 - Backend artifact/service: `@elova/backend`, `elova-backend.service`.
 - Contract package: `@elova/api-contract`.
@@ -55,13 +55,9 @@ No product endpoint is invented in this foundation. Existing v2 calls are conver
 
 ## Integration checkpoints and serialization
 
-1. **Baseline (this document):** merge `origin/main` ancestry into `origin/v2-develop` with an unchanged tree; freeze paths, names, OpenAPI, and fixtures.
-2. **Independent slice heads:** backend may implement only `apps/backend` plus contract consumption; frontend may implement `apps/frontend` plus generated-client consumption; operations may implement only its owned paths; CI may add verification without changing the contract.
-3. **Generated artifact checkpoint (serialized):** integration owner reconciles all heads, resolves the workspace lockfile, validates OpenAPI, and regenerates the client exactly once from the final contract.
-4. **Compatibility checkpoint (serialized):** backend conformance and frontend generated-client tests must pass against the same contract digest.
-5. **Final checkpoint (serialized):** independent builds, BFF leakage/failure tests, native startup/readiness, migration compatibility, full tests/lint/build, and no-mistakes review run on one unchanged head before the sole PR to `main`.
+Main ancestry has been reconciled into the v2 base; the independent service and operations slices have been integrated. `packages/api-contract/openapi.yaml` remains the sole API source: regenerate its client from the final contract rather than editing generated files. [Native CI](../../.github/workflows/ci.yml) owns the independent build, contract-drift, migration, startup/readiness, BFF-boundary, and security evidence. The final reviewed head must be green, unchanged, in scope, and mergeable before the sole PR to `main` is merged.
 
-True serialization points are contract/schema changes, generated client output, root dependency/lockfile reconciliation, ordered PostgreSQL migrations, legacy data migration, and the final branch/PR/merge. Host, Tailnet, PostgreSQL, n8n, registry, and public-image state are never shared worker state and are outside this slice.
+Contract/schema changes, generated client output, root dependency/lockfile reconciliation, ordered PostgreSQL migrations, legacy data migration, and the final branch/PR/merge remain serialized integration-owner decisions. Host, Tailnet, PostgreSQL, n8n, registry, and public-image state are outside this slice.
 
 ## Explicit deferrals
 

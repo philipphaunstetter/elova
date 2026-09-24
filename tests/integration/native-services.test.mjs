@@ -95,7 +95,7 @@ async function stopGracefully(process, name) {
   )
   assert.equal(
     result.code,
-    0,
+    name === 'frontend' ? 143 : 0,
     `${name} exited unsuccessfully\n${process.output()}`,
   )
 }

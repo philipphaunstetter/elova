@@ -21,6 +21,8 @@ RestartSec=5s
 TimeoutStartSec=60s
 TimeoutStopSec=30s
 KillSignal=SIGTERM
+# Next.js standalone completes its SIGTERM cleanup with exit code 143.
+SuccessExitStatus=143
 KillMode=control-group
 UMask=0077
 StateDirectory=elova/frontend

@@ -1,5 +1,7 @@
 # Elova vNext
 
+Elova monitors n8n workflows and execution outcomes. This first vNext slice establishes deployment boundaries and health checks; the legacy product flows are not yet ported to these services.
+
 Elova is being separated into independently built native services:
 
 - `apps/frontend` — the public VPS Next.js frontend and same-origin BFF;

@@ -82,7 +82,7 @@ These are instructions for a separately authorized maintenance window, not actio
 4. Create the environment file from the relevant example. Replace every example value; never deploy the example credentials or addresses. Do not put `HOSTNAME` or `PORT` in the frontend file—the unit pins loopback port 3000. Do not put `PORT` in the backend file—the unit pins port 3001.
 5. Run `systemd-analyze verify` on the installed units, then `systemctl daemon-reload`. Enabling or starting units is a distinct operator decision and is not part of template installation.
 
-The units run with dedicated users, a strict read-only filesystem view, no capabilities, no privilege escalation, private temporary/devices, protected kernel/control-group settings, a restrictive umask, graceful `SIGTERM` with a 30-second stop timeout, and `Restart=on-failure`. Writable state is restricted to systemd-managed `/var/lib/elova/<service>` and `/run/elova/<service>` paths. Application startup never runs a migration.
+The units run with dedicated users, a strict read-only filesystem view, no capabilities, no privilege escalation, private temporary/devices, protected kernel/control-group settings, a restrictive umask, `SIGTERM` with a 30-second stop timeout, and `Restart=on-failure`. The standalone Next.js frontend exits with status 143 after `SIGTERM`; its unit accepts that status as successful shutdown so an intentional stop does not trigger a failure restart. Writable state is restricted to systemd-managed `/var/lib/elova/<service>` and `/run/elova/<service>` paths. Application startup never runs a migration.
 
 ## Guarded deployment sequence
 
