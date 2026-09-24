@@ -14,16 +14,13 @@ ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/to/o
 
 ## Run the backend locally
 
-The backend requires a same-host Unix-socket or loopback PostgreSQL URL and refuses wildcard binds. Apply migrations explicitly before startup:
+The backend requires a same-host Unix-socket or loopback PostgreSQL URL and refuses wildcard binds. Before either command, supply `DATABASE_URL` and two **different** base64-encoded 32-byte values for `ELOVA_SESSION_SECRET` and `ELOVA_CREDENTIAL_KEY` through a protected local environment. Migration validates these settings too. Do not put credentials in shell history or checked-in files. Apply migrations explicitly before startup:
 
 ```bash
 cd apps/backend
-DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/elova npm run migrate
-DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/elova \
-  ELOVA_BACKEND_HOST=127.0.0.1 PORT=3001 npm start
+npm run migrate
+ELOVA_BACKEND_HOST=127.0.0.1 PORT=3001 npm start
 ```
-
-Do not use real credentials in shell history; these commands show variable shape only.
 
 ## Run the frontend locally
 

@@ -27,7 +27,7 @@ The example Tailnet address is build-time test input only; no network call is ma
 
 ## Initial owner
 
-There is no public signup or web bootstrap. After an operator has separately provisioned and migrated private PostgreSQL on GX10, the operator runs the packaged backend's `bootstrap-owner` command once with `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD` supplied through the protected host environment. The command performs one atomic owner write; failures before commit are retryable and every call after commitment is refused. Repository tests exercise this behavior but do not operate a real host or database.
+There is no public signup or web bootstrap. After an operator has separately provisioned and migrated private PostgreSQL on GX10, the operator runs the packaged backend's `bootstrap-owner` command once with `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD` supplied through the protected host environment. The command performs one atomic owner write; failures before commit are retryable and every call after commitment is refused.
 
 ## Operations
 

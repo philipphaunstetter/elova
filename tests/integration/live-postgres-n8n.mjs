@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
@@ -190,11 +191,30 @@ try {
   assert.equal((await request(api, '/v1/workflows', { headers: { cookie } }, 200)).body.workflows.length, 2);
   assert.equal((await request(api, '/v1/dashboard/metrics', { headers: { cookie } }, 200)).body.totalExecutions, 2);
   assert.equal((await pool.query('SELECT count(*)::integer AS count FROM sessions')).rows[0].count, 1);
-  console.log(JSON.stringify({ verdict: 'pass', scope: 'isolated PostgreSQL and two synthetic n8n fixtures',
-    checks: ['atomic one-time operator bootstrap', 'signed login and authenticated settings through BFF',
-      'unsigned and incorrect credentials rejected', 'encrypted immutable provider origins',
-      'sanitized persisted workflow and execution histories separated by provider'],
-    persisted: { owners: 1, sessions: 1, providers: 2, workflows: 2, executions: 2 },
+  const dashboard = (await request(api, '/v1/dashboard/metrics', { headers: { cookie } }, 200)).body;
+  const ownerSession = (await request(api, '/v1/auth/session', { headers: { cookie } }, 200)).body;
+  if (process.env.ELOVA_LIVE_EVIDENCE_DIR) {
+    for (const route of ['login', 'settings']) {
+      const response = await fetch(`${publicOrigin}/${route}`, { headers: { cookie } });
+      assert.equal(response.status, 200);
+      await writeFile(resolve(process.env.ELOVA_LIVE_EVIDENCE_DIR, `live-${route}.html`), await response.text());
+    }
+  }
+  const logout = await fetch(`${api}/v1/auth/logout`, { method: 'POST', headers: { cookie } });
+  assert.equal(logout.status, 204);
+  await request(api, '/v1/auth/session', { headers: { cookie } }, 401);
+  console.log(JSON.stringify({
+    operator: { firstExit: first.code, retryExit: second.code, ownerCount: 1 },
+    authentication: { incorrectPassword: 401, unsignedCookie: 401, anonymousSettings: 401,
+      signedSession: ownerSession, authenticatedSettings: 200, revokedSession: 401 },
+    providers: providers.map(provider => ({ id: provider.id, name: provider.name, baseUrl: provider.baseUrl })),
+    duplicateOrigin: 409, encryptedCredential: true,
+    observability: { dashboard, executions: executions.map(item => ({ providerId: item.providerId,
+      status: item.status, durationMs: item.durationMs })), workflowCount: 2 },
+    persistence: { ownerCount: 1, providerCount: 2, workflowCount: 2, executionCount: 2,
+      modes: histories.rows.map(row => ({ providerId: row.id, workflowPrivacy: row.workflow_privacy,
+        executionPrivacy: row.execution_privacy, status: row.status })) },
+    sanitation: 'Synthetic personal data and secrets absent from both persisted content columns',
   }));
 } finally {
   for (const child of children.reverse()) {

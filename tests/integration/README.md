@@ -9,7 +9,7 @@ These tests exercise the frontend/BFF/backend/PostgreSQL boundary without publis
 - `native-services.test.mjs` extracts install-free archives, runs packaged migration/start commands, checks backend and proxied readiness, inspects browser assets for private values, verifies generic failures, and checks shutdown behavior.
 - The pinned TruffleHog action scans repository history and tracked content, failing CI on verified or unknown secret findings.
 
-All values are synthetic and local. No test contacts a real n8n instance, host, credential, database, or deployment.
+CI uses disposable PostgreSQL and synthetic values; it never contacts a deployed n8n, production credential, host, or database. `live-postgres-n8n.mjs` is an opt-in scenario outside CI and `npm test`: it checks the built operator command, signed login through the BFF, authenticated settings, and separated sanitized histories against an explicitly authorized, **empty** loopback PostgreSQL database and two synthetic loopback n8n fixtures. It requires `ELOVA_LIVE_ISOLATED_FIXTURE=yes`, `ELOVA_LIVE_DATABASE_URL`, `ELOVA_LIVE_N8N_A`, and `ELOVA_LIVE_N8N_B`; do not run it against existing databases or deployed services.
 
 ## Generated-contract checkpoint
 

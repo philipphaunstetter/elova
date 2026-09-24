@@ -44,4 +44,4 @@ Raw workflow and execution responses are bounded to process memory while being t
 
 ## Deferred scope
 
-Workspace/multi-user schema and flows, governance/Jev, scoring, legacy data migration or deletion, live owner bootstrap, live n8n synchronization, deployment, and external legacy Docker-image retirement remain outside this repository change. The current schema deliberately serves one owner-operated installation.
+Workspace/multi-user schema and flows, governance/Jev, scoring, legacy data migration or deletion, owner bootstrap and n8n synchronization on deployed infrastructure, deployment, and external legacy Docker-image retirement remain outside this repository change. The current schema deliberately serves one owner-operated installation.

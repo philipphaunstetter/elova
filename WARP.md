@@ -3,7 +3,7 @@
 ## Service boundaries
 
 - `apps/frontend`: public Next.js UI and same-origin BFF. It must not import database, n8n, synchronization, or backend runtime code.
-- `apps/backend`: private API, PostgreSQL access, migrations, and future synchronization/jobs.
+- `apps/backend`: private API, PostgreSQL access, migrations, and owner-initiated n8n synchronization.
 - `packages/api-contract`: authoritative OpenAPI, fixtures, and generated client. Change the OpenAPI first and regenerate; never hand-edit generated files.
 - `ops`: clean native artifact packaging plus templates and documentation. Repository work must not mutate hosts or services.
 

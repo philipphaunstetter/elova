@@ -9,7 +9,7 @@ The first vNext slice runs without containers:
 | Public VPS | `elova-frontend` | `@elova/frontend` | `elova-frontend.service` | `127.0.0.1:3000` only | `http://127.0.0.1:3000/api/v1/health/ready` |
 | Private GX10 | `elova-backend` | `@elova/backend` | `elova-backend.service` | the address in `ELOVA_BACKEND_HOST` on `tailscale0`, port `3001` | `http://<tailnet-address>:3001/v1/health/ready` |
 
-The frontend's public TLS reverse proxy is outside this slice. It must proxy browser requests to the loopback frontend; it must never expose GX10 directly. PostgreSQL is reachable only from the backend. Tailnet transport identity does not replace application authentication or workspace authorization.
+The frontend's public TLS reverse proxy is outside this slice. It must proxy browser requests to the loopback frontend; it must never expose GX10 directly. PostgreSQL is reachable only on GX10 by authorized backend and operator processes. Tailnet transport identity does not replace the signed owner session required by product endpoints.
 
 ## Preconditions owned by the operator
 
@@ -136,7 +136,7 @@ The helper invokes only `elova-backend-migrate@<release>.service`, waits for suc
 
 ### 3a. Bootstrap the sole owner separately
 
-Only after migration and separate authorization, an operator on GX10 may run the packaged backend command once with `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD` supplied through a protected transient environment. Do not put the bootstrap password in shell history, process arguments, the persistent environment file, logs, or tickets.
+Only after migration and separate authorization, an operator on GX10 may run the packaged backend command once with `DATABASE_URL`, `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD` supplied through a protected transient environment. An operator shell does not automatically inherit the backend unit's environment file. Do not put the bootstrap password in shell history, process arguments, the persistent environment file, logs, or tickets.
 
 ```sh
 cd "/opt/elova/backend/releases/$release"
