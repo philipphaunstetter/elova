@@ -1,6 +1,6 @@
 # Elova vNext
 
-Elova monitors n8n workflow definitions and execution outcomes. vNext runs as two independently built native services:
+Elova monitors n8n workflow definitions and execution outcomes. The existing native release runs as two independently built services:
 
 - `apps/frontend` — the public VPS Next.js UI and same-origin BFF;
 - `apps/backend` — the private GX10 API, owner/session authority, n8n synchronization, sanitization boundary, and PostgreSQL persistence;
@@ -32,7 +32,7 @@ There is no public signup or web bootstrap. After separately provisioning and mi
 
 Read [`ops/docs/native-services-runbook.md`](ops/docs/native-services-runbook.md) before considering host work. Repository templates do not install, deploy, migrate, bootstrap an owner, start, or restart anything by themselves. Host, Tailnet, PostgreSQL, n8n, credential, owner-bootstrap, and deployment changes require separate authority.
 
-The legacy public Docker image remains externally available and untouched. vNext has no container build or image-publication path; retirement of the external legacy artifact is a separate decision.
+The legacy public Docker image remains externally available and untouched. A separate **private, unactivated** backend + PostgreSQL two-container candidate is documented in [`ops/docs/container-runbook.md`](ops/docs/container-runbook.md); CI may build an unpushed ARM64 candidate with synthetic secrets. This is not an image-publication or GX10 deployment path without separate authority. Retirement of the external legacy artifact is a separate decision.
 
 ## Deferred product scope
 

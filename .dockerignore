@@ -1,0 +1,16 @@
+*
+!package.json
+!package-lock.json
+!apps/
+!apps/backend/
+!apps/backend/package.json
+!apps/backend/tsconfig.json
+!apps/backend/src/
+!apps/backend/src/**
+!apps/backend/migrations/
+!apps/backend/migrations/*.sql
+!apps/frontend/
+!apps/frontend/package.json
+!packages/
+!packages/api-contract/
+!packages/api-contract/package.json

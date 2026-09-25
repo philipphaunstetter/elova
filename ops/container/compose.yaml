@@ -1,0 +1,65 @@
+# Project-only template. Review ops/docs/container-runbook.md before any host action.
+name: elova
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+    platform: linux/arm64
+    pull_policy: never
+    restart: 'no'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: elova_vnext
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin
+      POSTGRES_INITDB_ARGS: --auth-local=peer --auth-host=scram-sha-256
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    volumes:
+      - elova_pg16_data:/var/lib/postgresql/data
+      - ${ELOVA_SECRETS_DIR:?protected absolute directory required}/postgres_admin:/run/secrets/postgres_admin:ro
+      - ${ELOVA_SECRETS_DIR:?protected absolute directory required}/postgres_app:/run/secrets/postgres_app:ro
+      - ./init-elova-db.sh:/docker-entrypoint-initdb.d/10-elova-db.sh:ro
+    networks: [elova_db]
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: '1.0'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d elova_vnext']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+  backend:
+    profiles: [activate]
+    image: ${ELOVA_BACKEND_IMAGE:?verified immutable backend digest required}
+    platform: linux/arm64
+    pull_policy: never
+    restart: 'no'
+    init: true
+    read_only: true
+    user: '10001:10001'
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: '1.0'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    environment:
+      ELOVA_RUNTIME: container
+      ELOVA_BACKEND_HOST: 0.0.0.0
+      PORT: '43181'
+      DATABASE_URL_FILE: /run/secrets/database_url
+      ELOVA_SESSION_SECRET_FILE: /run/secrets/session_key
+      ELOVA_CREDENTIAL_KEY_FILE: /run/secrets/credential_key
+    volumes:
+      - ${ELOVA_SECRETS_DIR:?protected absolute directory required}/database_url:/run/secrets/database_url:ro
+      - ${ELOVA_SECRETS_DIR:?protected absolute directory required}/session_key:/run/secrets/session_key:ro
+      - ${ELOVA_SECRETS_DIR:?protected absolute directory required}/credential_key:/run/secrets/credential_key:ro
+    networks: [elova_db, elova_edge]
+    ports:
+      - '${ELOVA_TAILNET_IP:?verified Tailnet IPv4 required}:43181:43181/tcp'
+volumes:
+  elova_pg16_data:
+    driver: local
+networks:
+  elova_db:
+    internal: true
+  elova_edge: {}
