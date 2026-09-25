@@ -1,6 +1,6 @@
 # Elova vNext developer quick start
 
-This repository does not provide a Docker or Compose runtime for vNext.
+These commands run the existing native development path. For the separate unactivated two-container candidate, see the [container runbook](ops/docs/container-runbook.md); it does not authorize host operation.
 
 ## Build and test
 
@@ -34,4 +34,4 @@ NODE_ENV=development ELOVA_BACKEND_URL=http://127.0.0.1:43181 npm start
 
 Production accepts only the GX10 HTTP origin using Tailnet IPv4, Tailscale IPv6, or a fully qualified MagicDNS `.ts.net` name. The frontend must configure it only on the server.
 
-For production prerequisites, guarded release mechanics, readiness, rollback, and restore expectations, see [`ops/docs/native-services-runbook.md`](ops/docs/native-services-runbook.md). Do not install or run those templates without separate host authority.
+For native production prerequisites, guarded release mechanics, readiness, rollback, and restore expectations, see [`ops/docs/native-services-runbook.md`](ops/docs/native-services-runbook.md). Do not install or run those templates without separate host authority.
