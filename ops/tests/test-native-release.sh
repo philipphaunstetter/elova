@@ -110,23 +110,23 @@ ok 'backend rollback refuses migration-count mismatches and remains readiness-ga
 source "$HELPER"
 frontend_env="$TMP/frontend.env"
 for allowed_origin in \
-  http://100.64.0.1:3001 \
-  http://100.127.255.254:3001 \
-  http://gx10.example-tailnet.ts.net:3001 \
-  'http://[fd7a:115c:a1e0::1]:3001'; do
+  http://100.64.0.1:43181 \
+  http://100.127.255.254:43181 \
+  http://gx10.example-tailnet.ts.net:43181 \
+  'http://[fd7a:115c:a1e0::1]:43181'; do
   printf 'ELOVA_BACKEND_URL=%s\n' "$allowed_origin" > "$frontend_env"
   check_frontend_env "$frontend_env" || fail "Tailnet HTTP origin was rejected: $allowed_origin"
 done
 for rejected_origin in \
-  http://10.0.0.2:3001 \
-  http://192.168.0.2:3001 \
-  http://169.254.0.2:3001 \
-  http://gx10:3001 \
-  http://gx10.internal:3001 \
-  http://gx10.local:3001 \
-  http://api.example.com:3001 \
-  https://gx10.example-tailnet.ts.net:3001 \
-  'http://[fd00::1]:3001'; do
+  http://10.0.0.2:43181 \
+  http://192.168.0.2:43181 \
+  http://169.254.0.2:43181 \
+  http://gx10:43181 \
+  http://gx10.internal:43181 \
+  http://gx10.local:43181 \
+  http://api.example.com:43181 \
+  https://gx10.example-tailnet.ts.net:43181 \
+  'http://[fd00::1]:43181'; do
   printf 'ELOVA_BACKEND_URL=%s\n' "$rejected_origin" > "$frontend_env"
   if (check_frontend_env "$frontend_env") >"$TMP/out" 2>&1; then
     fail "unsupported backend origin was accepted: $rejected_origin"
@@ -134,7 +134,7 @@ for rejected_origin in \
 done
 ok 'frontend preflight accepts only Tailnet HTTP origins'
 
-printf 'ELOVA_BACKEND_URL=http://100.100.10.20:3001\nDATABASE_URL=postgresql://frontend-must-not-receive-this\n' > "$frontend_env"
+printf 'ELOVA_BACKEND_URL=http://100.100.10.20:43181\nDATABASE_URL=postgresql://frontend-must-not-receive-this\n' > "$frontend_env"
 if (check_frontend_env "$frontend_env") >"$TMP/out" 2>&1; then
   fail 'frontend environment accepted backend database configuration'
 fi
@@ -142,7 +142,7 @@ grep -Fq 'must not define backend-only DATABASE_URL' "$TMP/out" ||
   fail 'frontend database variable refusal was not explicit'
 ok 'frontend preflight rejects backend-only database configuration'
 
-printf 'ELOVA_BACKEND_URL=http://100.100.10.20:3001\nELOVA_SESSION_SECRET=frontend-must-not-receive-this\n' > "$frontend_env"
+printf 'ELOVA_BACKEND_URL=http://100.100.10.20:43181\nELOVA_SESSION_SECRET=frontend-must-not-receive-this\n' > "$frontend_env"
 if (check_frontend_env "$frontend_env") >"$TMP/out" 2>&1; then
   fail 'frontend environment accepted backend session configuration'
 fi
@@ -250,16 +250,120 @@ systemctl() {
     *) return 1 ;;
   esac
 }
+listener_host=127.0.0.1
+listener_port=43180
+extra_listener=''
 ss() {
-  printf 'LISTEN 0 511 127.0.0.1:3000 0.0.0.0:* users:(("node",pid=%s,fd=20))\n' "$listener_pid"
+  [[ -n $listener_host ]] || return 0
+  printf 'LISTEN 0 511 %s:%s 0.0.0.0:* users:(("node",pid=%s,fd=20))\n' "$listener_host" "$listener_port" "$listener_pid"
+  if [[ -n $extra_listener ]]; then
+    printf 'LISTEN 0 511 %s:%s 0.0.0.0:* users:(("node",pid=%s,fd=21))\n' "$extra_listener" "$listener_port" "$listener_pid"
+  fi
 }
 service=frontend
 unit_owns_listener elova-frontend.service || fail 'unit-owned listener was rejected'
+check_port_conflicts || fail 'the existing frontend unit listener was rejected'
 listener_pid=999999
 if unit_owns_listener elova-frontend.service; then
   fail 'listener outside the unit control group was accepted'
 fi
-ok 'readiness ownership requires the named unit listener'
+if (check_port_conflicts) >"$TMP/out" 2>&1; then
+  fail 'port occupied by another process was accepted'
+fi
+listener_pid=$owned_pid
+listener_host=0.0.0.0
+if (check_port_conflicts) >"$TMP/out" 2>&1; then
+  fail 'wildcard listener on the frontend port was accepted'
+fi
+listener_host=''
+check_port_conflicts || fail 'unoccupied frontend port was rejected'
+ok 'listener checks require the intended unit-owned, loopback listener'
+
+service=backend
+listener_host=100.64.0.1
+listener_port=43181
+printf 'ELOVA_BACKEND_HOST=100.64.0.1\n' > "$TMP/backend-listener.env"
+env_file() { printf '%s\n' "$TMP/backend-listener.env"; }
+check_port_conflicts || fail 'unit-owned Tailnet backend listener was rejected'
+extra_listener=0.0.0.0
+if (check_port_conflicts) >"$TMP/out" 2>&1; then
+  fail 'additional public listener on the backend port was accepted'
+fi
+extra_listener=''
+listener_host=0.0.0.0
+if (check_port_conflicts) >"$TMP/out" 2>&1; then
+  fail 'public backend wildcard listener was accepted'
+fi
+ok 'backend conflict check requires only the configured Tailnet bind'
+service=frontend
+
+(
+  service=frontend
+  release=release-b
+  artifact="$TMP/frontend.tgz"
+  sha256_file="$TMP/frontend.sha256"
+  apply=0
+  dry_run_requested=0
+  artifact_preflight() { :; }
+  host_preflight() { printf 'host\n' >> "$TMP/preflight-events"; }
+  check_port_conflicts() { printf 'port\n' >> "$TMP/preflight-events"; }
+  run_preflight > "$TMP/preflight-out"
+) || fail 'explicit read-only preflight failed'
+[[ $(<"$TMP/preflight-events") == $'host\nport' ]] ||
+  fail 'explicit preflight did not inspect the port after host checks'
+: > "$TMP/preflight-events"
+(
+  service=frontend
+  release=release-b
+  artifact="$TMP/frontend.tgz"
+  sha256_file="$TMP/frontend.sha256"
+  apply=0
+  dry_run_requested=1
+  artifact_preflight() { :; }
+  host_preflight() { printf 'host\n' >> "$TMP/preflight-events"; }
+  check_port_conflicts() { printf 'port\n' >> "$TMP/preflight-events"; }
+  run_preflight > "$TMP/preflight-out"
+) || fail 'dry-run preflight failed'
+[[ ! -s $TMP/preflight-events ]] || fail 'dry-run preflight inspected the host'
+ok 'explicit read-only preflight checks the listener; dry-run does not'
+
+activation_fixture="$TMP/port-activation"
+mkdir -p "$activation_fixture/releases"/{release-a,release-b}
+ln -s releases/release-a "$activation_fixture/current"
+ln -s releases/release-b "$activation_fixture/previous"
+for action in activate rollback; do
+  if (
+    service=frontend
+    release=release-b
+    apply=1
+    service_root() { printf '%s\n' "$activation_fixture"; }
+    host_preflight() { :; }
+    acquire_lock() { :; }
+    require_apply() { return 0; }
+    check_package_manifest() { :; }
+    health_url() { printf 'http://127.0.0.1:43180/api/v1/health/ready\n'; }
+    systemctl() {
+      if [[ $1 == is-active ]]; then return 0; fi
+      printf '%s\n' "$*" >> "$TMP/port-activation-systemctl"
+    }
+    check_port_conflicts() {
+      [[ $(link_release_name "$activation_fixture" current) == release-a ]] ||
+        fail "$action changed the current link before checking the port"
+      die 'simulated occupied service port'
+    }
+    "run_$action"
+  ) >"$TMP/port-activation-out" 2>&1; then
+    fail "$action proceeded despite an occupied port"
+  fi
+  grep -Fq 'simulated occupied service port' "$TMP/port-activation-out" ||
+    fail "$action did not check the port before changing links"
+  [[ $(link_release_name "$activation_fixture" current) == release-a ]] ||
+    fail "$action changed the current link on a port conflict"
+  [[ $(link_release_name "$activation_fixture" previous) == release-b ]] ||
+    fail "$action changed the previous link on a port conflict"
+  [[ ! -e $TMP/port-activation-systemctl ]] || fail "$action restarted a unit on a port conflict"
+done
+ok 'activation and rollback recheck the port before links or restart'
 
 health_headers="$TMP/health.headers"
 health_body="$TMP/health.body"

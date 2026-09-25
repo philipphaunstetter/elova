@@ -15,7 +15,7 @@ WorkingDirectory=/opt/elova/backend/current
 Environment=NODE_ENV=production
 Environment=NPM_CONFIG_CACHE=/var/lib/elova/backend/npm-cache
 EnvironmentFile=/etc/elova/backend.env
-ExecStart=/usr/bin/env PORT=3001 npm start
+ExecStart=/usr/bin/env PORT=43181 npm start
 Restart=on-failure
 RestartSec=5s
 TimeoutStartSec=60s

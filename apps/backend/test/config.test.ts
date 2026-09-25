@@ -30,7 +30,7 @@ test('backend fails closed without independent session and credential secrets', 
 test('backend defaults to loopback, a bounded port, and packaged migrations', () => {
   const config = loadConfig(secureEnv({ DATABASE_URL: 'postgres://127.0.0.1/elova' }))
   assert.equal(config.host, '127.0.0.1')
-  assert.equal(config.port, 4100)
+  assert.equal(config.port, 43181)
   assert.equal(config.migrationsDirectory, resolve(process.cwd(), 'migrations'))
 })
 

@@ -92,7 +92,7 @@ for source in backend frontend; do
     "$TMP/repo/ops/bin/elova-package-native" "$TMP/output" >"$TMP/out" 2>&1; then
     echo "$source environment was archived" >&2; exit 1
   fi
-  grep -Fq 'packaged releases may not contain environment files' "$TMP/out"
+  grep -Fq 'packaged releases may not contain environment files' "$TMP/out" || { cat "$TMP/out" >&2; exit 1; }
   test ! -e "$TMP/output/elova-$source.tgz"
 done
 

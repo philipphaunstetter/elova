@@ -59,7 +59,7 @@ jobs:
       - name: Build frontend native artifact independently
         run: npm run build --workspace @elova/frontend
         env:
-          ELOVA_BACKEND_URL: http://100.100.10.20:3001
+          ELOVA_BACKEND_URL: http://100.100.10.20:43181
 
   backend-quality:
     name: Backend lint, type, unit, and build
@@ -138,7 +138,7 @@ jobs:
       - name: Package install-free native artifacts
         run: npm run package:native -- "$RUNNER_TEMP/elova-native"
         env:
-          ELOVA_BACKEND_URL: http://100.100.10.20:3001
+          ELOVA_BACKEND_URL: http://100.100.10.20:43181
       - name: Verify native packaging removes stale output
         run: |
           printf 'stale backend output\n' > apps/backend/dist/src/stale-output.js
@@ -149,7 +149,7 @@ jobs:
           if grep -Fq stale-output "$RUNNER_TEMP/elova-backend-files.txt"; then exit 1; fi
           if grep -Fq stale-output "$RUNNER_TEMP/elova-frontend-files.txt"; then exit 1; fi
         env:
-          ELOVA_BACKEND_URL: http://100.100.10.20:3001
+          ELOVA_BACKEND_URL: http://100.100.10.20:43181
       - name: Verify artifacts satisfy the release-helper contract
         run: |
           ops/bin/elova-native-release stage --service backend \
@@ -223,4 +223,4 @@ jobs:
           npm test
           npm run build
         env:
-          ELOVA_BACKEND_URL: http://100.100.10.20:3001
+          ELOVA_BACKEND_URL: http://100.100.10.20:43181

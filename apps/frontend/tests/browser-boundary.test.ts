@@ -4,7 +4,7 @@ import { join, relative, resolve } from "node:path";
 import test from "node:test";
 
 const root = resolve(import.meta.dirname, "..");
-const privateMarkers = ["http://100.100.10.20:3001", "100.100.10.20", ":3001"];
+const privateMarkers = ["http://100.100.10.20:43181", "100.100.10.20", ":43181"];
 
 function filesBelow(directory: string): string[] {
   if (!existsSync(directory)) return [];
