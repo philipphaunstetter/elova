@@ -47,7 +47,15 @@ test('0001 upgrade retains owner, session, provider and sanitized evidence witho
   assert.equal(alienWorkspaces.length, 1)
   assert.equal(alienWorkspaces[0].name, 'Original workspace')
   assert.notEqual(alienWorkspaces[0].id, space)
-  assert.equal((await pool.query("SELECT to_regclass('public.workspace_members') AS membership")).rows[0].membership, null)
+  assert.deepEqual((await pool.query(
+    'SELECT workspace_id, owner_id FROM workspace_members ORDER BY owner_id')).rows, [
+    { workspace_id: space, owner_id: owner },
+    { workspace_id: alienWorkspaces[0].id, owner_id: alien },
+  ])
+  await assert.rejects(pool.query(
+    'UPDATE workspace_members SET owner_id = $2 WHERE workspace_id = $1', [space, alien]), { code: '23503' })
+  await assert.rejects(pool.query(
+    'DELETE FROM workspace_members WHERE workspace_id = $1', [space]), { code: '23503' })
   assert.deepEqual((await pool.query('SELECT id, role FROM owners ORDER BY id')).rows, [
     { id: owner, role: 'user' }, { id: alien, role: 'user' },
   ])
@@ -90,6 +98,8 @@ test('0001 upgrade retains owner, session, provider and sanitized evidence witho
   await assert.rejects(pool.query("UPDATE owners SET role = 'super_admin' WHERE id = $1", [owner]), { code: '23505' })
   const adminWorkspaces = await repository.listWorkspaces(admin.id)
   assert.deepEqual(adminWorkspaces.map((item) => item.name), ['admin workspace', 'Original workspace', 'Original workspace'])
+  assert.deepEqual((await pool.query('SELECT workspace_id FROM workspace_members WHERE owner_id = $1', [admin.id])).rows,
+    [{ workspace_id: adminWorkspaces[0].id }])
   assert.equal(adminWorkspaces[0].role, 'owner')
   assert.equal(adminWorkspaces.find((item) => item.id === space).role, 'super_admin')
   assert.equal((await repository.getProviderSecret(admin.id, space, provider)).encryptedApiKey, 'v1.synthetic')
@@ -122,6 +132,8 @@ test('0001 upgrade retains owner, session, provider and sanitized evidence witho
   assert.equal(await repository.selectWorkspace(alienSession, alien, space), false)
   assert.equal((await repository.resolveSession(alienSession, 'alien-digest', new Date())).workspaceId, alienWorkspaces[0].id)
   const second = await repository.createWorkspace(session, owner, 'Other workspace')
+  assert.deepEqual((await pool.query('SELECT owner_id FROM workspace_members WHERE workspace_id = $1', [second.id])).rows,
+    [{ owner_id: owner }])
   assert.deepEqual(await repository.listProviders(owner, second.id), [])
   assert.deepEqual(await repository.listWorkflows(owner, second.id, 20), [])
   assert.deepEqual(await repository.listExecutions(owner, second.id, 20), [])
@@ -151,5 +163,6 @@ test('0001 upgrade retains owner, session, provider and sanitized evidence witho
   assert.equal((await repository.resolveSession(adminSession, 'admin-digest', new Date())).workspaceId, alienWorkspaces[0].id)
   await repository.revokeSession(session)
   assert.equal(await repository.createWorkspace(session, owner, 'Rejected workspace'), undefined)
+  assert.equal((await pool.query('SELECT count(*)::integer AS total FROM workspace_members WHERE owner_id = $1', [owner])).rows[0].total, 2)
   assert.deepEqual((await repository.listWorkspaces(owner)).map((item) => item.id), [space, second.id])
 })

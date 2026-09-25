@@ -139,6 +139,8 @@ export class PostgresRepository implements ElovaRepository {
       const workspaceId = randomUUID()
       await client.query('INSERT INTO workspaces (id, name, created_by) VALUES ($1, $2, $3)',
         [workspaceId, 'admin workspace', owner.id])
+      await client.query('INSERT INTO workspace_members (workspace_id, owner_id) VALUES ($1, $2)',
+        [workspaceId, owner.id])
       await client.query('COMMIT')
       return { ...owner, email: owner.email.toLowerCase() }
     } catch (error) {
@@ -188,8 +190,10 @@ export class PostgresRepository implements ElovaRepository {
       `SELECT o.id, o.email, o.display_name, o.role, s.workspace_id
        FROM sessions s JOIN owners o ON o.id = s.owner_id
        LEFT JOIN workspaces w ON w.id = s.workspace_id
+       LEFT JOIN workspace_members m ON m.workspace_id = w.id AND m.owner_id = o.id
        WHERE s.id = $1 AND s.token_digest = $2 AND s.revoked_at IS NULL AND s.expires_at > $3
-         AND (s.workspace_id IS NULL OR w.created_by = o.id OR o.role = 'super_admin')`,
+         AND (s.workspace_id IS NULL OR (w.created_by = o.id AND m.owner_id IS NOT NULL)
+              OR o.role = 'super_admin')`,
       [sessionId, tokenDigest, now],
     )
     const row = result.rows[0]
@@ -203,9 +207,11 @@ export class PostgresRepository implements ElovaRepository {
 
   async listWorkspaces(ownerId: string): Promise<Workspace[]> {
     const result = await this.pool.query<{ id: string; name: string; role: string; created_at: Date }>(
-      `SELECT w.id, w.name, CASE WHEN w.created_by = $1 THEN 'owner' ELSE 'super_admin' END AS role,
+      `SELECT w.id, w.name,
+              CASE WHEN w.created_by = $1 AND m.owner_id IS NOT NULL THEN 'owner' ELSE 'super_admin' END AS role,
               w.created_at FROM workspaces w JOIN owners actor ON actor.id = $1
-       WHERE w.created_by = $1 OR actor.role = 'super_admin'
+       LEFT JOIN workspace_members m ON m.workspace_id = w.id AND m.owner_id = actor.id
+       WHERE (w.created_by = $1 AND m.owner_id IS NOT NULL) OR actor.role = 'super_admin'
        ORDER BY (w.created_by = $1) DESC, w.created_at, w.id`, [ownerId])
     return result.rows.map((row) => ({ id: row.id, name: row.name, role: row.role,
       createdAt: row.created_at.toISOString() }))
@@ -226,6 +232,7 @@ export class PostgresRepository implements ElovaRepository {
       const result = await client.query<{ created_at: Date }>(
         'INSERT INTO workspaces (id, name, created_by) VALUES ($1, $2, $3) RETURNING created_at',
         [id, name, ownerId])
+      await client.query('INSERT INTO workspace_members (workspace_id, owner_id) VALUES ($1, $2)', [id, ownerId])
       await client.query('UPDATE sessions SET workspace_id = $2 WHERE id = $1', [sessionId, id])
       await client.query('COMMIT')
       return { id, name, role: 'owner', createdAt: result.rows[0]!.created_at.toISOString() }
@@ -240,7 +247,9 @@ export class PostgresRepository implements ElovaRepository {
       `UPDATE sessions s SET workspace_id = $3
        WHERE s.id = $1 AND s.owner_id = $2 AND s.revoked_at IS NULL AND s.expires_at > now()
          AND EXISTS (SELECT 1 FROM workspaces w JOIN owners actor ON actor.id = $2
-                     WHERE w.id = $3 AND (w.created_by = $2 OR actor.role = 'super_admin'))`,
+                     WHERE w.id = $3 AND (actor.role = 'super_admin' OR
+                       (w.created_by = $2 AND EXISTS (
+                         SELECT 1 FROM workspace_members m WHERE m.workspace_id = w.id AND m.owner_id = $2))))`,
       [sessionId, ownerId, workspaceId])
     return result.rowCount === 1
   }
@@ -258,7 +267,9 @@ export class PostgresRepository implements ElovaRepository {
               max(c.last_synced_at) AS last_synced_at
        FROM n8n_providers p LEFT JOIN sync_cursors c ON c.provider_id = p.id
        JOIN workspaces space ON space.id = p.workspace_id
-       JOIN owners actor ON actor.id = $1 AND (space.created_by = actor.id OR actor.role = 'super_admin')
+       JOIN owners actor ON actor.id = $1 AND (actor.role = 'super_admin' OR
+         (space.created_by = actor.id AND EXISTS (
+           SELECT 1 FROM workspace_members m WHERE m.workspace_id = space.id AND m.owner_id = actor.id)))
        WHERE p.workspace_id = $2
        GROUP BY p.id ORDER BY p.created_at`,
       [ownerId, workspaceId],
@@ -286,7 +297,9 @@ export class PostgresRepository implements ElovaRepository {
         `INSERT INTO n8n_providers (id, owner_id, workspace_id, name, base_url, encrypted_api_key)
          SELECT $1, $2, $3, $4, $5, $6
          WHERE EXISTS (SELECT 1 FROM workspaces space JOIN owners actor ON actor.id = $2
-                       WHERE space.id = $3 AND (space.created_by = actor.id OR actor.role = 'super_admin'))
+                       WHERE space.id = $3 AND (actor.role = 'super_admin' OR
+                         (space.created_by = actor.id AND EXISTS (
+                           SELECT 1 FROM workspace_members m WHERE m.workspace_id = space.id AND m.owner_id = actor.id))))
          RETURNING created_at`,
         [id, input.ownerId, input.workspaceId, input.name, input.baseUrl, input.encryptedApiKey],
       )
@@ -323,7 +336,9 @@ export class PostgresRepository implements ElovaRepository {
               max(c.last_synced_at) AS last_synced_at
        FROM n8n_providers p LEFT JOIN sync_cursors c ON c.provider_id = p.id
        JOIN workspaces space ON space.id = p.workspace_id
-       JOIN owners actor ON actor.id = $1 AND (space.created_by = actor.id OR actor.role = 'super_admin')
+       JOIN owners actor ON actor.id = $1 AND (actor.role = 'super_admin' OR
+         (space.created_by = actor.id AND EXISTS (
+           SELECT 1 FROM workspace_members m WHERE m.workspace_id = space.id AND m.owner_id = actor.id)))
        WHERE p.workspace_id = $2 AND p.id = $3
        GROUP BY p.id`,
       [ownerId, workspaceId, providerId],
@@ -464,7 +479,9 @@ export class PostgresRepository implements ElovaRepository {
               p.id AS "providerId", p.name AS "providerName"
        FROM workflows w JOIN n8n_providers p ON p.id = w.provider_id
        JOIN workspaces space ON space.id = p.workspace_id
-       JOIN owners actor ON actor.id = $1 AND (space.created_by = actor.id OR actor.role = 'super_admin')
+       JOIN owners actor ON actor.id = $1 AND (actor.role = 'super_admin' OR
+         (space.created_by = actor.id AND EXISTS (
+           SELECT 1 FROM workspace_members m WHERE m.workspace_id = space.id AND m.owner_id = actor.id)))
        WHERE p.workspace_id = $2 ORDER BY w.updated_at DESC LIMIT $3`,
       [ownerId, workspaceId, limit],
     )
@@ -481,7 +498,9 @@ export class PostgresRepository implements ElovaRepository {
        FROM executions e JOIN n8n_providers p ON p.id = e.provider_id
        LEFT JOIN workflows w ON w.id = e.workflow_id
        JOIN workspaces space ON space.id = p.workspace_id
-       JOIN owners actor ON actor.id = $1 AND (space.created_by = actor.id OR actor.role = 'super_admin')
+       JOIN owners actor ON actor.id = $1 AND (actor.role = 'super_admin' OR
+         (space.created_by = actor.id AND EXISTS (
+           SELECT 1 FROM workspace_members m WHERE m.workspace_id = space.id AND m.owner_id = actor.id)))
        WHERE p.workspace_id = $2 ORDER BY e.started_at DESC NULLS LAST LIMIT $3`,
       [ownerId, workspaceId, limit],
     )
@@ -501,7 +520,9 @@ export class PostgresRepository implements ElovaRepository {
               avg(e.duration_ms)::text AS average_duration
        FROM executions e JOIN n8n_providers p ON p.id = e.provider_id
        JOIN workspaces space ON space.id = p.workspace_id
-       JOIN owners actor ON actor.id = $1 AND (space.created_by = actor.id OR actor.role = 'super_admin')
+       JOIN owners actor ON actor.id = $1 AND (actor.role = 'super_admin' OR
+         (space.created_by = actor.id AND EXISTS (
+           SELECT 1 FROM workspace_members m WHERE m.workspace_id = space.id AND m.owner_id = actor.id)))
        WHERE p.workspace_id = $2`,
       [ownerId, workspaceId],
     )

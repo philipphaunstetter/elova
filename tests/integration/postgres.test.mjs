@@ -103,7 +103,7 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
   )
   assert.deepEqual(tables.rows.map((row) => row.table_name), [
     'executions', 'n8n_providers', 'owners', 'schema_migrations', 'sessions',
-    'sync_cursors', 'sync_runs', 'workflows', 'workspaces',
+    'sync_cursors', 'sync_runs', 'workflows', 'workspace_members', 'workspaces',
   ])
   const privacyConstraints = await pool.query(
     `SELECT table_name, column_name FROM information_schema.columns
@@ -123,6 +123,8 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
   const workspaces = await repository.listWorkspaces(owner.id)
   assert.equal(workspaces.length, 1)
   assert.equal(workspaces[0].name, 'admin workspace')
+  assert.deepEqual((await pool.query('SELECT owner_id FROM workspace_members WHERE workspace_id = $1',
+    [workspaces[0].id])).rows, [{ owner_id: owner.id }])
   const adminRole = await pool.query('SELECT role FROM owners WHERE id = $1', [owner.id])
   assert.equal(adminRole.rows[0].role, 'super_admin')
   await assert.rejects(
@@ -158,6 +160,8 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
   const created = await request('POST', '/v1/workspaces', cookie, undefined, { name: 'Personal workspace' })
   assert.equal(created.status, 201)
   const secondId = created.body.workspace.id
+  assert.deepEqual((await pool.query('SELECT owner_id FROM workspace_members WHERE workspace_id = $1',
+    [secondId])).rows, [{ owner_id: owner.id }])
   assert.equal((await request('GET', '/v1/auth/session', cookie)).body.user.workspaceId, secondId)
   await empty(secondId)
   assert.deepEqual((await request('GET', '/v1/workspaces', cookie)).body.workspaces.map((space) => space.name),
