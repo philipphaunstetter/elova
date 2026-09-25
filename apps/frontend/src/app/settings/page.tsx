@@ -93,7 +93,7 @@ export default function SettingsPage() {
         <div className="page-heading"><div><p className="eyebrow"><span className="eyebrow-dot" aria-hidden="true" /> Authenticated settings</p><h1>n8n <em>connections.</em></h1><p className="intro">Connect a private n8n origin to synchronize workflow and execution evidence.</p></div><span className="heading-tag">PRIVATE CONNECTIONS / N8N</span></div>
         {state === "loading" && <p className="notice" role="status">Loading connections…</p>}
         {state === "unauthorized" && <div className="notice" role="status"><p>Sign in before configuring n8n.</p><Link className="text-link" href="/login">Sign in <span aria-hidden="true">↗</span></Link></div>}
-        {state === "error" && <div className="notice error" role="alert"><p>Settings are temporarily unavailable.</p><button className="button" onClick={() => void refresh()}>Try again</button></div>}
+        {state === "error" && <p className="notice error" role="alert">Settings are temporarily unavailable.</p>}
         {state === "ready" && <>
           <div className="settings-grid">
             <section className="form-surface" aria-labelledby="add-title">
