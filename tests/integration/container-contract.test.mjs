@@ -44,6 +44,35 @@ test('backend activation and migrations are distinct from default database start
   assert.deepEqual(backend.cap_drop, ['ALL'])
 })
 
+test('documented one-off migration uses supported run options without publishing ports', (t) => {
+  const runbook = readFileSync('ops/docs/container-runbook.md', 'utf8')
+  const commands = [...runbook.matchAll(/`(docker compose -f ops\/container\/compose\.yaml run [^`\n]+)`/g)]
+  assert.equal(commands.length, 1, 'review every documented Compose run invocation')
+  const args = commands[0][1].split(/\s+/)
+  assert.deepEqual(args, [
+    'docker', 'compose', '-f', 'ops/container/compose.yaml', 'run',
+    '--rm', '--no-deps', '--no-TTY', 'backend', 'node', 'dist/src/migrate.js',
+  ])
+  // This profiled service has a host port, but run does not map it without
+  // --publish or --service-ports. Help inspection never starts a container.
+  assert.deepEqual(backend.profiles, ['activate'])
+  assert.deepEqual(backend.ports, ['synthetic:43181:43181/tcp'])
+  assert.match(runbook, /`elova_elova_pg16_data`/)
+  const help = spawnSync('docker', ['compose', 'run', '--help'], {
+    encoding: 'utf8', timeout: 5000,
+  })
+  if (help.error?.code === 'ENOENT' || /'compose' is not a docker command/.test(help.stderr)) {
+    t.diagnostic('Docker Compose unavailable; static invocation contract checked')
+    return
+  }
+  assert.equal(help.status, 0, help.error?.message || help.stderr)
+  const supported = new Set([...help.stdout.matchAll(/^\s*(?:-\w,\s*)?(--[\w-]+)\s/gm)]
+    .map((match) => match[1]))
+  for (const option of args.slice(5, 8)) assert.ok(supported.has(option), `${option} not in installed Compose run --help`)
+  assert.ok(supported.has('--publish'))
+  assert.ok(supported.has('--service-ports'))
+})
+
 test('disposable CI checks the initialized app role as the peer-authenticated postgres user', () => {
   const dir = mkdtempSync(join(tmpdir(), 'elova-arm64-peer-'))
   try {
