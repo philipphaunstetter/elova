@@ -15,7 +15,7 @@ CREATE TABLE workspaces (
 CREATE TABLE workspace_members (
   workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT,
   owner_id uuid NOT NULL REFERENCES owners(id) ON DELETE RESTRICT,
-  role text NOT NULL CHECK (role IN ('owner', 'member')),
+  role text NOT NULL CHECK (role = 'owner'),
   PRIMARY KEY (workspace_id, owner_id)
 );
 CREATE INDEX workspace_members_owner_idx ON workspace_members(owner_id, workspace_id);
