@@ -356,7 +356,6 @@ host_preflight() {
     systemd-analyze verify /etc/systemd/system/elova-backend-migrate@.service >/dev/null
     check_backend_env "$file"
   fi
-  check_port_conflicts
 }
 
 artifact_preflight() {
@@ -400,6 +399,7 @@ run_preflight() {
     printf 'dry-run: host checks skipped; rerun without --dry-run for explicit read-only host preflight\n'
   else
     host_preflight
+    check_port_conflicts
     printf 'preflight passed for %s release %s\n' "$service" "$release"
   fi
 }
@@ -515,9 +515,6 @@ pid_in_control_group() {
   return 1
 }
 
-# Run on the target host before activation (also via host preflight). An existing
-# release may own the intended listener; unrelated or additional listeners fail.
-# This is a local read-only check, not evidence of availability on another host.
 check_port_conflicts() {
   local host port sockets line endpoint pid_entry pid control_group
   read -r host port < <(listener_coordinates) || die "cannot determine $service listener"
@@ -750,11 +747,12 @@ run_activate() {
   if systemctl is-active --quiet "$unit"; then
     prior_service_active=1
   fi
+  url=$(health_url)
+  check_port_conflicts
   if [[ -n $old ]]; then
     set_link "$root" previous "releases/$old"
   fi
   set_link "$root" current "releases/$release"
-  url=$(health_url)
   if ! systemctl restart "$unit" || ! wait_for_health "$unit"; then
     if (( rollback_allowed == 1 )); then
       if restore_release_state \
@@ -812,9 +810,10 @@ run_rollback() {
   if systemctl is-active --quiet "$unit"; then
     prior_service_active=1
   fi
+  url=$(health_url)
+  check_port_conflicts
   set_link "$root" current "releases/$previous"
   set_link "$root" previous "releases/$current"
-  url=$(health_url)
   if ! systemctl restart "$unit" || ! wait_for_health "$unit"; then
     if restore_release_state \
       "$root" "$current" 1 "$previous" "$unit" "$prior_service_active"; then

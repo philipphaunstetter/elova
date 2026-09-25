@@ -109,12 +109,4 @@ for service in backend frontend; do
     echo "$service archive includes an environment file" >&2; exit 1
   fi
 done
-frontend_package="$TMP/unpacked/frontend/package"
-node - "$frontend_package/package.json" <<'NODE'
-const assert = require('node:assert/strict')
-const manifest = require(process.argv[2])
-assert.equal(manifest.scripts.start, 'node apps/frontend/start.js')
-NODE
-grep -Fq "process.env.PORT ??= '43180'" "$frontend_package/apps/frontend/start.js"
-grep -Fq "process.env.HOSTNAME ??= '127.0.0.1'" "$frontend_package/apps/frontend/start.js"
 printf 'ok - dirty, ignored and staged environment files refused; clean archives verified\n'

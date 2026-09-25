@@ -277,7 +277,7 @@ if (check_port_conflicts) >"$TMP/out" 2>&1; then
 fi
 listener_host=''
 check_port_conflicts || fail 'unoccupied frontend port was rejected'
-ok 'preflight and readiness require the intended unit-owned, loopback listener'
+ok 'listener checks require the intended unit-owned, loopback listener'
 
 service=backend
 listener_host=100.64.0.1
@@ -296,6 +296,74 @@ if (check_port_conflicts) >"$TMP/out" 2>&1; then
 fi
 ok 'backend conflict check requires only the configured Tailnet bind'
 service=frontend
+
+(
+  service=frontend
+  release=release-b
+  artifact="$TMP/frontend.tgz"
+  sha256_file="$TMP/frontend.sha256"
+  apply=0
+  dry_run_requested=0
+  artifact_preflight() { :; }
+  host_preflight() { printf 'host\n' >> "$TMP/preflight-events"; }
+  check_port_conflicts() { printf 'port\n' >> "$TMP/preflight-events"; }
+  run_preflight > "$TMP/preflight-out"
+) || fail 'explicit read-only preflight failed'
+[[ $(<"$TMP/preflight-events") == $'host\nport' ]] ||
+  fail 'explicit preflight did not inspect the port after host checks'
+: > "$TMP/preflight-events"
+(
+  service=frontend
+  release=release-b
+  artifact="$TMP/frontend.tgz"
+  sha256_file="$TMP/frontend.sha256"
+  apply=0
+  dry_run_requested=1
+  artifact_preflight() { :; }
+  host_preflight() { printf 'host\n' >> "$TMP/preflight-events"; }
+  check_port_conflicts() { printf 'port\n' >> "$TMP/preflight-events"; }
+  run_preflight > "$TMP/preflight-out"
+) || fail 'dry-run preflight failed'
+[[ ! -s $TMP/preflight-events ]] || fail 'dry-run preflight inspected the host'
+ok 'explicit read-only preflight checks the listener; dry-run does not'
+
+activation_fixture="$TMP/port-activation"
+mkdir -p "$activation_fixture/releases"/{release-a,release-b}
+ln -s releases/release-a "$activation_fixture/current"
+ln -s releases/release-b "$activation_fixture/previous"
+for action in activate rollback; do
+  if (
+    service=frontend
+    release=release-b
+    apply=1
+    service_root() { printf '%s\n' "$activation_fixture"; }
+    host_preflight() { :; }
+    acquire_lock() { :; }
+    require_apply() { return 0; }
+    check_package_manifest() { :; }
+    health_url() { printf 'http://127.0.0.1:43180/api/v1/health/ready\n'; }
+    systemctl() {
+      if [[ $1 == is-active ]]; then return 0; fi
+      printf '%s\n' "$*" >> "$TMP/port-activation-systemctl"
+    }
+    check_port_conflicts() {
+      [[ $(link_release_name "$activation_fixture" current) == release-a ]] ||
+        fail "$action changed the current link before checking the port"
+      die 'simulated occupied service port'
+    }
+    "run_$action"
+  ) >"$TMP/port-activation-out" 2>&1; then
+    fail "$action proceeded despite an occupied port"
+  fi
+  grep -Fq 'simulated occupied service port' "$TMP/port-activation-out" ||
+    fail "$action did not check the port before changing links"
+  [[ $(link_release_name "$activation_fixture" current) == release-a ]] ||
+    fail "$action changed the current link on a port conflict"
+  [[ $(link_release_name "$activation_fixture" previous) == release-b ]] ||
+    fail "$action changed the previous link on a port conflict"
+  [[ ! -e $TMP/port-activation-systemctl ]] || fail "$action restarted a unit on a port conflict"
+done
+ok 'activation and rollback recheck the port before links or restart'
 
 health_headers="$TMP/health.headers"
 health_body="$TMP/health.body"
