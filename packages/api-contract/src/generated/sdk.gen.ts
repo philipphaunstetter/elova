@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CreateProviderData, CreateProviderErrors, CreateProviderResponses, GetDashboardMetricsData, GetDashboardMetricsErrors, GetDashboardMetricsResponses, GetLivenessData, GetLivenessResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetSessionData, GetSessionErrors, GetSessionResponses, ListExecutionsData, ListExecutionsErrors, ListExecutionsResponses, ListProvidersData, ListProvidersErrors, ListProvidersResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, SynchronizeProviderData, SynchronizeProviderErrors, SynchronizeProviderResponses } from './types.gen';
+import type { AddWorkspaceMemberData, AddWorkspaceMemberErrors, AddWorkspaceMemberResponses, ChangeWorkspaceMemberRoleData, ChangeWorkspaceMemberRoleErrors, ChangeWorkspaceMemberRoleResponses, CreateProviderData, CreateProviderErrors, CreateProviderResponses, CreateWorkspaceData, CreateWorkspaceErrors, CreateWorkspaceResponses, GetDashboardMetricsData, GetDashboardMetricsErrors, GetDashboardMetricsResponses, GetLivenessData, GetLivenessResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetSessionData, GetSessionErrors, GetSessionResponses, ListExecutionsData, ListExecutionsErrors, ListExecutionsResponses, ListProvidersData, ListProvidersErrors, ListProvidersResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, ListWorkspaceMembersData, ListWorkspaceMembersErrors, ListWorkspaceMembersResponses, ListWorkspacesData, ListWorkspacesErrors, ListWorkspacesResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, RemoveWorkspaceMemberData, RemoveWorkspaceMemberErrors, RemoveWorkspaceMemberResponses, RenameWorkspaceData, RenameWorkspaceErrors, RenameWorkspaceResponses, SelectWorkspaceData, SelectWorkspaceErrors, SelectWorkspaceResponses, SynchronizeProviderData, SynchronizeProviderErrors, SynchronizeProviderResponses, TransferWorkspaceOwnershipData, TransferWorkspaceOwnershipErrors, TransferWorkspaceOwnershipResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -51,7 +51,142 @@ export const getSession = <ThrowOnError extends boolean = false>(options?: Optio
     ...options
 });
 
-export const listProviders = <ThrowOnError extends boolean = false>(options?: Options<ListProvidersData, ThrowOnError>): RequestResult<ListProvidersResponses, ListProvidersErrors, ThrowOnError> => (options?.client ?? client).get<ListProvidersResponses, ListProvidersErrors, ThrowOnError>({
+export const listWorkspaces = <ThrowOnError extends boolean = false>(options?: Options<ListWorkspacesData, ThrowOnError>): RequestResult<ListWorkspacesResponses, ListWorkspacesErrors, ThrowOnError> => (options?.client ?? client).get<ListWorkspacesResponses, ListWorkspacesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'elova_session',
+            type: 'apiKey'
+        }],
+    url: '/workspaces',
+    ...options
+});
+
+export const createWorkspace = <ThrowOnError extends boolean = false>(options: Options<CreateWorkspaceData, ThrowOnError>): RequestResult<CreateWorkspaceResponses, CreateWorkspaceErrors, ThrowOnError> => (options.client ?? client).post<CreateWorkspaceResponses, CreateWorkspaceErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'elova_session',
+            type: 'apiKey'
+        }],
+    url: '/workspaces',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const selectWorkspace = <ThrowOnError extends boolean = false>(options: Options<SelectWorkspaceData, ThrowOnError>): RequestResult<SelectWorkspaceResponses, SelectWorkspaceErrors, ThrowOnError> => (options.client ?? client).post<SelectWorkspaceResponses, SelectWorkspaceErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'elova_session',
+            type: 'apiKey'
+        }],
+    url: '/workspaces/select',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Only a workspace owner, admin, or global super administrator may rename the selected workspace.
+ */
+export const renameWorkspace = <ThrowOnError extends boolean = false>(options: Options<RenameWorkspaceData, ThrowOnError>): RequestResult<RenameWorkspaceResponses, RenameWorkspaceErrors, ThrowOnError> => (options.client ?? client).patch<RenameWorkspaceResponses, RenameWorkspaceErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'elova_session',
+            type: 'apiKey'
+        }],
+    url: '/workspaces/settings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Only a workspace owner or global super administrator may list memberships.
+ */
+export const listWorkspaceMembers = <ThrowOnError extends boolean = false>(options: Options<ListWorkspaceMembersData, ThrowOnError>): RequestResult<ListWorkspaceMembersResponses, ListWorkspaceMembersErrors, ThrowOnError> => (options.client ?? client).get<ListWorkspaceMembersResponses, ListWorkspaceMembersErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'elova_session',
+            type: 'apiKey'
+        }],
+    url: '/workspaces/members',
+    ...options
+});
+
+/**
+ * Owner or global super administrator attaches only an already-provisioned exact user identity. Never creates a login.
+ */
+export const addWorkspaceMember = <ThrowOnError extends boolean = false>(options: Options<AddWorkspaceMemberData, ThrowOnError>): RequestResult<AddWorkspaceMemberResponses, AddWorkspaceMemberErrors, ThrowOnError> => (options.client ?? client).post<AddWorkspaceMemberResponses, AddWorkspaceMemberErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'elova_session',
+            type: 'apiKey'
+        }],
+    url: '/workspaces/members',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Owner or global super administrator removes a member; cannot remove the designated last owner.
+ */
+export const removeWorkspaceMember = <ThrowOnError extends boolean = false>(options: Options<RemoveWorkspaceMemberData, ThrowOnError>): RequestResult<RemoveWorkspaceMemberResponses, RemoveWorkspaceMemberErrors, ThrowOnError> => (options.client ?? client).delete<RemoveWorkspaceMemberResponses, RemoveWorkspaceMemberErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'elova_session',
+            type: 'apiKey'
+        }],
+    url: '/workspaces/members/{userId}',
+    ...options
+});
+
+/**
+ * Owner or global super administrator changes an existing member role; transfer designation first to demote the designated owner.
+ */
+export const changeWorkspaceMemberRole = <ThrowOnError extends boolean = false>(options: Options<ChangeWorkspaceMemberRoleData, ThrowOnError>): RequestResult<ChangeWorkspaceMemberRoleResponses, ChangeWorkspaceMemberRoleErrors, ThrowOnError> => (options.client ?? client).patch<ChangeWorkspaceMemberRoleResponses, ChangeWorkspaceMemberRoleErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'elova_session',
+            type: 'apiKey'
+        }],
+    url: '/workspaces/members/{userId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Owner or global super administrator designates an existing owner member to preserve the at-least-one-owner invariant before removing or demoting the prior designated owner.
+ */
+export const transferWorkspaceOwnership = <ThrowOnError extends boolean = false>(options: Options<TransferWorkspaceOwnershipData, ThrowOnError>): RequestResult<TransferWorkspaceOwnershipResponses, TransferWorkspaceOwnershipErrors, ThrowOnError> => (options.client ?? client).post<TransferWorkspaceOwnershipResponses, TransferWorkspaceOwnershipErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'elova_session',
+            type: 'apiKey'
+        }],
+    url: '/workspaces/ownership/transfer',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Any current workspace member or global super administrator; returns summaries, never credentials.
+ */
+export const listProviders = <ThrowOnError extends boolean = false>(options: Options<ListProvidersData, ThrowOnError>): RequestResult<ListProvidersResponses, ListProvidersErrors, ThrowOnError> => (options.client ?? client).get<ListProvidersResponses, ListProvidersErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'elova_session',
@@ -61,6 +196,9 @@ export const listProviders = <ThrowOnError extends boolean = false>(options?: Op
     ...options
 });
 
+/**
+ * Only a workspace owner, admin or global super administrator may add a connection.
+ */
 export const createProvider = <ThrowOnError extends boolean = false>(options: Options<CreateProviderData, ThrowOnError>): RequestResult<CreateProviderResponses, CreateProviderErrors, ThrowOnError> => (options.client ?? client).post<CreateProviderResponses, CreateProviderErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -75,6 +213,9 @@ export const createProvider = <ThrowOnError extends boolean = false>(options: Op
     }
 });
 
+/**
+ * Only a workspace owner, admin or global super administrator may run the secret-bearing sync.
+ */
 export const synchronizeProvider = <ThrowOnError extends boolean = false>(options: Options<SynchronizeProviderData, ThrowOnError>): RequestResult<SynchronizeProviderResponses, SynchronizeProviderErrors, ThrowOnError> => (options.client ?? client).post<SynchronizeProviderResponses, SynchronizeProviderErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -85,7 +226,10 @@ export const synchronizeProvider = <ThrowOnError extends boolean = false>(option
     ...options
 });
 
-export const listWorkflows = <ThrowOnError extends boolean = false>(options?: Options<ListWorkflowsData, ThrowOnError>): RequestResult<ListWorkflowsResponses, ListWorkflowsErrors, ThrowOnError> => (options?.client ?? client).get<ListWorkflowsResponses, ListWorkflowsErrors, ThrowOnError>({
+/**
+ * Sanitized read for any current member or global super administrator; no workflow write operation exists.
+ */
+export const listWorkflows = <ThrowOnError extends boolean = false>(options: Options<ListWorkflowsData, ThrowOnError>): RequestResult<ListWorkflowsResponses, ListWorkflowsErrors, ThrowOnError> => (options.client ?? client).get<ListWorkflowsResponses, ListWorkflowsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'elova_session',
@@ -95,7 +239,10 @@ export const listWorkflows = <ThrowOnError extends boolean = false>(options?: Op
     ...options
 });
 
-export const listExecutions = <ThrowOnError extends boolean = false>(options?: Options<ListExecutionsData, ThrowOnError>): RequestResult<ListExecutionsResponses, ListExecutionsErrors, ThrowOnError> => (options?.client ?? client).get<ListExecutionsResponses, ListExecutionsErrors, ThrowOnError>({
+/**
+ * Sanitized read for any current member or global super administrator.
+ */
+export const listExecutions = <ThrowOnError extends boolean = false>(options: Options<ListExecutionsData, ThrowOnError>): RequestResult<ListExecutionsResponses, ListExecutionsErrors, ThrowOnError> => (options.client ?? client).get<ListExecutionsResponses, ListExecutionsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'elova_session',
@@ -105,7 +252,10 @@ export const listExecutions = <ThrowOnError extends boolean = false>(options?: O
     ...options
 });
 
-export const getDashboardMetrics = <ThrowOnError extends boolean = false>(options?: Options<GetDashboardMetricsData, ThrowOnError>): RequestResult<GetDashboardMetricsResponses, GetDashboardMetricsErrors, ThrowOnError> => (options?.client ?? client).get<GetDashboardMetricsResponses, GetDashboardMetricsErrors, ThrowOnError>({
+/**
+ * Sanitized aggregate read for any current member or global super administrator.
+ */
+export const getDashboardMetrics = <ThrowOnError extends boolean = false>(options: Options<GetDashboardMetricsData, ThrowOnError>): RequestResult<GetDashboardMetricsResponses, GetDashboardMetricsErrors, ThrowOnError> => (options.client ?? client).get<GetDashboardMetricsResponses, GetDashboardMetricsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'elova_session',

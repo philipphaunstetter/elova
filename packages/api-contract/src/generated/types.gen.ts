@@ -20,6 +20,24 @@ export type Owner = {
     id: string;
     email: string;
     displayName: string;
+    role: 'user' | 'super_admin';
+    workspaceId: string | null;
+};
+
+export type Workspace = {
+    id: string;
+    name: string;
+    role: 'owner' | 'admin' | 'editor' | 'viewer' | 'super_admin';
+    createdAt: string;
+};
+
+export type MemberRole = 'owner' | 'admin' | 'editor' | 'viewer';
+
+export type WorkspaceMember = {
+    userId: string;
+    email: string;
+    displayName: string;
+    role: MemberRole;
 };
 
 export type Session = {
@@ -56,6 +74,8 @@ export type BffFailure = {
         message: 'Service temporarily unavailable' | 'Service timed out';
     };
 };
+
+export type WorkspaceId = string;
 
 export type GetLivenessData = {
     body?: never;
@@ -175,8 +195,368 @@ export type GetSessionResponses = {
 
 export type GetSessionResponse = GetSessionResponses[keyof GetSessionResponses];
 
+export type ListWorkspacesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/workspaces';
+};
+
+export type ListWorkspacesErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+};
+
+export type ListWorkspacesError = ListWorkspacesErrors[keyof ListWorkspacesErrors];
+
+export type ListWorkspacesResponses = {
+    /**
+     * Owned workspaces, plus globally accessible workspaces for the super administrator, and the active session workspace.
+     */
+    200: {
+        activeWorkspaceId: string | null;
+        workspaces: Array<Workspace>;
+    };
+};
+
+export type ListWorkspacesResponse = ListWorkspacesResponses[keyof ListWorkspacesResponses];
+
+export type CreateWorkspaceData = {
+    body: {
+        name: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/workspaces';
+};
+
+export type CreateWorkspaceErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+};
+
+export type CreateWorkspaceError = CreateWorkspaceErrors[keyof CreateWorkspaceErrors];
+
+export type CreateWorkspaceResponses = {
+    /**
+     * New workspace created and selected.
+     */
+    201: {
+        workspace?: Workspace;
+    };
+};
+
+export type CreateWorkspaceResponse = CreateWorkspaceResponses[keyof CreateWorkspaceResponses];
+
+export type SelectWorkspaceData = {
+    body: {
+        workspaceId: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/workspaces/select';
+};
+
+export type SelectWorkspaceErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    404: ErrorEnvelope;
+};
+
+export type SelectWorkspaceError = SelectWorkspaceErrors[keyof SelectWorkspaceErrors];
+
+export type SelectWorkspaceResponses = {
+    /**
+     * Session switched to an authorized workspace.
+     */
+    200: {
+        activeWorkspaceId?: string;
+    };
+};
+
+export type SelectWorkspaceResponse = SelectWorkspaceResponses[keyof SelectWorkspaceResponses];
+
+export type RenameWorkspaceData = {
+    body: {
+        name: string;
+    };
+    headers: {
+        'x-elova-workspace-id': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/workspaces/settings';
+};
+
+export type RenameWorkspaceErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    403: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
+};
+
+export type RenameWorkspaceError = RenameWorkspaceErrors[keyof RenameWorkspaceErrors];
+
+export type RenameWorkspaceResponses = {
+    /**
+     * Workspace renamed.
+     */
+    204: void;
+};
+
+export type RenameWorkspaceResponse = RenameWorkspaceResponses[keyof RenameWorkspaceResponses];
+
+export type ListWorkspaceMembersData = {
+    body?: never;
+    headers: {
+        'x-elova-workspace-id': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/workspaces/members';
+};
+
+export type ListWorkspaceMembersErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    403: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
+};
+
+export type ListWorkspaceMembersError = ListWorkspaceMembersErrors[keyof ListWorkspaceMembersErrors];
+
+export type ListWorkspaceMembersResponses = {
+    /**
+     * Confirmed members and their per-workspace roles.
+     */
+    200: {
+        members: Array<WorkspaceMember>;
+    };
+};
+
+export type ListWorkspaceMembersResponse = ListWorkspaceMembersResponses[keyof ListWorkspaceMembersResponses];
+
+export type AddWorkspaceMemberData = {
+    body: {
+        email: string;
+        role: MemberRole;
+    };
+    headers: {
+        'x-elova-workspace-id': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/workspaces/members';
+};
+
+export type AddWorkspaceMemberErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    403: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    404: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
+};
+
+export type AddWorkspaceMemberError = AddWorkspaceMemberErrors[keyof AddWorkspaceMemberErrors];
+
+export type AddWorkspaceMemberResponses = {
+    /**
+     * Existing user attached.
+     */
+    204: void;
+};
+
+export type AddWorkspaceMemberResponse = AddWorkspaceMemberResponses[keyof AddWorkspaceMemberResponses];
+
+export type RemoveWorkspaceMemberData = {
+    body?: never;
+    headers: {
+        'x-elova-workspace-id': string;
+    };
+    path: {
+        userId: string;
+    };
+    query?: never;
+    url: '/workspaces/members/{userId}';
+};
+
+export type RemoveWorkspaceMemberErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    403: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    404: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
+};
+
+export type RemoveWorkspaceMemberError = RemoveWorkspaceMemberErrors[keyof RemoveWorkspaceMemberErrors];
+
+export type RemoveWorkspaceMemberResponses = {
+    /**
+     * Member removed and their selected sessions for this workspace cleared.
+     */
+    204: void;
+};
+
+export type RemoveWorkspaceMemberResponse = RemoveWorkspaceMemberResponses[keyof RemoveWorkspaceMemberResponses];
+
+export type ChangeWorkspaceMemberRoleData = {
+    body: {
+        role: MemberRole;
+    };
+    headers: {
+        'x-elova-workspace-id': string;
+    };
+    path: {
+        userId: string;
+    };
+    query?: never;
+    url: '/workspaces/members/{userId}';
+};
+
+export type ChangeWorkspaceMemberRoleErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    403: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    404: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
+};
+
+export type ChangeWorkspaceMemberRoleError = ChangeWorkspaceMemberRoleErrors[keyof ChangeWorkspaceMemberRoleErrors];
+
+export type ChangeWorkspaceMemberRoleResponses = {
+    /**
+     * Member role changed.
+     */
+    204: void;
+};
+
+export type ChangeWorkspaceMemberRoleResponse = ChangeWorkspaceMemberRoleResponses[keyof ChangeWorkspaceMemberRoleResponses];
+
+export type TransferWorkspaceOwnershipData = {
+    body: {
+        userId: string;
+    };
+    headers: {
+        'x-elova-workspace-id': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/workspaces/ownership/transfer';
+};
+
+export type TransferWorkspaceOwnershipErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    403: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
+};
+
+export type TransferWorkspaceOwnershipError = TransferWorkspaceOwnershipErrors[keyof TransferWorkspaceOwnershipErrors];
+
+export type TransferWorkspaceOwnershipResponses = {
+    /**
+     * Designated owner transferred.
+     */
+    204: void;
+};
+
+export type TransferWorkspaceOwnershipResponse = TransferWorkspaceOwnershipResponses[keyof TransferWorkspaceOwnershipResponses];
+
 export type ListProvidersData = {
     body?: never;
+    headers: {
+        'x-elova-workspace-id': string;
+    };
     path?: never;
     query?: never;
     url: '/providers';
@@ -186,7 +566,15 @@ export type ListProvidersErrors = {
     /**
      * Stable non-sensitive error envelope.
      */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
     401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
 };
 
 export type ListProvidersError = ListProvidersErrors[keyof ListProvidersErrors];
@@ -208,12 +596,19 @@ export type CreateProviderData = {
         baseUrl: string;
         apiKey: string;
     };
+    headers: {
+        'x-elova-workspace-id': string;
+    };
     path?: never;
     query?: never;
     url: '/providers';
 };
 
 export type CreateProviderErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    400: ErrorEnvelope;
     /**
      * Stable non-sensitive error envelope.
      */
@@ -243,6 +638,9 @@ export type CreateProviderResponse = CreateProviderResponses[keyof CreateProvide
 
 export type SynchronizeProviderData = {
     body?: never;
+    headers: {
+        'x-elova-workspace-id': string;
+    };
     path: {
         providerId: string;
     };
@@ -251,6 +649,10 @@ export type SynchronizeProviderData = {
 };
 
 export type SynchronizeProviderErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    400: ErrorEnvelope;
     /**
      * Stable non-sensitive error envelope.
      */
@@ -289,6 +691,9 @@ export type SynchronizeProviderResponse = SynchronizeProviderResponses[keyof Syn
 
 export type ListWorkflowsData = {
     body?: never;
+    headers: {
+        'x-elova-workspace-id': string;
+    };
     path?: never;
     query?: never;
     url: '/workflows';
@@ -298,7 +703,15 @@ export type ListWorkflowsErrors = {
     /**
      * Stable non-sensitive error envelope.
      */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
     401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
 };
 
 export type ListWorkflowsError = ListWorkflowsErrors[keyof ListWorkflowsErrors];
@@ -316,6 +729,9 @@ export type ListWorkflowsResponse = ListWorkflowsResponses[keyof ListWorkflowsRe
 
 export type ListExecutionsData = {
     body?: never;
+    headers: {
+        'x-elova-workspace-id': string;
+    };
     path?: never;
     query?: {
         limit?: number;
@@ -327,7 +743,15 @@ export type ListExecutionsErrors = {
     /**
      * Stable non-sensitive error envelope.
      */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
     401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
 };
 
 export type ListExecutionsError = ListExecutionsErrors[keyof ListExecutionsErrors];
@@ -345,6 +769,9 @@ export type ListExecutionsResponse = ListExecutionsResponses[keyof ListExecution
 
 export type GetDashboardMetricsData = {
     body?: never;
+    headers: {
+        'x-elova-workspace-id': string;
+    };
     path?: never;
     query?: never;
     url: '/dashboard/metrics';
@@ -354,7 +781,15 @@ export type GetDashboardMetricsErrors = {
     /**
      * Stable non-sensitive error envelope.
      */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
     401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
 };
 
 export type GetDashboardMetricsError = GetDashboardMetricsErrors[keyof GetDashboardMetricsErrors];

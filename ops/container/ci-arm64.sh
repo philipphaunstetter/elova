@@ -46,6 +46,7 @@ docker run --rm --network none --entrypoint node "$ELOVA_BACKEND_IMAGE" -e '
   assert.ok(fs.existsSync("dist/src/server.js"));
   assert.ok(fs.existsSync("dist/src/migrate.js"));
   assert.ok(fs.existsSync("migrations/0001_postgres_authority.sql"));
+  assert.ok(fs.existsSync("migrations/0002_workspaces.sql"));
   for (const path of ["dist/test", "src", "/app/apps/frontend", "/app/node_modules/next", "/run/secrets/database_url"]) assert.ok(!fs.existsSync(path), path);
 '
 docker save "$ELOVA_BACKEND_IMAGE" | sha256sum
@@ -82,7 +83,7 @@ done
   const expected = await loadMigrations(config.migrationsDirectory);
   const pool = new Pool({ connectionString: config.databaseUrl });
   try {
-    assert.equal(expected.length, 1);
+    assert.equal(expected.length, 2);
     const { rows } = await pool.query("SELECT name, checksum FROM schema_migrations");
     assert.deepEqual(rows, expected.map(({name, checksum}) => ({name, checksum})));
     const identity = await pool.query("SELECT current_user, current_schema()");

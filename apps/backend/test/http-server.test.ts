@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { afterEach, test } from 'node:test'
 import { connect, type AddressInfo } from 'node:net'
+import type { ElovaApplication, ApplicationRequest } from '../src/application.js'
 import type { DatabaseGateway, ReadinessChecks } from '../src/database.js'
 import { createBackendServer } from '../src/http-server.js'
 
@@ -23,8 +24,8 @@ function gateway(checks: ReadinessChecks): DatabaseGateway {
   }
 }
 
-async function start(checks: ReadinessChecks, database = gateway(checks)): Promise<string> {
-  const server = createBackendServer(database)
+async function start(checks: ReadinessChecks, database = gateway(checks), application?: ElovaApplication): Promise<string> {
+  const server = createBackendServer(database, application)
   servers.push(server)
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
@@ -107,6 +108,20 @@ test('malformed request targets return a stable error without terminating the se
 
   const live = await fetch(`${origin}/v1/health/live`)
   assert.equal(live.status, 200)
+})
+
+test('workspace header reaches the application without substituting session selection', async () => {
+  let received: ApplicationRequest | undefined
+  const application = { async handle(request: ApplicationRequest) {
+    received = request
+    return { status: 200, body: { workspaceId: request.headers['x-elova-workspace-id'] ?? null } }
+  } } as ElovaApplication
+  const origin = await start({ database: 'ready', migrations: 'ready' }, undefined, application)
+  const workspaceId = '33333333-3333-4333-8333-333333333333'
+  const response = await fetch(`${origin}/v1/providers`, { headers: { 'x-elova-workspace-id': workspaceId } })
+  assert.equal(response.status, 200)
+  assert.equal(received?.headers['x-elova-workspace-id'], workspaceId)
+  assert.deepEqual(await response.json(), { workspaceId })
 })
 
 test('unknown paths and methods return stable, non-reflective errors', async () => {

@@ -13,7 +13,7 @@ The frontend's public TLS reverse proxy is outside this slice. It must proxy bro
 
 ## Day-one operator checklist (not an authorization to deploy)
 
-**Repository provides:** the PostgreSQL-only `0001_postgres_authority.sql` schema and ordered migration command, one-time `bootstrap-owner` command, native backend/frontend builds and install-free archives, SHA-256 files, root-operated guarded release helper, systemd templates, example environment *keys*, and synthetic/ephemeral CI verification. Pulling this repository onto either host alone installs nothing and does not configure PostgreSQL. The current public Docker artifact is unaffected.
+**Repository provides:** the PostgreSQL-only `0001_postgres_authority.sql` and additive `0002_workspaces.sql` schema migrations, the ordered migration command, one-time `bootstrap-owner` command, native backend/frontend builds and install-free archives, SHA-256 files, root-operated guarded release helper, systemd templates, example environment *keys*, and synthetic/ephemeral CI verification. Pulling this repository onto either host alone installs nothing and does not configure PostgreSQL. The current public Docker artifact is unaffected.
 
 **Supply/approve separately before the window:** a dedicated backed-up *empty* GX10 PostgreSQL database and local-only role/connection with permission to create the initial schema and write application tables (the current migration unit and runtime share `DATABASE_URL`; do not mistake this for a read-only runtime role); independent protected keys and owner bootstrap credentials; approved GX10 `tailscale0` address, VPS-to-GX10 Tailnet policy and firewall; supported host packages, non-login service users, protected env files and installed units; VPS DNS/TLS/reverse proxy to loopback; trusted archive transfer and digest; a backup/restore and incident owner. The repository does **not** provision any of these. Separating migration and runtime database roles would require a reviewed design change; do not silently grant database superuser or remote-access privileges. For an existing database or legacy-data import, stop for a separately reviewed migration plan rather than applying the initial schema blindly.
 
@@ -21,7 +21,7 @@ The frontend's public TLS reverse proxy is outside this slice. It must proxy bro
 
 1. In a clean, locked checkout on a trusted **build workspace**, run `npm ci`, then follow the [release artifact build command](#release-artifact-contract). The synthetic build URL is not the runtime target. Record the commit SHA and transfer each archive **with its independently checked SHA file** and reviewed helper/templates. A host-side `git pull` is only source checkout, not an activation; do not run a build as root or from a dirty checkout. Verify the transferred digest against the trusted build record before continuing.
 2. On GX10, provision the separately approved local PostgreSQL database/role and `/etc/elova/backend.env`; on VPS configure `/etc/elova/frontend.env`. Keep `DATABASE_URL` and both keys only on GX10, never on VPS. Confirm Tailnet/private bind and public proxy boundaries. Review/install only each host's own unit(s) and the helper, then `systemctl daemon-reload` as separately authorized.
-3. On each host run the helper's **read-only** artifact `preflight --dry-run` and full host `preflight`; resolve failures. On GX10, stage the backend; verify backup and migration SQL; explicitly migrate the staged backend release. Only after successful migration, bootstrap the owner once using a protected transient environment as below; check database state if acknowledgement is uncertain. Never expose a public signup path.
+3. On each host run the helper's **read-only** artifact `preflight --dry-run` and full host `preflight`; resolve failures. On GX10, stage the backend; verify backup and migration SQL; explicitly migrate the staged backend release. Only after successful migration and separate approval, bootstrap the owner once using the protected local password-file handoff below; check database state if acknowledgement is uncertain. Never expose a public signup path.
 4. Activate the backend and require PostgreSQL/migration readiness; then stage and activate the frontend and require its BFF readiness. Verify the VPS loopback listener, public TLS proxy to the frontend only, authenticated login, and absence of a public GX10/database listener. Configure n8n through the authenticated owner settings only after service health. Preserve logs, artifact hashes and rollback/forward-fix decision ownership.
 
 **Stop conditions:** any missing separate authorization, backup, clean artifact provenance, private route, database/secret, unit or readiness check is a blocker for live bring-up. No live host/database/network state was verified by this repository; passing local or CI tests cannot certify tomorrow's hosts. A failed migration or changed migration count is a forward-fix/restore decision, not permission to down-migrate or roll back the backend.
@@ -151,71 +151,11 @@ sudo "$helper" migrate --service backend --release "$release" --apply
 
 The helper invokes only `elova-backend-migrate@<release>.service`, waits for success, and writes the verified staged-artifact digest into a release-specific success marker outside the artifact. Migration does not require an unused backend service port. A release identity with an existing migration record cannot be staged again, and activation refuses a missing or artifact-mismatched marker. It does **not** activate or restart the API. The API unit runs only `npm start`; it never invokes migration implicitly.
 
-### 3a. Bootstrap the sole owner separately
+### 3a. Bootstrap the sole super administrator separately
 
-Only after migration and separate authorization, an operator on GX10 may run the packaged backend command once. An operator shell does not automatically inherit the backend unit's environment file, and running plain `npm run bootstrap-owner` from a root shell is **not** the service-user procedure. Prepare a **root-owned mode 0600 file on tmpfs** in a unique mode 0700 directory under `/run/elova/operator-bootstrap/`, copying the protected `/etc/elova/backend.env` into it. Supply `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD` via a separately approved secret handoff into that same file; use systemd `EnvironmentFile=` syntax. Do not put the password in shell history, process arguments, the persistent `/etc/elova/backend.env`, logs, tickets, or a disk-backed editor swap file. Do not use `sudoedit` if its temporary copy could be disk-backed. Confirm the transient file has only the four backend keys and those three bootstrap keys with the approved values; never reuse it.
+**Not executed by this repository; requires separately approved host/release authority.** After applying both ordered migrations, an authorized operator may create the one global super-administrator and their actual `admin workspace`. Verify the captain-selected identifier through the approved operator channel and receive the chosen password through a protected local handoff, never chat, shell arguments, environment values, CI, repository or logs. A legacy owner's identifier cannot be reused or silently promoted. The CLI requires `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD_FILE`; the latter contains only the password (an optional final newline is stripped). `ELOVA_BOOTSTRAP_PASSWORD` is rejected. The password file must be a regular non-symlink absolute path, readable by the bootstrap process UID, **exactly mode 0400**, between 12 and 256 password characters, on protected ephemeral storage. Its path may be supplied in the environment, but never its contents. For container mode, a separately reviewed one-off container mount must make the file accessible to UID 10001; do not add it to the always-on backend or publish any host port. Use the separately approved Elova-only application database credential, not a shared DBA password. In container mode `DATABASE_URL_FILE` uses the existing protected mount; native bootstrap uses local-only `DATABASE_URL`. Run the command under the designated backend identity after migration, not as a root convenience shell.
 
-In one **operator Bash shell**, execute this preparation step on GX10. It refuses stale entries from a previous attempt; investigate them and check owner state before another attempt. The cleanup trap is installed before the password file is created. Preparation does not supply bootstrap values:
-
-```bash
-prepare_owner_bootstrap() {
-  if [[ -n ${bootstrap_file:-} ]]; then
-    echo 'Bootstrap preparation already attempted in this shell; inspect and exit' >&2
-    return 1
-  fi
-  sudo install -d -o root -g root -m 0700 /run/elova/operator-bootstrap || return 1
-  local existing directory
-  existing=$(sudo find /run/elova/operator-bootstrap -mindepth 1 -maxdepth 1 -print -quit) || return 1
-  if [[ -n $existing ]]; then
-    echo 'Previous bootstrap files exist; inspect owner state and clean up before retrying' >&2
-    return 1
-  fi
-  directory=$(sudo mktemp -d /run/elova/operator-bootstrap/owner.XXXXXXXXXX) || return 1
-  bootstrap_file=$directory/owner.env
-  trap 'sudo rm -f -- "$bootstrap_file"; sudo rmdir -- "${bootstrap_file%/*}"' EXIT
-  trap 'exit 129' HUP
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-  if ! sudo install -o root -g root -m 0600 /etc/elova/backend.env "$bootstrap_file"; then
-    echo 'Bootstrap preparation failed; exit and inspect the transient directory' >&2
-    return 1
-  fi
-  bootstrap_prepared=1
-}
-prepare_owner_bootstrap
-```
-
-**Stop here.** In that shell, check `bootstrap_prepared` is `1` and `bootstrap_file` names the newly created tmpfs file. Using the approved handoff, securely append the three bootstrap values to that file, verify them without printing secrets, and only then execute the separate invocation step below **in the same shell**. Never paste the invocation together with preparation or continue after a failed preparation. Systemd reads the environment file before dropping privileges to the backend user:
-
-```bash
-run_owner_bootstrap() {
-  if [[ ${bootstrap_prepared:-} != 1 || -z ${bootstrap_file:-} ]] ||
-     ! sudo test -f "$bootstrap_file" || sudo test -L "$bootstrap_file"; then
-    bootstrap_prepared=0
-    echo 'No valid preparation in this shell; do not run bootstrap' >&2
-    return 1
-  fi
-  bootstrap_prepared=0
-  local bootstrap_status=0
-  sudo systemd-run --wait --collect --uid=elova-backend --gid=elova-backend \
-    --working-directory="/opt/elova/backend/releases/$release" \
-    --property="EnvironmentFile=$bootstrap_file" \
-    /usr/bin/env npm run bootstrap-owner || bootstrap_status=$?
-  if ! sudo rm -f -- "$bootstrap_file" || ! sudo rmdir -- "${bootstrap_file%/*}"; then
-    echo 'Bootstrap cleanup failed; inspect the tmpfs directory before retrying' >&2
-    return 1
-  fi
-  trap - EXIT HUP INT TERM
-  unset bootstrap_file bootstrap_prepared
-  if (( bootstrap_status != 0 )); then
-    echo 'Bootstrap outcome uncertain; inspect GX10 owner state before retrying' >&2
-    return 1
-  fi
-}
-run_owner_bootstrap
-```
-
-Treat a nonzero exit or missing success acknowledgement as uncertain; remove the transient file even if the command fails, then check the owner count on GX10 before considering a retry. If the shell or `systemd-run --wait` is interrupted, verify the transient directory is gone; if it remains, remove only that attempt's file and directory after inspecting the transient unit outcome and GX10 owner state. A trap cannot handle a killed shell, a lost machine, or a failed removal, so manually inspect `/run/elova/operator-bootstrap/` after any interrupted session. The command takes a PostgreSQL transaction lock and commits exactly one owner. A failure before commitment is retryable; every call after commitment fails closed. If acknowledgement is uncertain, check PostgreSQL for an existing owner before retrying; do not assume no credentials were written. There is no web bootstrap or public signup. This runbook does not authorize executing the command, and the repository change performs no live bootstrap.
+Immediately remove the password handoff file on success or failure and inspect the super-administrator count and the chosen identifier on uncertain outcomes before retrying. The transaction locks initial enrollment and writes the super administrator, personal workspace and owner membership atomically. Existing ordinary users remain isolated and do not close bootstrap; only an existing super administrator closes it permanently. Migration backfills legacy personal workspaces and owner memberships without recreating or promoting users. After a **separate** approval, an operator may provision a non-admin user through `node dist/src/provision-user.js` using `ELOVA_USER_EMAIL`, `ELOVA_USER_NAME` and `ELOVA_USER_PASSWORD_FILE` with the **same protected file requirements** as the first bootstrap; each person chooses their own password through the protected handoff, never chat, arguments, environment values or logs. `ELOVA_USER_PASSWORD` is rejected. The ordinary user starts with no membership; an owner/global admin may attach only an already-provisioned confirmed identity under [fixed workspace permissions](workspace-permissions.md). Do not perform or infer an invitation, consent, key exchange or live user creation from this documentation. Never reset/drop the database to repeat bootstrap. No public signup or browser enrollment exists. This runbook does not authorize running either command or accessing production credentials.
 
 There is deliberately **no down/destructive migration procedure**. If a forward migration fails, stop, preserve logs, leave the current release running, and escalate to the database/release owner. Restore or corrective-forward-migration decisions require separate authorization. Backend symlink rollback is prohibited whenever the current and retained releases have different migration counts, including additive changes. Exact-count readiness remains fail-closed; recovery across that boundary requires a forward fix.
 

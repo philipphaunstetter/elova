@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { writeFile } from 'node:fs/promises';
+import { writeFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
@@ -33,6 +35,9 @@ const sessionSecret = secret();
 const credentialKey = secret();
 const email = 'owner@isolated.example.test';
 const password = `  ${randomBytes(24).toString('hex')}  `;
+const handoff = await mkdtemp(join(tmpdir(), 'elova-fixture-password-'));
+const passwordFile = join(handoff, 'password');
+await writeFile(passwordFile, password, { mode: 0o400 });
 const apiKeyA = `synthetic-key-a-${randomBytes(12).toString('hex')}`;
 const apiKeyB = `synthetic-key-b-${randomBytes(12).toString('hex')}`;
 const backendEnv = {
@@ -101,7 +106,7 @@ try {
   assert.equal(migration.code, 0, `Migration failed: ${migration.output}`);
   const operatorEnv = {
     ...backendEnv, ELOVA_BOOTSTRAP_EMAIL: email, ELOVA_BOOTSTRAP_NAME: 'Synthetic Owner',
-    ELOVA_BOOTSTRAP_PASSWORD: password,
+    ELOVA_BOOTSTRAP_PASSWORD_FILE: passwordFile,
   };
   const first = await run(resolve(backend, 'dist/src/bootstrap-owner.js'), [], backend, operatorEnv);
   assert.equal(first.code, 0, `Operator bootstrap failed: ${first.output}`);
@@ -122,8 +127,9 @@ try {
     { ...process.env, NODE_ENV: 'development', ELOVA_BACKEND_URL: privateOrigin });
   await ready(`${publicOrigin}/health/live`, frontendServer);
   const api = `${publicOrigin}/api`;
-  const json = (body, cookie) => ({
-    method: 'POST', headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+  const json = (body, cookie, workspaceId) => ({
+    method: 'POST', headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}),
+      ...(workspaceId ? { 'x-elova-workspace-id': workspaceId } : {}) },
     body: JSON.stringify(body),
   });
 
@@ -133,11 +139,14 @@ try {
   assert.equal(login.body.user.email, email);
   const cookie = login.response.headers.get('set-cookie')?.split(';')[0];
   assert.match(cookie ?? '', /^elova_session=/);
+  const workspaceId = login.body.user.workspaceId;
+  assert.match(workspaceId, /^[0-9a-f-]{36}$/i);
+  const scopedHeaders = { cookie, 'x-elova-workspace-id': workspaceId };
   await request(api, '/v1/auth/session', {}, 401);
   await request(api, '/v1/providers', {}, 401);
   await request(api, '/v1/auth/session', { headers: { cookie: 'elova_session=eyJmb3JnZWQiOiJ0cnVlIn0' } }, 401);
   await request(api, '/v1/auth/session', { headers: { cookie } }, 200);
-  assert.deepEqual((await request(api, '/v1/providers', { headers: { cookie } }, 200)).body.providers, []);
+  assert.deepEqual((await request(api, '/v1/providers', { headers: scopedHeaders }, 200)).body.providers, []);
 
   // Both fixture responses contain fabricated personal data. Never print raw bodies.
   for (const fixture of [fixtureA, fixtureB]) {
@@ -146,21 +155,21 @@ try {
     assert.equal(workflow.body.data.length, 1);
     assert.equal(execution.body.data.length, 1);
   }
-  const add = (name, baseUrl, apiKey) => json({ name, baseUrl, apiKey }, cookie);
+  const add = (name, baseUrl, apiKey) => json({ name, baseUrl, apiKey }, cookie, workspaceId);
   const providerA = (await request(api, '/v1/providers', add('Fixture A', fixtureA, apiKeyA), 201)).body.provider;
   assert.equal(providerA.baseUrl, `http://[redacted]:${new URL(fixtureA).port}`);
   await request(api, '/v1/providers', add('Duplicate A', fixtureA, 'another-synthetic-key'), 409);
   const encrypted = (await pool.query('SELECT encrypted_api_key FROM n8n_providers WHERE id = $1', [providerA.id])).rows[0].encrypted_api_key;
   assert.notEqual(encrypted, apiKeyA);
-  assert.equal(JSON.stringify((await request(api, '/v1/providers', { headers: { cookie } }, 200)).body).includes(apiKeyA), false);
-  assert.deepEqual((await request(api, `/v1/providers/${providerA.id}/sync`, json({}, cookie), 200)).body,
+  assert.equal(JSON.stringify((await request(api, '/v1/providers', { headers: scopedHeaders }, 200)).body).includes(apiKeyA), false);
+  assert.deepEqual((await request(api, `/v1/providers/${providerA.id}/sync`, json({}, cookie, workspaceId), 200)).body,
     { workflows: 1, executions: 1 });
 
   const providerB = (await request(api, '/v1/providers', add('Fixture B', fixtureB, apiKeyB), 201)).body.provider;
   assert.notEqual(providerA.id, providerB.id);
-  assert.deepEqual((await request(api, `/v1/providers/${providerB.id}/sync`, json({}, cookie), 200)).body,
+  assert.deepEqual((await request(api, `/v1/providers/${providerB.id}/sync`, json({}, cookie, workspaceId), 200)).body,
     { workflows: 1, executions: 1 });
-  const providers = (await request(api, '/v1/providers', { headers: { cookie } }, 200)).body.providers;
+  const providers = (await request(api, '/v1/providers', { headers: scopedHeaders }, 200)).body.providers;
   assert.equal(providers.length, 2);
   assert.deepEqual(new Set(providers.map(provider => provider.baseUrl)),
     new Set([fixtureA, fixtureB].map(origin => `http://[redacted]:${new URL(origin).port}`)));
@@ -185,13 +194,13 @@ try {
     assert.match(row.execution_content, /\[redacted\]/);
   }
   assert.deepEqual(new Set(histories.rows.map(row => row.status)), new Set(['success', 'error']));
-  const executions = (await request(api, '/v1/executions', { headers: { cookie } }, 200)).body.executions;
+  const executions = (await request(api, '/v1/executions', { headers: scopedHeaders }, 200)).body.executions;
   assert.equal(executions.length, 2);
   assert.deepEqual(new Set(executions.map(item => item.providerId)), new Set([providerA.id, providerB.id]));
-  assert.equal((await request(api, '/v1/workflows', { headers: { cookie } }, 200)).body.workflows.length, 2);
-  assert.equal((await request(api, '/v1/dashboard/metrics', { headers: { cookie } }, 200)).body.totalExecutions, 2);
+  assert.equal((await request(api, '/v1/workflows', { headers: scopedHeaders }, 200)).body.workflows.length, 2);
+  assert.equal((await request(api, '/v1/dashboard/metrics', { headers: scopedHeaders }, 200)).body.totalExecutions, 2);
   assert.equal((await pool.query('SELECT count(*)::integer AS count FROM sessions')).rows[0].count, 1);
-  const dashboard = (await request(api, '/v1/dashboard/metrics', { headers: { cookie } }, 200)).body;
+  const dashboard = (await request(api, '/v1/dashboard/metrics', { headers: scopedHeaders }, 200)).body;
   const ownerSession = (await request(api, '/v1/auth/session', { headers: { cookie } }, 200)).body;
   if (process.env.ELOVA_LIVE_EVIDENCE_DIR) {
     for (const route of ['login', 'settings']) {
@@ -217,6 +226,7 @@ try {
     sanitation: 'Synthetic personal data and secrets absent from both persisted content columns',
   }));
 } finally {
+  await rm(handoff, { recursive: true, force: true });
   for (const child of children.reverse()) {
     if (child.pid) {
       try { process.kill(-child.pid, 'SIGTERM'); } catch { /* Already exited. */ }

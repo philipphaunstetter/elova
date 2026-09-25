@@ -15,6 +15,7 @@
     "start": "node dist/src/server.js",
     "migrate": "node dist/src/migrate.js",
     "bootstrap-owner": "node dist/src/bootstrap-owner.js",
+    "provision-user": "node dist/src/provision-user.js",
     "test": "npm run build && node --test dist/test/*.test.js"
   },
   "dependencies": {

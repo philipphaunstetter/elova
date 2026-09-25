@@ -110,7 +110,7 @@ function parseSecret(name: string, value: string | undefined): string {
   return secret
 }
 
-function protectedValue(name: string, env: NodeJS.ProcessEnv, container: boolean): string {
+export function protectedValue(name: string, env: NodeJS.ProcessEnv, container: boolean): string {
   if (!container) return required(name, env[name])
   const path = env[`${name}_FILE`]
   if (path !== undefined && env[name] !== undefined) throw new Error(`${name} and ${name}_FILE are mutually exclusive`)

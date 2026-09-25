@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppFooter, AppNav } from "../app-nav";
+import { WorkspaceSwitcher } from "../workspace-switcher";
 
 type Metrics = {
   totalExecutions: number;
@@ -27,41 +28,52 @@ type Execution = {
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<Metrics>();
   const [executions, setExecutions] = useState<Execution[]>([]);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "unauthorized" | "error">("loading");
+  const onUnauthorized = useCallback(() => setState("unauthorized"), []);
+  const onWorkspaceError = useCallback(() => setState("error"), []);
+  const onWorkspaceChange = useCallback((id: string) => {
+    setWorkspaceId(id);
+    setState(id ? "loading" : "error");
+  }, []);
 
   useEffect(() => {
+    if (!workspaceId) return;
     const controller = new AbortController();
+    const options = { cache: "no-store" as const, signal: controller.signal, headers: { "x-elova-workspace-id": workspaceId } };
     void Promise.all([
-      fetch("/api/v1/dashboard/metrics", { cache: "no-store", signal: controller.signal }),
-      fetch("/api/v1/executions?limit=20", { cache: "no-store", signal: controller.signal }),
+      fetch("/api/v1/dashboard/metrics", options),
+      fetch("/api/v1/executions?limit=20", options),
     ]).then(async ([metricsResponse, executionsResponse]) => {
+      if (controller.signal.aborted) return;
       if (metricsResponse.status === 401 || executionsResponse.status === 401) {
         setState("unauthorized");
         return;
       }
       if (!metricsResponse.ok || !executionsResponse.ok) throw new Error("request failed");
-      const [metricBody, executionBody] = await Promise.all([
+      const [metricsBody, executionBody] = await Promise.all([
         metricsResponse.json() as Promise<Metrics>,
         executionsResponse.json() as Promise<{ executions: Execution[] }>,
       ]);
       if (controller.signal.aborted) return;
-      setMetrics(metricBody);
+      setMetrics(metricsBody);
       setExecutions(executionBody.executions);
       setState("ready");
     }).catch(() => { if (!controller.signal.aborted) setState("error"); });
     return () => controller.abort();
-  }, []);
+  }, [workspaceId]);
 
   return (
     <div className="app-shell">
       <AppNav />
       <main id="main" tabIndex={-1} className="shell page-content">
         <div className="page-heading">
-          <div><p className="eyebrow"><span className="eyebrow-dot" aria-hidden="true" /> Owner workspace</p><h1>Workflow <em>observability.</em></h1><p className="intro">Review synchronized n8n execution outcomes and recent history.</p></div>
+          <div><p className="eyebrow"><span className="eyebrow-dot" aria-hidden="true" /> Private workspace</p><h1>Workflow <em>observability.</em></h1><p className="intro">Review synchronized n8n execution outcomes and recent history in the selected workspace.</p></div>
           <span className="heading-tag">EXECUTION EVIDENCE / N8N</span>
         </div>
+        {state !== "unauthorized" && <WorkspaceSwitcher onWorkspaceChange={onWorkspaceChange} onUnauthorized={onUnauthorized} onError={onWorkspaceError} />}
         {state === "loading" && <p className="notice" role="status">Loading current execution evidence…</p>}
-        {state === "unauthorized" && <div className="notice" role="status"><p>Sign in with the operator-created owner account to view execution evidence.</p><Link className="text-link" href="/login">Sign in <span aria-hidden="true">↗</span></Link></div>}
+        {state === "unauthorized" && <div className="notice" role="status"><p>Sign in with your operator-enrolled account to view execution evidence.</p><Link className="text-link" href="/login">Sign in <span aria-hidden="true">↗</span></Link></div>}
         {state === "error" && <p className="notice error" role="alert">Observability data is temporarily unavailable. Please try again later.</p>}
         {state === "ready" && metrics && (
           <>

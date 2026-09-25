@@ -21,7 +21,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email: form.get("email"), password: form.get("password") }),
       });
       if (!response.ok) {
-        setError("Sign in failed. Check your owner credentials.");
+        setError("Sign in failed. Check your account credentials.");
         return;
       }
       router.push("/dashboard");
@@ -38,10 +38,10 @@ export default function LoginPage() {
       <AppNav />
       <main id="main" tabIndex={-1} className="shell page-content auth-layout">
         <div className="auth-intro">
-          <p className="eyebrow"><span className="eyebrow-dot" aria-hidden="true" /> Owner access</p>
+          <p className="eyebrow"><span className="eyebrow-dot" aria-hidden="true" /> Private workspace access</p>
           <h1>Welcome <em>back.</em></h1>
-          <p className="intro">Sign in with the owner account created by your operator to view workflow execution evidence.</p>
-          <p className="auth-note">The initial owner account is created once by the operator.</p>
+          <p className="intro">Sign in to view your workspace and its workflow execution evidence.</p>
+          <p className="auth-note">The first super administrator and admin workspace are enrolled once through a protected local operator handoff.</p>
         </div>
         <section className="form-surface" aria-labelledby="login-title">
           <p className="section-index">01 / SIGN IN</p>

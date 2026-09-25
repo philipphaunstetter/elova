@@ -118,6 +118,13 @@ tbody tr:last-child td { border-bottom: 0; }
 .provider-card p { margin-bottom: 8px; }
 .provider-card .button { flex: none; }
 .settings-layout > .notice { margin-top: 22px; }
+.settings-grid-readonly { grid-template-columns: 1fr; }
+.workspace-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; margin: 0 0 32px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.workspace-controls label { display: grid; gap: 6px; font-size: 14px; font-weight: 650; }
+.workspace-controls input, .workspace-controls select { min-height: 42px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: white; color: var(--foreground); font: inherit; }
+.workspace-controls form { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.workspace-controls p { width: 100%; margin: 0; color: #a42542; }
+.evidence-json { overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 900px) {
   .home-hero, .auth-layout, .settings-grid { grid-template-columns: 1fr; }
   .home-visual { aspect-ratio: auto; min-height: 340px; }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { ElovaRepository, SessionOwner } from './repository.js'
-import { ProviderOriginAlreadyExistsError, ProviderSyncAlreadyRunningError, ProviderSyncCapacityError } from './repository.js'
+import type { ElovaRepository, MemberRole, MemberWriteResult, SessionOwner, WorkspaceRole } from './repository.js'
+import { ProviderOriginAlreadyExistsError, ProviderSyncAlreadyRunningError, ProviderSyncCapacityError, WorkspaceAccessDeniedError } from './repository.js'
 import { N8nSynchronizer } from './n8n-sync.js'
 import { normalizeProviderOrigin } from './provider-url.js'
 import {
@@ -42,6 +42,23 @@ function stringField(value: unknown, maximum: number): string | undefined {
   return normalized.length > 0 && normalized.length <= maximum ? normalized : undefined
 }
 
+const RESOURCE_UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
+
+function workspaceId(value: unknown): string | undefined {
+  return typeof value === 'string' && RESOURCE_UUID.test(value) ? value.toLowerCase() : undefined
+}
+
+function memberRole(value: unknown): MemberRole | undefined {
+  return value === 'owner' || value === 'admin' || value === 'editor' || value === 'viewer' ? value : undefined
+}
+
+function memberResult(result: MemberWriteResult): ApplicationResponse {
+  if (result === 'ok') return { status: 204 }
+  if (result === 'forbidden') return error(403, 'FORBIDDEN', 'Workspace permission required')
+  if (result === 'not_found') return error(404, 'NOT_FOUND', 'User or membership not found')
+  return error(409, 'MEMBERSHIP_CONFLICT', 'Transfer ownership or resolve existing membership first')
+}
+
 function cookieValue(cookie: string | undefined, name: string): string | undefined {
   return cookie?.split(';')
     .map((part) => part.trim().split('='))
@@ -78,6 +95,22 @@ export class ElovaApplication {
     return owner ?? error(401, 'UNAUTHORIZED', 'Authentication required')
   }
 
+  private async requireWorkspace(request: ApplicationRequest,
+    allowed: readonly WorkspaceRole[] = ['owner', 'admin', 'editor', 'viewer', 'super_admin'],
+  ): Promise<(SessionOwner & { workspaceId: string; workspaceRole: WorkspaceRole }) | ApplicationResponse> {
+    const owner = await this.requireOwner(request)
+    if ('status' in owner) return owner
+    const requestedWorkspaceId = workspaceId(request.headers['x-elova-workspace-id'])
+    if (!requestedWorkspaceId) return error(400, 'BAD_REQUEST', 'Valid workspace ID is required')
+    if (!owner.workspaceId) return error(409, 'NO_WORKSPACE', 'Create or select a workspace first')
+    if (owner.workspaceId !== requestedWorkspaceId) {
+      return error(409, 'WORKSPACE_CHANGED', 'Refresh the workspace before retrying')
+    }
+    const role = await this.repository.getWorkspaceRole(owner.id, requestedWorkspaceId)
+    if (!role || !allowed.includes(role)) return error(403, 'FORBIDDEN', 'Workspace permission required')
+    return { ...owner, workspaceId: requestedWorkspaceId, workspaceRole: role }
+  }
+
   async handle(request: ApplicationRequest): Promise<ApplicationResponse | undefined> {
     if (request.method === 'POST' && request.pathname === '/v1/auth/login') {
       const body = record(request.body)
@@ -111,12 +144,16 @@ export class ElovaApplication {
         sessionTokenDigest(issued.token),
         new Date(issued.claims.expiresAt * 1_000),
       )
+      const firstWorkspace = (await this.repository.listWorkspaces(owner.id))[0]
+      const selected = firstWorkspace
+        ? await this.repository.selectWorkspace(sessionId, owner.id, firstWorkspace.id) : false
       return {
         status: 200,
         headers: {
           'set-cookie': `elova_session=${issued.token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}`,
         },
-        body: { user: { id: owner.id, email: owner.email, displayName: owner.displayName } },
+        body: { user: { id: owner.id, email: owner.email, displayName: owner.displayName,
+          role: owner.role ?? 'user', workspaceId: selected ? firstWorkspace!.id : null } },
       }
     }
 
@@ -133,18 +170,94 @@ export class ElovaApplication {
     if (request.method === 'GET' && request.pathname === '/v1/auth/session') {
       const owner = await this.owner(request)
       return owner
-        ? { status: 200, body: { user: owner } }
+        ? { status: 200, body: { user: { id: owner.id, email: owner.email,
+          displayName: owner.displayName, role: owner.role, workspaceId: owner.workspaceId } } }
         : error(401, 'UNAUTHORIZED', 'Authentication required')
     }
 
-    if (request.pathname === '/v1/providers' && request.method === 'GET') {
+    if (request.pathname === '/v1/workspaces' && request.method === 'GET') {
       const owner = await this.requireOwner(request)
       if ('status' in owner) return owner
-      return { status: 200, body: { providers: await this.repository.listProviders(owner.id) } }
+      return { status: 200, body: { workspaces: await this.repository.listWorkspaces(owner.id),
+        activeWorkspaceId: owner.workspaceId } }
+    }
+
+    if (request.pathname === '/v1/workspaces' && request.method === 'POST') {
+      const owner = await this.requireOwner(request)
+      if ('status' in owner) return owner
+      const name = stringField(record(request.body).name, 120)
+      if (!name) return error(400, 'BAD_REQUEST', 'Workspace name is required')
+      const workspace = await this.repository.createWorkspace(owner.sessionId, owner.id, name)
+      return workspace ? { status: 201, body: { workspace } }
+        : error(401, 'UNAUTHORIZED', 'Authentication required')
+    }
+
+    if (request.pathname === '/v1/workspaces/select' && request.method === 'POST') {
+      const owner = await this.requireOwner(request)
+      if ('status' in owner) return owner
+      const id = workspaceId(record(request.body).workspaceId)
+      if (!id) return error(400, 'BAD_REQUEST', 'Valid workspace ID is required')
+      const selected = await this.repository.selectWorkspace(owner.sessionId, owner.id, id)
+      if (selected) return { status: 200, body: { activeWorkspaceId: id } }
+      return await this.owner(request) ? error(404, 'NOT_FOUND', 'Workspace not found')
+        : error(401, 'UNAUTHORIZED', 'Authentication required')
+    }
+
+    if (request.pathname === '/v1/workspaces/settings' && request.method === 'PATCH') {
+      const owner = await this.requireWorkspace(request, ['owner', 'admin', 'super_admin'])
+      if ('status' in owner) return owner
+      const name = stringField(record(request.body).name, 120)
+      if (!name) return error(400, 'BAD_REQUEST', 'Workspace name is required')
+      return memberResult(await this.repository.renameWorkspace(owner.id, owner.workspaceId, name))
+    }
+
+    if (request.pathname === '/v1/workspaces/members' && request.method === 'GET') {
+      const owner = await this.requireWorkspace(request, ['owner', 'super_admin'])
+      if ('status' in owner) return owner
+      const members = await this.repository.listMembers(owner.id, owner.workspaceId)
+      return members ? { status: 200, body: { members } } : error(403, 'FORBIDDEN', 'Workspace permission required')
+    }
+
+    if (request.pathname === '/v1/workspaces/members' && request.method === 'POST') {
+      const owner = await this.requireWorkspace(request, ['owner', 'super_admin'])
+      if ('status' in owner) return owner
+      const body = record(request.body)
+      const email = stringField(body.email, 320)?.toLowerCase()
+      const role = memberRole(body.role)
+      if (!email || !email.includes('@') || !role) return error(400, 'BAD_REQUEST', 'Existing user email and role are required')
+      return memberResult(await this.repository.addMember(owner.id, owner.workspaceId, email, role))
+    }
+
+    const memberMatch = request.pathname.match(/^\/v1\/workspaces\/members\/([0-9a-f-]+)$/i)
+    if (memberMatch && (request.method === 'PATCH' || request.method === 'DELETE')) {
+      const owner = await this.requireWorkspace(request, ['owner', 'super_admin'])
+      if ('status' in owner) return owner
+      const userId = workspaceId(memberMatch[1])
+      if (!userId) return error(404, 'NOT_FOUND', 'Membership not found')
+      if (request.method === 'DELETE') {
+        return memberResult(await this.repository.removeMember(owner.id, owner.workspaceId, userId))
+      }
+      const role = memberRole(record(request.body).role)
+      if (!role) return error(400, 'BAD_REQUEST', 'Valid workspace role is required')
+      return memberResult(await this.repository.setMemberRole(owner.id, owner.workspaceId, userId, role))
+    }
+
+    if (request.pathname === '/v1/workspaces/ownership/transfer' && request.method === 'POST') {
+      const owner = await this.requireWorkspace(request, ['owner', 'super_admin'])
+      if ('status' in owner) return owner
+      const userId = workspaceId(record(request.body).userId)
+      if (!userId) return error(400, 'BAD_REQUEST', 'Existing owner user ID is required')
+      return memberResult(await this.repository.transferOwnership(owner.id, owner.workspaceId, userId))
+    }
+
+    if (request.pathname === '/v1/providers' && request.method === 'GET') {
+      const owner = await this.requireWorkspace(request)
+      if ('status' in owner) return owner
+      return { status: 200, body: { providers: await this.repository.listProviders(owner.id, owner.workspaceId) } }
     }
 
     if (request.pathname === '/v1/providers' && request.method === 'POST') {
-      const owner = await this.requireOwner(request)
+      const owner = await this.requireWorkspace(request, ['owner', 'admin', 'super_admin'])
       if ('status' in owner) return owner
       const body = record(request.body)
       const name = stringField(body.name, 120)
@@ -160,6 +273,7 @@ export class ElovaApplication {
       try {
         const provider = await this.repository.createProvider({
           ownerId: owner.id,
+          workspaceId: owner.workspaceId,
           name,
           baseUrl,
           encryptedApiKey: encryptCredential(apiKey, this.credentialKey),
@@ -169,15 +283,19 @@ export class ElovaApplication {
         if (caught instanceof ProviderOriginAlreadyExistsError) {
           return error(409, 'PROVIDER_ORIGIN_IMMUTABLE', 'Use a new connection for a different n8n origin')
         }
+        if (caught instanceof WorkspaceAccessDeniedError) {
+          return error(403, 'FORBIDDEN', 'Workspace permission required')
+        }
         throw caught
       }
     }
 
     const syncMatch = request.pathname.match(/^\/v1\/providers\/([0-9a-f-]+)\/sync$/i)
     if (syncMatch && request.method === 'POST') {
-      const owner = await this.requireOwner(request)
+      const owner = await this.requireWorkspace(request, ['owner', 'admin', 'super_admin'])
       if ('status' in owner) return owner
-      const provider = await this.repository.getProviderSecret(owner.id, syncMatch[1]!)
+      if (!RESOURCE_UUID.test(syncMatch[1]!)) return error(404, 'NOT_FOUND', 'Provider not found')
+      const provider = await this.repository.getProviderSecret(owner.id, owner.workspaceId, syncMatch[1]!)
       if (!provider) return error(404, 'NOT_FOUND', 'Provider not found')
       try {
         const result = await this.synchronizer.synchronize(provider)
@@ -194,23 +312,23 @@ export class ElovaApplication {
     }
 
     if (request.method === 'GET' && request.pathname === '/v1/workflows') {
-      const owner = await this.requireOwner(request)
+      const owner = await this.requireWorkspace(request)
       if ('status' in owner) return owner
-      return { status: 200, body: { workflows: await this.repository.listWorkflows(owner.id, 500) } }
+      return { status: 200, body: { workflows: await this.repository.listWorkflows(owner.id, owner.workspaceId, 500) } }
     }
 
     if (request.method === 'GET' && request.pathname === '/v1/executions') {
-      const owner = await this.requireOwner(request)
+      const owner = await this.requireWorkspace(request)
       if ('status' in owner) return owner
       const requested = Number(request.searchParams.get('limit') ?? '200')
       const limit = Number.isInteger(requested) ? Math.min(Math.max(requested, 1), 1_000) : 200
-      return { status: 200, body: { executions: await this.repository.listExecutions(owner.id, limit) } }
+      return { status: 200, body: { executions: await this.repository.listExecutions(owner.id, owner.workspaceId, limit) } }
     }
 
     if (request.method === 'GET' && request.pathname === '/v1/dashboard/metrics') {
-      const owner = await this.requireOwner(request)
+      const owner = await this.requireWorkspace(request)
       if ('status' in owner) return owner
-      return { status: 200, body: await this.repository.dashboardMetrics(owner.id) }
+      return { status: 200, body: await this.repository.dashboardMetrics(owner.id, owner.workspaceId) }
     }
 
     return undefined
