@@ -25,12 +25,7 @@ ELOVA_BACKEND_HOST=127.0.0.1 PORT=43181 npm start
 
 ## Run the frontend locally
 
-In a separate terminal:
-
-```bash
-cd apps/frontend
-NODE_ENV=development ELOVA_BACKEND_URL=http://127.0.0.1:43181 npm start
-```
+In a separate terminal, run the [frontend source dev command](apps/frontend/README.md#previewing-the-rework) with server-only `ELOVA_BACKEND_URL=http://127.0.0.1:43181` set for that command.
 
 Production accepts only the GX10 HTTP origin using Tailnet IPv4, Tailscale IPv6, or a fully qualified MagicDNS `.ts.net` name. The frontend must configure it only on the server.
 
