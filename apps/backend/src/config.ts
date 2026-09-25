@@ -111,10 +111,10 @@ function parseSecret(name: string, value: string | undefined): string {
 }
 
 function protectedValue(name: string, env: NodeJS.ProcessEnv, container: boolean): string {
+  if (!container) return required(name, env[name])
   const path = env[`${name}_FILE`]
   if (path !== undefined && env[name] !== undefined) throw new Error(`${name} and ${name}_FILE are mutually exclusive`)
-  if (container && (!path || env[name] !== undefined)) throw new Error(`${name}_FILE is required in container mode`)
-  if (!path) return required(name, env[name])
+  if (!path) throw new Error(`${name}_FILE is required in container mode`)
   if (!path.startsWith('/')) throw new Error(`${name}_FILE must be an absolute path`)
 
   let fd: number | undefined

@@ -15,6 +15,24 @@ test('configuration fails closed without a database URL', () => {
   assert.throws(() => loadConfig(secureEnv()), /DATABASE_URL is required/)
 })
 
+test('native configuration uses environment values only', () => {
+  const env = secureEnv({
+    DATABASE_URL: 'postgres://127.0.0.1/elova',
+    DATABASE_URL_FILE: '/nonexistent/database_url',
+    ELOVA_SESSION_SECRET_FILE: '/nonexistent/session_key',
+    ELOVA_CREDENTIAL_KEY_FILE: '/nonexistent/credential_key',
+  })
+  const config = loadConfig(env)
+  assert.equal(config.databaseUrl, env.DATABASE_URL)
+  assert.equal(config.sessionSecret, env.ELOVA_SESSION_SECRET)
+  assert.equal(config.credentialKey, env.ELOVA_CREDENTIAL_KEY)
+  for (const name of ['DATABASE_URL', 'ELOVA_SESSION_SECRET', 'ELOVA_CREDENTIAL_KEY']) {
+    const missing = { ...env }
+    delete missing[name]
+    assert.throws(() => loadConfig(missing), new RegExp(`${name} is required`))
+  }
+})
+
 test('backend fails closed without independent session and credential secrets', () => {
   const database = { DATABASE_URL: 'postgres://127.0.0.1/elova' }
   assert.throws(() => loadConfig(database), /ELOVA_SESSION_SECRET is required/)

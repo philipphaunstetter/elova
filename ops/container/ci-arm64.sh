@@ -26,8 +26,16 @@ sudo chown 10001:10001 "$secrets_dir/database_url" "$secrets_dir/session_key" "$
 
 # No push: record source/lock/base and the local candidate artifact hash/image ID.
 sha256sum package-lock.json ops/container/Dockerfile.backend
-docker build --platform linux/arm64 -f ops/container/Dockerfile.backend -t elova-ci:"${GITHUB_SHA}" .
 export ELOVA_BACKEND_IMAGE=elova-ci:"${GITHUB_SHA}"
+"${compose[@]}" config --quiet
+postgres_image=$("${compose[@]}" config --format json | node -e '
+  const image = JSON.parse(require("node:fs").readFileSync(0, "utf8")).services.postgres.image;
+  if (!/^postgres:16-alpine@sha256:[a-f0-9]{64}$/.test(image)) process.exit(1);
+  process.stdout.write(image);
+')
+docker pull --platform linux/arm64 "$postgres_image"
+[[ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$postgres_image")" == linux/arm64 ]]
+docker build --platform linux/arm64 -f ops/container/Dockerfile.backend -t "$ELOVA_BACKEND_IMAGE" .
 docker image inspect --format '{{.Id}} {{.Os}}/{{.Architecture}} {{.Config.User}}' "$ELOVA_BACKEND_IMAGE"
 [[ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$ELOVA_BACKEND_IMAGE")" == linux/arm64 ]]
 [[ "$(docker image inspect --format '{{.Config.User}}' "$ELOVA_BACKEND_IMAGE")" == 10001:10001 ]]
@@ -41,7 +49,6 @@ docker run --rm --network none --entrypoint node "$ELOVA_BACKEND_IMAGE" -e '
   for (const path of ["dist/test", "src", "/app/apps/frontend", "/app/node_modules/next", "/run/secrets/database_url"]) assert.ok(!fs.existsSync(path), path);
 '
 docker save "$ELOVA_BACKEND_IMAGE" | sha256sum
-"${compose[@]}" config --quiet
 "${compose[@]}" up -d postgres
 for i in $(seq 1 40); do
   if "${compose[@]}" exec -T postgres pg_isready -U postgres -d elova_vnext >/dev/null 2>&1; then break; fi
