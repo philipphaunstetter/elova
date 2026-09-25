@@ -98,4 +98,9 @@ done
 [[ "$status" == 200 ]] || { echo 'Expected 200 after deliberate migration' >&2; exit 1; }
 node -e 'const a=require("node:assert/strict"); const r=JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); a.equal(r.status,"ready"); a.deepEqual(r.checks,{database:"ready",migrations:"ready"})' "$secrets_dir/ready-response"
 "${compose[@]}" restart backend
-curl --retry 10 --retry-connrefused --retry-delay 2 --fail --silent http://127.0.0.1:43181/v1/health/ready >/dev/null
+for _ in $(seq 1 30); do
+  status=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:43181/v1/health/ready || true)
+  if [[ "$status" == 200 ]]; then break; fi
+  sleep 2
+done
+[[ "$status" == 200 ]] || { echo 'Expected 200 after backend restart' >&2; exit 1; }
