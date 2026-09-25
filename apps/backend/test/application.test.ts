@@ -57,9 +57,9 @@ class MemoryRepository implements ElovaRepository {
   }
   async selectWorkspace(sessionId: string, ownerId: string, workspaceId: string): Promise<boolean> {
     if (this.revokeOnSelect) { this.session = undefined; return false }
-    if (this.session?.id !== sessionId || this.session.ownerId !== ownerId ||
-        !this.workspaces.some((workspace) => workspace.id === workspaceId)) return false
-    this.activeWorkspaceId = workspaceId
+    const selected = this.workspaces.find((workspace) => workspace.id === workspaceId.toLowerCase())
+    if (this.session?.id !== sessionId || this.session.ownerId !== ownerId || !selected) return false
+    this.activeWorkspaceId = selected.id
     return true
   }
   async listProviders(_ownerId: string, workspaceId: string): Promise<ProviderSummary[]> {
@@ -127,6 +127,31 @@ test('operator-created owner can log in and signed session authorizes API access
   const metrics = await application.handle(request('GET', '/v1/dashboard/metrics', undefined, cookie, ADMIN_WORKSPACE))
   assert.equal(session?.status, 200)
   assert.equal(metrics?.status, 200)
+})
+
+test('first admin can use empty workspaces without a provider or API key', async () => {
+  const { application, repository, cookie } = await loggedIn()
+  assert.deepEqual((await application.handle(request('GET', '/v1/auth/session', undefined, cookie)))?.body, {
+    user: { id: repository.owner!.id, email: repository.owner!.email,
+      displayName: repository.owner!.displayName, role: 'super_admin', workspaceId: ADMIN_WORKSPACE },
+  })
+  const empty = async (id: string) => {
+    assert.deepEqual((await application.handle(request('GET', '/v1/providers', undefined, cookie, id)))?.body, { providers: [] })
+    assert.deepEqual((await application.handle(request('GET', '/v1/workflows', undefined, cookie, id)))?.body, { workflows: [] })
+    assert.deepEqual((await application.handle(request('GET', '/v1/executions', undefined, cookie, id)))?.body, { executions: [] })
+    assert.deepEqual((await application.handle(request('GET', '/v1/dashboard/metrics', undefined, cookie, id)))?.body,
+      { totalExecutions: 0, successfulExecutions: 0, failedExecutions: 0, successRate: null, averageDurationMs: null })
+  }
+  await empty(ADMIN_WORKSPACE)
+  const created = await application.handle(request('POST', '/v1/workspaces', { name: 'Personal workspace' }, cookie))
+  assert.equal(created?.status, 201)
+  const secondId = repository.workspaces[1]!.id
+  assert.deepEqual((await application.handle(request('GET', '/v1/workspaces', undefined, cookie)))?.body,
+    { workspaces: repository.workspaces, activeWorkspaceId: secondId })
+  await empty(secondId)
+  assert.equal((await application.handle(request('POST', '/v1/workspaces/select', { workspaceId: ADMIN_WORKSPACE }, cookie)))?.status, 200)
+  await empty(ADMIN_WORKSPACE)
+  assert.equal(repository.providers.length, 0)
 })
 
 test('wrong password and forged unsigned session are rejected', async () => {
@@ -202,6 +227,19 @@ test('workspace creation and switching scope provider, workflow, execution and m
   assert.deepEqual((await application.handle(request('GET', '/v1/executions', undefined, cookie, secondWorkspace)))?.body, { executions: [] })
   assert.equal((await application.handle(request('POST', '/v1/workspaces/select', { workspaceId: ADMIN_WORKSPACE }, cookie)))?.status, 200)
   assert.equal(((await application.handle(request('GET', '/v1/providers', undefined, cookie, ADMIN_WORKSPACE)))?.body as { providers: unknown[] }).providers.length, 1)
+})
+
+test('uppercase workspace UUIDs select and scope the same canonical workspace', async () => {
+  const { application, repository, cookie } = await loggedIn()
+  const id = 'aabbccdd-abcd-4abc-8abc-abcdefabcdef'
+  repository.workspaces.push({ id, name: 'Mixed-case workspace', role: 'owner', createdAt: new Date().toISOString() })
+  const selected = await application.handle(request('POST', '/v1/workspaces/select', { workspaceId: id.toUpperCase() }, cookie))
+  assert.deepEqual(selected?.body, { activeWorkspaceId: id })
+  assert.equal(repository.activeWorkspaceId, id)
+  assert.deepEqual((await application.handle(request('GET', '/v1/providers', undefined, cookie, id.toUpperCase())))?.body,
+    { providers: [] })
+  assert.deepEqual((await application.handle(request('GET', '/v1/workspaces', undefined, cookie)))?.body,
+    { workspaces: repository.workspaces, activeWorkspaceId: id })
 })
 
 test('stale two-tab workspace requests cannot place credentials or read evidence in another workspace', async () => {

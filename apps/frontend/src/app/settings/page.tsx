@@ -19,8 +19,9 @@ type Provider = {
 };
 
 export default function SettingsPage() {
-  const [providers, setProviders] = useState<Provider[]>([]);
+  const [providerResult, setProviderResult] = useState<{ workspaceId: string; providers: Provider[] } | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const providers = providerResult?.workspaceId === workspaceId ? providerResult.providers : [];
   const [message, setMessage] = useState("");
   const [unauthorized, setUnauthorized] = useState(false);
   const onUnauthorized = useCallback(() => setUnauthorized(true), []);
@@ -32,11 +33,11 @@ export default function SettingsPage() {
       setMessage(await workspaceChanged(response) ? "Workspace changed in another tab. Reload before retrying." : "Settings are temporarily unavailable.");
       return;
     }
-    setProviders(((await response.json()) as { providers: Provider[] }).providers);
+    setProviderResult({ workspaceId: id, providers: ((await response.json()) as { providers: Provider[] }).providers });
   }
 
   useEffect(() => {
-    if (!workspaceId) { setProviders([]); return; }
+    if (!workspaceId) return;
     let active = true;
     void fetch("/api/v1/providers", { cache: "no-store", headers: { "x-elova-workspace-id": workspaceId } }).then(async (response) => {
       if (!active) return;
@@ -46,7 +47,7 @@ export default function SettingsPage() {
         return;
       }
       const result = await response.json() as { providers: Provider[] };
-      if (active) setProviders(result.providers);
+      if (active) setProviderResult({ workspaceId, providers: result.providers });
     }).catch(() => { if (active) setMessage("Settings are temporarily unavailable."); });
     return () => { active = false; };
   }, [workspaceId]);
@@ -91,7 +92,7 @@ export default function SettingsPage() {
       <AppNav />
       <section className="dashboard-panel narrow">
         <p className="eyebrow">Authenticated settings</p><h1>n8n connections</h1>
-        <p className="intro left">Connections belong to the selected workspace. Each private origin has a separate immutable identity and history.</p>
+        <p className="intro left">Connections belong to the selected workspace. Adding an n8n connection is optional; no API key is needed to use your workspace.</p>
         {!unauthorized && <WorkspaceSwitcher onWorkspaceChange={setWorkspaceId} onUnauthorized={onUnauthorized} />}
         {unauthorized ? <p className="notice">Sign in before configuring n8n.</p> : (
           <>
@@ -102,6 +103,8 @@ export default function SettingsPage() {
               <button className="button primary" disabled={!workspaceId}>Add connection</button>
             </form>
             {message && <p className="notice" role="status">{message}</p>}
+            {workspaceId && providerResult?.workspaceId === workspaceId && providers.length === 0 &&
+              <p className="empty">No n8n connections in this workspace yet.</p>}
             <div className="provider-list">{providers.map((provider) => <article className="provider-card" key={provider.id}>
               <div><h2>{provider.name}</h2><p>{provider.baseUrl}</p><small>{provider.status} · {provider.lastSyncedAt ? `last sync ${new Date(provider.lastSyncedAt).toLocaleString()}` : "not synchronized"}</small></div>
               <button className="button" disabled={!workspaceId} onClick={() => void synchronize(provider.id)}>Sync now</button>

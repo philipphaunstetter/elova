@@ -44,6 +44,10 @@ function stringField(value: unknown, maximum: number): string | undefined {
 
 const RESOURCE_UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
 
+function workspaceId(value: unknown): string | undefined {
+  return typeof value === 'string' && RESOURCE_UUID.test(value) ? value.toLowerCase() : undefined
+}
+
 function cookieValue(cookie: string | undefined, name: string): string | undefined {
   return cookie?.split(';')
     .map((part) => part.trim().split('='))
@@ -83,11 +87,10 @@ export class ElovaApplication {
   private async requireWorkspace(request: ApplicationRequest): Promise<(SessionOwner & { workspaceId: string }) | ApplicationResponse> {
     const owner = await this.requireOwner(request)
     if ('status' in owner) return owner
-    const workspaceId = request.headers['x-elova-workspace-id']
-    if (!workspaceId || !RESOURCE_UUID.test(workspaceId))
-      return error(400, 'BAD_REQUEST', 'Valid workspace ID is required')
+    const requestedWorkspaceId = workspaceId(request.headers['x-elova-workspace-id'])
+    if (!requestedWorkspaceId) return error(400, 'BAD_REQUEST', 'Valid workspace ID is required')
     if (!owner.workspaceId) return error(409, 'NO_WORKSPACE', 'Create or select a workspace first')
-    return owner.workspaceId === workspaceId ? owner as SessionOwner & { workspaceId: string }
+    return owner.workspaceId === requestedWorkspaceId ? owner as SessionOwner & { workspaceId: string }
       : error(409, 'WORKSPACE_CHANGED', 'Refresh the workspace before retrying')
   }
 
@@ -174,9 +177,8 @@ export class ElovaApplication {
     if (request.pathname === '/v1/workspaces/select' && request.method === 'POST') {
       const owner = await this.requireOwner(request)
       if ('status' in owner) return owner
-      const id = record(request.body).workspaceId
-      if (typeof id !== 'string' || !RESOURCE_UUID.test(id))
-        return error(400, 'BAD_REQUEST', 'Valid workspace ID is required')
+      const id = workspaceId(record(request.body).workspaceId)
+      if (!id) return error(400, 'BAD_REQUEST', 'Valid workspace ID is required')
       const selected = await this.repository.selectWorkspace(owner.sessionId, owner.id, id)
       if (selected) return { status: 200, body: { activeWorkspaceId: id } }
       return await this.owner(request) ? error(404, 'NOT_FOUND', 'Workspace not found')

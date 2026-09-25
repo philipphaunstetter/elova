@@ -18,6 +18,7 @@ const { applyMigrations, loadMigrations, migrationsAreCompatible } =
   await import(pathToFileURL(migrationsModulePath).href)
 const { PostgresGateway } = await import(pathToFileURL(databaseModulePath).href)
 const { PostgresRepository, OwnerAlreadyExistsError, ProviderSyncAlreadyRunningError } = await import(pathToFileURL(repositoryModulePath).href)
+const { ElovaApplication } = await import(pathToFileURL(join(backendRoot, 'dist/src/application.js')).href)
 const { bootstrapOwner } = await import(pathToFileURL(bootstrapModulePath).href)
 
 const databaseUrl = process.env.DATABASE_URL
@@ -132,6 +133,38 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
     OwnerAlreadyExistsError,
     'operator bootstrap closes permanently after the atomic owner commit',
   )
+
+  const syntheticSecret = Buffer.alloc(32, 9).toString('base64')
+  const application = new ElovaApplication(repository, syntheticSecret, syntheticSecret)
+  const request = (method, pathname, cookie, workspaceId, body) => application.handle({
+    method, pathname, searchParams: new URLSearchParams(),
+    headers: { cookie, 'x-elova-workspace-id': workspaceId }, body,
+  })
+  const login = await request('POST', '/v1/auth/login', undefined, undefined,
+    { email: owner.email, password: 'correct horse battery staple' })
+  assert.equal(login.status, 200)
+  assert.equal(login.body.user.role, 'super_admin')
+  assert.equal(login.body.user.workspaceId, workspaces[0].id)
+  const cookie = login.headers['set-cookie'].split(';')[0]
+  const empty = async (id) => {
+    assert.deepEqual((await request('GET', '/v1/providers', cookie, id)).body, { providers: [] })
+    assert.deepEqual((await request('GET', '/v1/workflows', cookie, id)).body, { workflows: [] })
+    assert.deepEqual((await request('GET', '/v1/executions', cookie, id)).body, { executions: [] })
+    assert.deepEqual((await request('GET', '/v1/dashboard/metrics', cookie, id)).body,
+      { totalExecutions: 0, successfulExecutions: 0, failedExecutions: 0, successRate: null, averageDurationMs: null })
+  }
+  await empty(workspaces[0].id)
+  const created = await request('POST', '/v1/workspaces', cookie, undefined, { name: 'Personal workspace' })
+  assert.equal(created.status, 201)
+  const secondId = created.body.workspace.id
+  assert.equal((await request('GET', '/v1/auth/session', cookie)).body.user.workspaceId, secondId)
+  await empty(secondId)
+  assert.deepEqual((await request('GET', '/v1/workspaces', cookie)).body.workspaces.map((space) => space.name),
+    ['admin workspace', 'Personal workspace'])
+  assert.equal((await request('POST', '/v1/workspaces/select', cookie, undefined,
+    { workspaceId: workspaces[0].id })).status, 200)
+  await empty(workspaces[0].id)
+  assert.equal((await pool.query('SELECT count(*)::integer AS total FROM n8n_providers')).rows[0].total, 0)
 
   let signalEntered
   let releaseSync

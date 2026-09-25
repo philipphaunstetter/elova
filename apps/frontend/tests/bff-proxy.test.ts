@@ -70,6 +70,47 @@ test("workspace selection uses the same-origin BFF and forwards only the session
   assert.match(requests[0]?.body ?? "", /workspaceId/);
 });
 
+test("login and empty workspace views pass through the BFF without an n8n connection", async () => {
+  const workspaceId = "aabbccdd-abcd-4abc-8abc-abcdefabcdef";
+  const cookie = "elova_session=synthetic";
+  const calls: Array<{ path: string; cookie: string | null; workspaceId: string | null }> = [];
+  const fakeFetch: typeof fetch = async (input, init) => {
+    const path = new URL(String(input)).pathname;
+    const headers = new Headers(init?.headers);
+    calls.push({ path, cookie: headers.get("cookie"), workspaceId: headers.get("x-elova-workspace-id") });
+    const body = path === "/v1/auth/login"
+      ? { user: { id: "11111111-1111-4111-8111-111111111111", email: "owner@example.test",
+          displayName: "Captain", role: "super_admin", workspaceId } }
+      : path === "/v1/workspaces"
+        ? { workspaces: [{ id: workspaceId, name: "admin workspace", role: "owner" }], activeWorkspaceId: workspaceId }
+        : { providers: [] };
+    return Response.json(body, { headers: {
+      "x-elova-api-version": "1", ...(path === "/v1/auth/login" ? { "set-cookie": `${cookie}; HttpOnly; Secure; Path=/` } : {}),
+    } });
+  };
+  const login = await proxyToBackend(browserRequest("/api/v1/auth/login", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "owner@example.test", password: "synthetic-password-only" }),
+  }), ["auth", "login"], fakeFetch);
+  assert.equal(login.status, 200);
+  assert.equal((await login.json() as { user: { workspaceId: string } }).user.workspaceId, workspaceId);
+  assert.equal(login.headers.getSetCookie()[0], `${cookie}; HttpOnly; Secure; Path=/`);
+  const workspaces = await proxyToBackend(browserRequest("/api/v1/workspaces", { headers: { cookie } }),
+    ["workspaces"], fakeFetch);
+  assert.deepEqual((await workspaces.json() as { workspaces: Array<{ name: string }> }).workspaces.map((item) => item.name),
+    ["admin workspace"]);
+  const providers = await proxyToBackend(browserRequest("/api/v1/providers", {
+    headers: { cookie, "x-elova-workspace-id": workspaceId },
+  }), ["providers"], fakeFetch);
+  assert.equal(providers.status, 200);
+  assert.deepEqual(await providers.json(), { providers: [] });
+  assert.deepEqual(calls, [
+    { path: "/v1/auth/login", cookie: null, workspaceId: null },
+    { path: "/v1/workspaces", cookie, workspaceId: null },
+    { path: "/v1/providers", cookie, workspaceId },
+  ]);
+});
+
 test("forwards the displayed workspace ID on credential writes and preserves stale-workspace rejection", async () => {
   const workspaceId = "33333333-3333-4333-8333-333333333333";
   let upstreamWorkspaceId: string | null = null;
