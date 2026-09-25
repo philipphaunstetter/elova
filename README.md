@@ -7,7 +7,7 @@ Elova monitors n8n workflow definitions and execution outcomes. vNext runs as tw
 - `packages/api-contract` — the canonical OpenAPI contract and generated client;
 - `ops` — native artifact packaging, guarded systemd templates, and operations guidance.
 
-Browsers call only the public frontend at `/api/v1/*`. On native hosts, the VPS frontend listens only on `127.0.0.1:43180` behind the public proxy, and the GX10 backend listens only on its `tailscale0` address at port `43181`. Server-only BFF code uses `ELOVA_BACKEND_URL` to reach the private backend over the Tailnet; the private origin never enters browser code or API responses. `DATABASE_URL`, session keys, credential-encryption keys, n8n credentials, and all durable state belong only to the GX10 backend.
+Browsers call only the public frontend at `/api/v1/*`. On native hosts, the VPS frontend is loopback-only behind the public proxy, and the GX10 backend binds only to its `tailscale0` address; see the [native host topology](ops/docs/native-services-runbook.md) for ports. Server-only BFF code uses `ELOVA_BACKEND_URL` to reach the private backend over the Tailnet; the private origin never enters browser code or API responses. `DATABASE_URL`, session keys, credential-encryption keys, n8n credentials, and all durable state belong only to the GX10 backend.
 
 PostgreSQL is the only vNext application store. It owns the sole operator-created administrator, signed sessions, immutable n8n provider identities, encrypted credentials, sanitized workflow definitions, sanitized execution history, synchronization cursors, and observability metrics. Raw n8n execution content and workflow-node configuration may exist only in bounded process memory while the versioned sanitizer transforms them; they are never written to a durable or external sink.
 
@@ -20,10 +20,9 @@ npm ci
 npm run generate
 npm run lint
 npm test
-ELOVA_BACKEND_URL=http://100.100.10.20:43181 npm run package:native -- /path/outside/repo
 ```
 
-The example Tailnet address is build-time test input only; no network call is made during the frontend build. Packaging requires a clean checkout and emits install-free frontend/backend archives and checksums without deploying them; see the [native operations runbook](ops/docs/native-services-runbook.md) for artifact safety requirements. PostgreSQL integration and staged-artifact startup tests run in CI with an ephemeral database.
+For packaging, use the [native artifact contract and build command](ops/docs/native-services-runbook.md#release-artifact-contract). Its example Tailnet address is build-time test input only; no network call is made during the frontend build. Packaging requires a clean checkout and emits install-free frontend/backend archives and checksums without deploying them. PostgreSQL integration and staged-artifact startup tests run in CI with an ephemeral database.
 
 ## Initial owner
 

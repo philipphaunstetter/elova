@@ -29,8 +29,7 @@ In a separate terminal:
 
 ```bash
 cd apps/frontend
-NODE_ENV=development ELOVA_BACKEND_URL=http://127.0.0.1:43181 \
-  HOSTNAME=127.0.0.1 PORT=43180 npm start
+NODE_ENV=development ELOVA_BACKEND_URL=http://127.0.0.1:43181 npm start
 ```
 
 Production accepts only the GX10 HTTP origin using Tailnet IPv4, Tailscale IPv6, or a fully qualified MagicDNS `.ts.net` name. The frontend must configure it only on the server.
