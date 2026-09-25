@@ -65,11 +65,14 @@ case "$*" in
     [[ -f "$ROLE_CHECKED" ]] || exit 97
     printf 'postgres\\n' ;;
   'compose -f ops/container/compose.yaml --profile activate up -d --no-deps backend')
-    [[ -f "$ROLE_CHECKED" ]] || exit 97
-    exit 42 ;;
+    [[ -f "$ROLE_CHECKED" ]] || exit 97 ;;
+  'compose -f ops/container/compose.yaml run --rm --no-deps --no-TTY backend node dist/src/migrate.js') ;;
+  'compose -f ops/container/compose.yaml run --rm --no-deps --no-TTY backend node --input-type=module -e '*) exit 42 ;;
+  'compose -f ops/container/compose.yaml run '*) exit 96 ;;
   *) exit 0 ;;
 esac
 `, { mode: 0o755 })
+    writeFileSync(join(bin, 'curl'), '#!/usr/bin/env bash\nprintf "503"\n', { mode: 0o755 })
     writeFileSync(join(bin, 'sudo'), `#!/usr/bin/env bash
 if [[ "$1" == rm ]]; then shift; exec /bin/rm "$@"; fi
 if [[ "$1" == chown ]]; then exit 0; fi
@@ -86,7 +89,7 @@ exit 96
         ROLE_CHECKED: join(dir, 'role-checked'),
       },
     })
-    // The fake backend startup stops the script immediately after the role probe.
+    // The fake migration verification stops the script after both unexposed run jobs.
     assert.equal(run.status, 42, `${run.stderr}\n${readFileSync(join(dir, 'docker.log'), 'utf8')}`)
   } finally {
     rmSync(dir, { recursive: true, force: true })

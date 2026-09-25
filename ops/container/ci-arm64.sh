@@ -71,9 +71,9 @@ for _ in $(seq 1 30); do
 done
 [[ "$status" == 503 ]] || { echo 'Expected 503 before deliberate migration' >&2; exit 1; }
 "${compose[@]}" stop backend
-# A run job does not publish the service's host port, start dependencies or activate the API.
-"${compose[@]}" run --rm --no-deps --no-TTY --no-ports backend node dist/src/migrate.js
-"${compose[@]}" run --rm --no-deps --no-TTY --no-ports backend node --input-type=module -e '
+# Compose run does not publish service ports by default; no dependencies or API activation.
+"${compose[@]}" run --rm --no-deps --no-TTY backend node dist/src/migrate.js
+"${compose[@]}" run --rm --no-deps --no-TTY backend node --input-type=module -e '
   import assert from "node:assert/strict";
   import { Pool } from "pg";
   import { loadConfig } from "./dist/src/config.js";
