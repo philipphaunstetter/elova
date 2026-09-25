@@ -113,6 +113,7 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
   assert.equal(privacyConstraints.rowCount, 6, 'workflow and execution evidence records privacy metadata')
 
   const repository = new PostgresRepository(pool)
+  assert.equal((await pool.query('SELECT count(*)::integer AS total FROM owners')).rows[0].total, 0)
   const owner = await bootstrapOwner(repository, {
     email: 'owner@example.test',
     displayName: 'Initial Owner',
@@ -131,7 +132,7 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
       password: 'another correct battery staple',
     }),
     OwnerAlreadyExistsError,
-    'operator bootstrap closes permanently after the atomic owner commit',
+    'operator bootstrap closes permanently after the atomic super-administrator commit',
   )
 
   const syntheticSecret = Buffer.alloc(32, 9).toString('base64')

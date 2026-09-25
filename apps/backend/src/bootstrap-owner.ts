@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 import { closeSync, constants, fstatSync, openSync, readFileSync } from 'node:fs'
 import { Pool } from 'pg'
 import { parseDatabaseUrl, protectedValue } from './config.js'
-import { PostgresRepository, OwnerAlreadyExistsError } from './repository.js'
+import { PostgresRepository, OwnerAlreadyExistsError, OwnerEmailAlreadyExistsError } from './repository.js'
 import { hashPassword } from './security.js'
 
 export async function bootstrapOwner(
@@ -60,7 +60,12 @@ async function main(): Promise<void> {
     process.stdout.write(`Initial owner created: ${owner.id}\n`)
   } catch (error) {
     if (error instanceof OwnerAlreadyExistsError) {
-      process.stderr.write('Initial owner already exists; bootstrap is permanently closed.\n')
+      process.stderr.write('Initial super administrator already exists; bootstrap is permanently closed.\n')
+      process.exitCode = 2
+      return
+    }
+    if (error instanceof OwnerEmailAlreadyExistsError) {
+      process.stderr.write('Owner identifier already exists; no super administrator was created.\n')
       process.exitCode = 2
       return
     }
@@ -72,7 +77,7 @@ async function main(): Promise<void> {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   void main().catch(() => {
-    process.stderr.write('Initial owner bootstrap failed; commit outcome may be unknown. Check PostgreSQL for an existing owner before retrying.\n')
+    process.stderr.write('Initial super administrator bootstrap failed; commit outcome may be unknown. Check PostgreSQL for an existing super administrator before retrying.\n')
     process.exitCode = 1
   })
 }

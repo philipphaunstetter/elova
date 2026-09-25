@@ -10,7 +10,9 @@ const backend = join(root, 'apps/backend')
 const requireBackend = createRequire(join(backend, 'package.json'))
 const { Pool } = requireBackend('pg')
 const { applyMigrations, loadMigrations } = await import(pathToFileURL(join(backend, 'dist/src/migrations.js')))
-const { PostgresRepository } = await import(pathToFileURL(join(backend, 'dist/src/repository.js')))
+const { PostgresRepository, OwnerAlreadyExistsError, OwnerEmailAlreadyExistsError } = await import(pathToFileURL(join(backend, 'dist/src/repository.js')))
+const { bootstrapOwner } = await import(pathToFileURL(join(backend, 'dist/src/bootstrap-owner.js')))
+const { verifyPassword } = await import(pathToFileURL(join(backend, 'dist/src/security.js')))
 const databaseUrl = process.env.DATABASE_URL
 assert.match(databaseUrl ?? '', /(?:127\.0\.0\.1|localhost):5432\/elova_test(?:$|\?)/)
 
@@ -37,18 +39,17 @@ test('0001 upgrade retains owner, session, provider and sanitized evidence witho
   await applyMigrations(pool, migrations)
   const repository = new PostgresRepository(pool)
   const workspaces = await repository.listWorkspaces(owner)
-  assert.equal(workspaces.length, 2)
-  assert.equal(workspaces[0].name, 'admin workspace')
+  assert.equal(workspaces.length, 1)
+  assert.equal(workspaces[0].name, 'Original workspace')
   assert.equal(workspaces[0].role, 'owner')
   const space = workspaces[0].id
   const alienWorkspaces = await repository.listWorkspaces(alien)
   assert.equal(alienWorkspaces.length, 1)
   assert.equal(alienWorkspaces[0].name, 'Original workspace')
   assert.notEqual(alienWorkspaces[0].id, space)
-  assert.deepEqual(workspaces[1], { ...alienWorkspaces[0], role: 'super_admin' })
   assert.equal((await pool.query("SELECT to_regclass('public.workspace_members') AS membership")).rows[0].membership, null)
   assert.deepEqual((await pool.query('SELECT id, role FROM owners ORDER BY id')).rows, [
-    { id: owner, role: 'super_admin' }, { id: alien, role: 'user' },
+    { id: owner, role: 'user' }, { id: alien, role: 'user' },
   ])
   assert.equal((await repository.listProviders(owner, space))[0].id, provider)
   assert.equal((await repository.getProviderSecret(owner, space, provider)).encryptedApiKey, 'v1.synthetic')
@@ -74,12 +75,31 @@ test('0001 upgrade retains owner, session, provider and sanitized evidence witho
   assert.deepEqual(await repository.listWorkflows(owner, alienWorkspaces[0].id, 20), [])
   assert.deepEqual(await repository.listExecutions(owner, alienWorkspaces[0].id, 20), [])
   assert.deepEqual(await repository.listProviders(alien, alienWorkspaces[0].id), [])
+  await assert.rejects(bootstrapOwner(repository, {
+    email: 'owner@example.test', displayName: 'Captain', password: 'synthetic chosen password',
+  }), OwnerEmailAlreadyExistsError)
+  assert.equal((await pool.query("SELECT count(*)::integer AS total FROM owners WHERE role = 'super_admin'")).rows[0].total, 0)
+  const admin = await bootstrapOwner(repository, {
+    email: 'captain@example.test', displayName: 'Captain', password: 'synthetic chosen password',
+  })
+  assert.equal((await repository.findOwnerByEmail(admin.email)).role, 'super_admin')
+  assert.equal(await verifyPassword('synthetic chosen password', (await repository.findOwnerByEmail(admin.email)).passwordHash), true)
+  await assert.rejects(bootstrapOwner(repository, {
+    email: 'another@example.test', displayName: 'Other', password: 'another synthetic password',
+  }), OwnerAlreadyExistsError)
+  await assert.rejects(pool.query("UPDATE owners SET role = 'super_admin' WHERE id = $1", [owner]), { code: '23505' })
+  const adminWorkspaces = await repository.listWorkspaces(admin.id)
+  assert.deepEqual(adminWorkspaces.map((item) => item.name), ['admin workspace', 'Original workspace', 'Original workspace'])
+  assert.equal(adminWorkspaces[0].role, 'owner')
+  assert.equal(adminWorkspaces.find((item) => item.id === space).role, 'super_admin')
+  assert.equal((await repository.getProviderSecret(admin.id, space, provider)).encryptedApiKey, 'v1.synthetic')
+  assert.deepEqual((await repository.listWorkspaces(owner)).map((item) => item.id), [space])
   const otherProvider = await repository.createProvider({
     ownerId: alien, workspaceId: alienWorkspaces[0].id, name: 'Other n8n',
     baseUrl: 'http://100.100.10.21:5678', encryptedApiKey: 'v1.other',
   })
-  assert.deepEqual((await repository.listProviders(owner, alienWorkspaces[0].id)).map((item) => item.id), [otherProvider.id])
-  assert.equal((await repository.getProviderSecret(owner, alienWorkspaces[0].id, otherProvider.id)).encryptedApiKey, 'v1.other')
+  assert.deepEqual((await repository.listProviders(admin.id, alienWorkspaces[0].id)).map((item) => item.id), [otherProvider.id])
+  assert.equal((await repository.getProviderSecret(admin.id, alienWorkspaces[0].id, otherProvider.id)).encryptedApiKey, 'v1.other')
   await repository.storeWorkflow(otherProvider.id, {
     providerWorkflowId: 'other-wf', name: 'Other workflow', active: false,
     sanitizedDefinition: {}, privacyMode: 'sanitized_only', sanitizerVersion: '2',
@@ -90,9 +110,10 @@ test('0001 upgrade retains owner, session, provider and sanitized evidence witho
     startedAt: null, stoppedAt: null, durationMs: null, sanitizedContent: {},
     privacyMode: 'sanitized_only', sanitizerVersion: '2', contentDigest: 'other-digest',
   })
-  assert.equal((await repository.listWorkflows(owner, alienWorkspaces[0].id, 20)).length, 1)
-  assert.equal((await repository.listExecutions(owner, alienWorkspaces[0].id, 20)).length, 1)
-  assert.equal((await repository.dashboardMetrics(owner, alienWorkspaces[0].id)).totalExecutions, 1)
+  assert.equal((await repository.listWorkflows(admin.id, alienWorkspaces[0].id, 20)).length, 1)
+  assert.equal((await repository.listExecutions(admin.id, alienWorkspaces[0].id, 20)).length, 1)
+  assert.equal((await repository.dashboardMetrics(admin.id, alienWorkspaces[0].id)).totalExecutions, 1)
+  assert.deepEqual(await repository.listWorkflows(owner, alienWorkspaces[0].id, 20), [])
   assert.equal((await repository.listWorkflows(alien, alienWorkspaces[0].id, 20)).length, 1)
   assert.equal(await repository.getProviderSecret(alien, space, provider), undefined)
   const alienSession = '77777777-7777-4777-8777-777777777777'
@@ -121,10 +142,14 @@ test('0001 upgrade retains owner, session, provider and sanitized evidence witho
   assert.equal(await repository.selectWorkspace(session, owner, second.id), true)
   assert.equal((await repository.resolveSession(session, 'synthetic-digest', new Date())).workspaceId, second.id)
   assert.equal(await repository.selectWorkspace(session, alien, space), false)
-  assert.equal(await repository.selectWorkspace(session, owner, alienWorkspaces[0].id), true)
-  assert.equal((await repository.resolveSession(session, 'synthetic-digest', new Date())).workspaceId, alienWorkspaces[0].id)
-  assert.equal(await repository.selectWorkspace(session, owner, second.id), true)
+  assert.equal(await repository.selectWorkspace(session, owner, alienWorkspaces[0].id), false)
+  const adminSession = '88888888-8888-4888-8888-888888888888'
+  await repository.createSession(adminSession, admin.id, 'admin-digest', new Date(Date.now() + 86_400_000))
+  assert.equal(await repository.selectWorkspace(adminSession, admin.id, space), true)
+  assert.equal((await repository.resolveSession(adminSession, 'admin-digest', new Date())).workspaceId, space)
+  assert.equal(await repository.selectWorkspace(adminSession, admin.id, alienWorkspaces[0].id), true)
+  assert.equal((await repository.resolveSession(adminSession, 'admin-digest', new Date())).workspaceId, alienWorkspaces[0].id)
   await repository.revokeSession(session)
   assert.equal(await repository.createWorkspace(session, owner, 'Rejected workspace'), undefined)
-  assert.deepEqual((await repository.listWorkspaces(owner)).map((item) => item.id), [space, second.id, alienWorkspaces[0].id])
+  assert.deepEqual((await repository.listWorkspaces(owner)).map((item) => item.id), [space, second.id])
 })

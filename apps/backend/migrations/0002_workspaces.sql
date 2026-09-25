@@ -2,9 +2,7 @@
 -- and are assigned to a dedicated legacy workspace for that owner, never by owner_id aliasing.
 ALTER TABLE owners ADD COLUMN role text NOT NULL DEFAULT 'user'
   CHECK (role IN ('user', 'super_admin'));
--- The one-time initial owner is the only account with global administrative authority.
-UPDATE owners SET role = 'super_admin'
-WHERE id = (SELECT id FROM owners ORDER BY created_at, id LIMIT 1);
+CREATE UNIQUE INDEX owners_single_super_admin_idx ON owners(role) WHERE role = 'super_admin';
 
 CREATE TABLE workspaces (
   id uuid PRIMARY KEY,
@@ -13,8 +11,7 @@ CREATE TABLE workspaces (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 INSERT INTO workspaces (id, name, created_by)
-SELECT gen_random_uuid(),
-  CASE WHEN role = 'super_admin' THEN 'admin workspace' ELSE 'Original workspace' END, id FROM owners;
+SELECT gen_random_uuid(), 'Original workspace', id FROM owners;
 ALTER TABLE sessions ADD COLUMN workspace_id uuid REFERENCES workspaces(id) ON DELETE SET NULL;
 UPDATE sessions s SET workspace_id = (
   SELECT w.id FROM workspaces w WHERE w.created_by = s.owner_id ORDER BY w.created_at, w.id LIMIT 1

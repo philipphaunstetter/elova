@@ -26,7 +26,7 @@ For packaging, use the [native artifact contract and build command](ops/docs/nat
 
 ## Initial owner
 
-There is no public signup or web bootstrap. After separately provisioning and migrating private PostgreSQL, an authorized operator can create the first global super administrator and their literal `admin workspace` with the packaged backend's `bootstrap-owner` command. The captain's identifier and chosen password must be provided later through the [protected local one-time handoff](ops/docs/native-services-runbook.md#3a-bootstrap-the-sole-owner-separately); no live owner is created by this repository. The command performs an atomic owner/workspace write; after commitment it is permanently closed.
+There is no public signup or web bootstrap. After separately provisioning and migrating private PostgreSQL, an authorized operator can create the first global super administrator and their literal `admin workspace` with the packaged backend's `bootstrap-owner` command. The captain's identifier and chosen password must be provided later through the [protected local one-time handoff](ops/docs/native-services-runbook.md#3a-bootstrap-the-sole-super-administrator-separately); no live owner is created by this repository. The command performs an atomic owner/workspace write; after commitment it is permanently closed.
 
 ## Operations
 
@@ -36,4 +36,4 @@ The legacy public Docker image remains externally available and untouched. A sep
 
 ## Deferred product scope
 
-The additive `0002_workspaces.sql` migration preserves existing owners, sessions and sanitized provider evidence, backfills a distinct owned workspace for each existing owner, and scopes n8n connections and evidence to an explicitly selected workspace with owner or super-administrator authorization. Authenticated users can create/switch workspaces; public signup, billing, customer enrollment, governance/Jev and scoring remain deferred.
+The additive `0002_workspaces.sql` migration preserves existing owners as ordinary users, sessions and sanitized provider evidence, backfills a distinct owned workspace for each existing owner without granting global access, and scopes n8n connections and evidence to an explicitly selected workspace with owner or separately enrolled super-administrator authorization. Authenticated users can create/switch workspaces; public signup, billing, customer enrollment, governance/Jev and scoring remain deferred.

@@ -109,6 +109,7 @@ export interface ElovaRepository extends SyncRepository {
 }
 
 export class OwnerAlreadyExistsError extends Error {}
+export class OwnerEmailAlreadyExistsError extends Error {}
 export class ProviderOriginAlreadyExistsError extends Error {}
 export class ProviderSyncAlreadyRunningError extends Error {}
 export class ProviderSyncCapacityError extends Error {}
@@ -125,8 +126,10 @@ export class PostgresRepository implements ElovaRepository {
     try {
       await client.query('BEGIN')
       await client.query('SELECT pg_advisory_xact_lock($1)', [1_817_652_862])
-      const count = await client.query<{ count: string }>('SELECT count(*)::text AS count FROM owners')
-      if (count.rows[0]?.count !== '0') throw new OwnerAlreadyExistsError('Initial owner already exists')
+      const count = await client.query<{ count: string }>("SELECT count(*)::text AS count FROM owners WHERE role = 'super_admin'")
+      if (count.rows[0]?.count !== '0') throw new OwnerAlreadyExistsError('Initial super administrator already exists')
+      const duplicate = await client.query('SELECT 1 FROM owners WHERE email = lower($1)', [input.email])
+      if (duplicate.rowCount) throw new OwnerEmailAlreadyExistsError('Owner email already exists')
       const owner: Owner = { id: randomUUID(), role: 'super_admin', ...input }
       await client.query(
         `INSERT INTO owners (id, email, display_name, password_hash, role)
