@@ -17,5 +17,5 @@ A **synthetic Tailnet demo** of the authenticated dashboard and settings is sepa
 ## Local verification
 
 ```bash
-npm run verify
+npm run verify --workspace @elova/frontend
 ```
