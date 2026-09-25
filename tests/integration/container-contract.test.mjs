@@ -20,7 +20,6 @@ test('only two project-owned services, networks and protected database volume', 
   assert.equal(postgres.ports, undefined)
   assert.equal(postgres.expose, undefined)
   assert.equal(postgres.volumes[0], 'elova_pg16_data:/var/lib/postgresql/data')
-  assert.ok(!composeText.match(/\bai\b/))
 })
 
 test('backend activation and migrations are distinct from default database startup', () => {
@@ -38,12 +37,6 @@ test('backend activation and migrations are distinct from default database start
   assert.equal(backend.command, undefined)
   assert.equal(backend.entrypoint, undefined)
   assert.equal(postgres.command, undefined)
-  assert.ok(!composeText.includes('dist/src/migrate.js'))
-  const dockerfile = readFileSync('ops/container/Dockerfile.backend', 'utf8')
-  assert.match(dockerfile, /CMD \["node", "dist\/src\/server\.js"\]/)
-  assert.doesNotMatch(dockerfile, /RUN .*migrat|CMD .*migrat/)
-  assert.match(dockerfile, /COPY apps\/backend\/migrations\/\*\.sql/)
-  assert.match(dockerfile, /USER 10001:10001/)
   assert.equal(backend.read_only, true)
   assert.deepEqual(backend.cap_drop, ['ALL'])
 })

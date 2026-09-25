@@ -31,6 +31,7 @@ export ELOVA_BACKEND_IMAGE=elova-ci:"${GITHUB_SHA}"
 docker image inspect --format '{{.Id}} {{.Os}}/{{.Architecture}} {{.Config.User}}' "$ELOVA_BACKEND_IMAGE"
 [[ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$ELOVA_BACKEND_IMAGE")" == linux/arm64 ]]
 [[ "$(docker image inspect --format '{{.Config.User}}' "$ELOVA_BACKEND_IMAGE")" == 10001:10001 ]]
+[[ "$(docker image inspect --format '{{json .Config.Cmd}}' "$ELOVA_BACKEND_IMAGE")" == '["node","dist/src/server.js"]' ]]
 docker run --rm --network none --entrypoint node "$ELOVA_BACKEND_IMAGE" -e '
   const assert = require("node:assert/strict");
   const fs = require("node:fs");
