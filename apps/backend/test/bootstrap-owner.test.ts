@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
+import { mkdtempSync, writeFileSync, chmodSync, rmSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { bootstrapOwner } from '../src/bootstrap-owner.js'
+import { bootstrapOwner, readOperatorPassword } from '../src/bootstrap-owner.js'
 import { OwnerAlreadyExistsError, type Owner, type PostgresRepository } from '../src/repository.js'
 import { verifyPassword } from '../src/security.js'
 
@@ -31,6 +34,22 @@ test('operator bootstrap refuses permanently after repository commitment', async
     bootstrapOwner(repository, { email: 'owner@example.test', displayName: 'Owner', password: 'correct horse battery staple' }),
     OwnerAlreadyExistsError,
   )
+})
+
+test('protected local handoff preserves the exact chosen password and rejects unsafe files', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'elova-owner-'))
+  try {
+    const path = join(dir, 'handoff')
+    writeFileSync(path, '  captain chosen secret  \n', { mode: 0o400 })
+    assert.equal(readOperatorPassword(path), '  captain chosen secret  ')
+    chmodSync(path, 0o600)
+    assert.throws(() => readOperatorPassword(path), /securely/)
+    chmodSync(path, 0o400)
+    const alias = join(dir, 'alias')
+    symlinkSync(path, alias)
+    assert.throws(() => readOperatorPassword(alias), /securely/)
+    assert.throws(() => readOperatorPassword('relative'), /absolute/)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
 test('bootstrap command never claims an owner was absent after a failed attempt', () => {

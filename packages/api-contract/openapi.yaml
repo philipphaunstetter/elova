@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Elova private backend API
-  version: 1.1.0
+  version: 1.2.0
   description: Canonical contract between the public VPS BFF and the private GX10 PostgreSQL-backed service.
 servers:
   - url: /v1
@@ -62,6 +62,67 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Session" }
         "401": { $ref: "#/components/responses/ErrorResponse" }
+  /workspaces:
+    get:
+      operationId: listWorkspaces
+      responses:
+        "200":
+          description: Workspaces joined by the authenticated user and active session workspace.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workspaces, activeWorkspaceId]
+                properties:
+                  activeWorkspaceId: { type: [string, "null"], format: uuid }
+                  workspaces:
+                    type: array
+                    items: { $ref: "#/components/schemas/Workspace" }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+    post:
+      operationId: createWorkspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 120 }
+      responses:
+        "201":
+          description: New workspace created and selected.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace: { $ref: "#/components/schemas/Workspace" }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+  /workspaces/select:
+    post:
+      operationId: selectWorkspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspaceId]
+              properties:
+                workspaceId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Session switched to an authorized workspace.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  activeWorkspaceId: { type: string, format: uuid }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+        "404": { $ref: "#/components/responses/ErrorResponse" }
   /providers:
     get:
       operationId: listProviders
@@ -221,11 +282,22 @@ components:
     Owner:
       type: object
       additionalProperties: false
-      required: [id, email, displayName]
+      required: [id, email, displayName, role, workspaceId]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
         displayName: { type: string }
+        role: { type: string, enum: [user, super_admin] }
+        workspaceId: { type: [string, "null"], format: uuid }
+    Workspace:
+      type: object
+      additionalProperties: false
+      required: [id, name, role, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        role: { type: string, enum: [owner, member] }
+        createdAt: { type: string, format: date-time }
     Session:
       type: object
       additionalProperties: false

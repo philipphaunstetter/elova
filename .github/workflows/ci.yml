@@ -160,8 +160,10 @@ jobs:
             --artifact "$RUNNER_TEMP/elova-native/elova-frontend.tgz" \
             --sha256-file "$RUNNER_TEMP/elova-native/elova-frontend.tgz.sha256" \
             --release "$GITHUB_SHA" --dry-run
-      - name: Verify baseline migration and advisory locking
-        run: node --test tests/integration/postgres.test.mjs
+      - name: Verify ordered migrations, advisory locking and preserved workspace upgrade
+        run: |
+          node --test tests/integration/postgres.test.mjs
+          node --test tests/integration/workspace-upgrade.test.mjs
       - name: Verify startup, readiness, BFF failures, leakage, and shutdown from staged artifacts
         run: node --test tests/integration/native-services.test.mjs
         env:

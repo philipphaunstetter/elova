@@ -20,6 +20,15 @@ export type Owner = {
     id: string;
     email: string;
     displayName: string;
+    role: 'user' | 'super_admin';
+    workspaceId: string | null;
+};
+
+export type Workspace = {
+    id: string;
+    name: string;
+    role: 'owner' | 'member';
+    createdAt: string;
 };
 
 export type Session = {
@@ -174,6 +183,96 @@ export type GetSessionResponses = {
 };
 
 export type GetSessionResponse = GetSessionResponses[keyof GetSessionResponses];
+
+export type ListWorkspacesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/workspaces';
+};
+
+export type ListWorkspacesErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+};
+
+export type ListWorkspacesError = ListWorkspacesErrors[keyof ListWorkspacesErrors];
+
+export type ListWorkspacesResponses = {
+    /**
+     * Workspaces joined by the authenticated user and active session workspace.
+     */
+    200: {
+        activeWorkspaceId: string | null;
+        workspaces: Array<Workspace>;
+    };
+};
+
+export type ListWorkspacesResponse = ListWorkspacesResponses[keyof ListWorkspacesResponses];
+
+export type CreateWorkspaceData = {
+    body: {
+        name: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/workspaces';
+};
+
+export type CreateWorkspaceErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+};
+
+export type CreateWorkspaceError = CreateWorkspaceErrors[keyof CreateWorkspaceErrors];
+
+export type CreateWorkspaceResponses = {
+    /**
+     * New workspace created and selected.
+     */
+    201: {
+        workspace?: Workspace;
+    };
+};
+
+export type CreateWorkspaceResponse = CreateWorkspaceResponses[keyof CreateWorkspaceResponses];
+
+export type SelectWorkspaceData = {
+    body: {
+        workspaceId: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/workspaces/select';
+};
+
+export type SelectWorkspaceErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    404: ErrorEnvelope;
+};
+
+export type SelectWorkspaceError = SelectWorkspaceErrors[keyof SelectWorkspaceErrors];
+
+export type SelectWorkspaceResponses = {
+    /**
+     * Session switched to an authorized workspace.
+     */
+    200: {
+        activeWorkspaceId?: string;
+    };
+};
+
+export type SelectWorkspaceResponse = SelectWorkspaceResponses[keyof SelectWorkspaceResponses];
 
 export type ListProvidersData = {
     body?: never;

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CreateProviderData, CreateProviderErrors, CreateProviderResponses, GetDashboardMetricsData, GetDashboardMetricsErrors, GetDashboardMetricsResponses, GetLivenessData, GetLivenessResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetSessionData, GetSessionErrors, GetSessionResponses, ListExecutionsData, ListExecutionsErrors, ListExecutionsResponses, ListProvidersData, ListProvidersErrors, ListProvidersResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, SynchronizeProviderData, SynchronizeProviderErrors, SynchronizeProviderResponses } from './types.gen';
+import type { CreateProviderData, CreateProviderErrors, CreateProviderResponses, CreateWorkspaceData, CreateWorkspaceErrors, CreateWorkspaceResponses, GetDashboardMetricsData, GetDashboardMetricsErrors, GetDashboardMetricsResponses, GetLivenessData, GetLivenessResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetSessionData, GetSessionErrors, GetSessionResponses, ListExecutionsData, ListExecutionsErrors, ListExecutionsResponses, ListProvidersData, ListProvidersErrors, ListProvidersResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, ListWorkspacesData, ListWorkspacesErrors, ListWorkspacesResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, SelectWorkspaceData, SelectWorkspaceErrors, SelectWorkspaceResponses, SynchronizeProviderData, SynchronizeProviderErrors, SynchronizeProviderResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -49,6 +49,44 @@ export const getSession = <ThrowOnError extends boolean = false>(options?: Optio
         }],
     url: '/auth/session',
     ...options
+});
+
+export const listWorkspaces = <ThrowOnError extends boolean = false>(options?: Options<ListWorkspacesData, ThrowOnError>): RequestResult<ListWorkspacesResponses, ListWorkspacesErrors, ThrowOnError> => (options?.client ?? client).get<ListWorkspacesResponses, ListWorkspacesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'elova_session',
+            type: 'apiKey'
+        }],
+    url: '/workspaces',
+    ...options
+});
+
+export const createWorkspace = <ThrowOnError extends boolean = false>(options: Options<CreateWorkspaceData, ThrowOnError>): RequestResult<CreateWorkspaceResponses, CreateWorkspaceErrors, ThrowOnError> => (options.client ?? client).post<CreateWorkspaceResponses, CreateWorkspaceErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'elova_session',
+            type: 'apiKey'
+        }],
+    url: '/workspaces',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const selectWorkspace = <ThrowOnError extends boolean = false>(options: Options<SelectWorkspaceData, ThrowOnError>): RequestResult<SelectWorkspaceResponses, SelectWorkspaceErrors, ThrowOnError> => (options.client ?? client).post<SelectWorkspaceResponses, SelectWorkspaceErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'elova_session',
+            type: 'apiKey'
+        }],
+    url: '/workspaces/select',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 export const listProviders = <ThrowOnError extends boolean = false>(options?: Options<ListProvidersData, ThrowOnError>): RequestResult<ListProvidersResponses, ListProvidersErrors, ThrowOnError> => (options?.client ?? client).get<ListProvidersResponses, ListProvidersErrors, ThrowOnError>({

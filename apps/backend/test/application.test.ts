@@ -8,6 +8,7 @@ import type {
   ProviderSecret,
   ProviderSummary,
   SessionOwner,
+  Workspace,
   SyncRepository,
   StoredExecution,
   StoredWorkflow,
@@ -16,10 +17,13 @@ import { ProviderSyncAlreadyRunningError } from '../src/repository.js'
 import { encryptCredential, hashPassword } from '../src/security.js'
 
 const SECRET = Buffer.alloc(32, 9).toString('base64')
+const ADMIN_WORKSPACE = '33333333-3333-4333-8333-333333333333'
 
 class MemoryRepository implements ElovaRepository {
   owner?: Owner
   session: { id: string; ownerId: string; digest: string; expiresAt: Date } | undefined
+  workspaces: Workspace[] = [{ id: ADMIN_WORKSPACE, name: 'admin workspace', role: 'owner', createdAt: new Date().toISOString() }]
+  activeWorkspaceId: string | null = null
   providers: ProviderSecret[] = []
   workflows: StoredWorkflow[] = []
   executions: StoredExecution[] = []
@@ -37,20 +41,37 @@ class MemoryRepository implements ElovaRepository {
   }
   async resolveSession(sessionId: string, digest: string, now: Date): Promise<SessionOwner | undefined> {
     if (!this.owner || this.session?.id !== sessionId || this.session.digest !== digest || this.session.expiresAt <= now) return undefined
-    return { id: this.owner.id, email: this.owner.email, displayName: this.owner.displayName }
+    return { id: this.owner.id, email: this.owner.email, displayName: this.owner.displayName,
+      role: this.owner.role ?? 'super_admin', workspaceId: this.activeWorkspaceId, sessionId }
   }
   async revokeSession() { this.session = undefined }
-  async listProviders(): Promise<ProviderSummary[]> { return this.providers }
-  async createProvider(input: { ownerId: string; name: string; baseUrl: string; encryptedApiKey: string }) {
+  async listWorkspaces(): Promise<Workspace[]> { return this.workspaces }
+  async createWorkspace(_ownerId: string, name: string): Promise<Workspace> {
+    const workspace = { id: '44444444-4444-4444-8444-444444444444', name, role: 'owner', createdAt: new Date().toISOString() }
+    this.workspaces.push(workspace)
+    return workspace
+  }
+  async selectWorkspace(sessionId: string, ownerId: string, workspaceId: string): Promise<boolean> {
+    if (this.session?.id !== sessionId || this.session.ownerId !== ownerId ||
+        !this.workspaces.some((workspace) => workspace.id === workspaceId)) return false
+    this.activeWorkspaceId = workspaceId
+    return true
+  }
+  async listProviders(_ownerId: string, workspaceId: string): Promise<ProviderSummary[]> {
+    return this.providers.filter((item) => item.workspaceId === workspaceId)
+  }
+  async createProvider(input: { ownerId: string; workspaceId: string; name: string; baseUrl: string; encryptedApiKey: string }) {
     const provider: ProviderSecret = {
-      id: '22222222-2222-4222-8222-222222222222', ownerId: input.ownerId, name: input.name,
+      id: '22222222-2222-4222-8222-222222222222', ownerId: input.ownerId, workspaceId: input.workspaceId, name: input.name,
       baseUrl: input.baseUrl, encryptedApiKey: input.encryptedApiKey, status: 'unverified',
       createdAt: new Date().toISOString(), lastSyncedAt: null,
     }
     this.providers.push(provider)
     return provider
   }
-  async getProviderSecret(_ownerId: string, providerId: string) { return this.providers.find((item) => item.id === providerId) }
+  async getProviderSecret(ownerId: string, workspaceId: string, providerId: string) {
+    return this.providers.find((item) => item.id === providerId && item.workspaceId === workspaceId && item.ownerId === ownerId)
+  }
   async withProviderSyncLock<T>(providerId: string, operation: (repository: SyncRepository) => Promise<T>): Promise<T> {
     if (this.syncLocks.has(providerId)) throw new ProviderSyncAlreadyRunningError('Provider synchronization already in progress')
     this.syncLocks.add(providerId)
@@ -65,8 +86,12 @@ class MemoryRepository implements ElovaRepository {
   async getSyncCursor() { return null }
   async finishSync(_providerId: string, _kind: string, cursor: string | null) { this.cursors.push(cursor) }
   async failSync() { this.failedSyncs += 1 }
-  async listWorkflows() { return this.workflows }
-  async listExecutions() { return this.executions }
+  async listWorkflows(_ownerId: string, workspaceId: string) {
+    return workspaceId === ADMIN_WORKSPACE ? this.workflows : []
+  }
+  async listExecutions(_ownerId: string, workspaceId: string) {
+    return workspaceId === ADMIN_WORKSPACE ? this.executions : []
+  }
   async dashboardMetrics(): Promise<DashboardMetrics> {
     return { totalExecutions: 0, successfulExecutions: 0, failedExecutions: 0, successRate: null, averageDurationMs: null }
   }
@@ -148,10 +173,35 @@ test('unknown login emails do not accumulate failed-login buckets or lock the ow
   })))?.status, 429)
 })
 
+test('workspace creation and switching scope provider, workflow, execution and metric requests', async () => {
+  const { application, repository, cookie } = await loggedIn()
+  assert.deepEqual((await application.handle(request('GET', '/v1/workspaces', undefined, cookie)))?.body,
+    { workspaces: repository.workspaces, activeWorkspaceId: ADMIN_WORKSPACE })
+  assert.equal((await application.handle(request('GET', '/v1/workspaces')))?.status, 401)
+  const provider = await application.handle(request('POST', '/v1/providers', {
+    name: 'Synthetic n8n', baseUrl: 'http://100.100.10.20:5678', apiKey: 'synthetic-only',
+  }, cookie))
+  assert.equal(provider?.status, 201)
+  assert.equal(repository.providers[0]?.workspaceId, ADMIN_WORKSPACE)
+  assert.equal((await application.handle(request('POST', '/v1/workspaces/select', {
+    workspaceId: '55555555-5555-4555-8555-555555555555',
+  }, cookie)))?.status, 404)
+  const created = await application.handle(request('POST', '/v1/workspaces', { name: 'Second workspace' }, cookie))
+  assert.equal(created?.status, 201)
+  assert.equal(repository.workspaces[1]?.name, 'Second workspace')
+  assert.deepEqual((await application.handle(request('GET', '/v1/providers', undefined, cookie)))?.body,
+    { providers: [] })
+  assert.equal((await application.handle(request('POST', `/v1/providers/${repository.providers[0]?.id}/sync`, undefined, cookie)))?.status, 404)
+  assert.deepEqual((await application.handle(request('GET', '/v1/workflows', undefined, cookie)))?.body, { workflows: [] })
+  assert.deepEqual((await application.handle(request('GET', '/v1/executions', undefined, cookie)))?.body, { executions: [] })
+  assert.equal((await application.handle(request('POST', '/v1/workspaces/select', { workspaceId: ADMIN_WORKSPACE }, cookie)))?.status, 200)
+  assert.equal(((await application.handle(request('GET', '/v1/providers', undefined, cookie)))?.body as { providers: unknown[] }).providers.length, 1)
+})
+
 test('overlapping provider syncs cannot overwrite fresher execution outcomes', async () => {
   const { repository, cookie } = await loggedIn()
   repository.providers.push({
-    id: '22222222-2222-4222-8222-222222222222', ownerId: repository.owner!.id,
+    id: '22222222-2222-4222-8222-222222222222', ownerId: repository.owner!.id, workspaceId: ADMIN_WORKSPACE,
     name: 'n8n', baseUrl: 'http://100.100.10.20:5678', encryptedApiKey: encryptCredential('test-api-key', SECRET),
     status: 'unverified', createdAt: new Date().toISOString(), lastSyncedAt: null,
   })
@@ -207,4 +257,5 @@ test('provider synchronization stores only sanitized workflow and execution repr
   const stored = JSON.stringify({ workflows: repository.workflows, executions: repository.executions, cursors: repository.cursors })
   assert.doesNotMatch(stored, /Jane Doe|jane@example\.test|private-api-key|sensitive-provider-cursor/)
   assert.match(stored, /sanitized_only/)
+
 })

@@ -26,7 +26,7 @@ For packaging, use the [native artifact contract and build command](ops/docs/nat
 
 ## Initial owner
 
-There is no public signup or web bootstrap. After separately provisioning and migrating private PostgreSQL on GX10, an authorized operator can create the sole owner with the packaged backend's `bootstrap-owner` command. Use the [transient service-user procedure](ops/docs/native-services-runbook.md#3a-bootstrap-the-sole-owner-separately), not the persistent backend environment file, for bootstrap credentials. The command performs one atomic owner write; failures before commit are retryable and every call after commitment is refused.
+There is no public signup or web bootstrap. After separately provisioning and migrating private PostgreSQL, an authorized operator can create the first global super administrator and their literal `admin workspace` with the packaged backend's `bootstrap-owner` command. The captain's identifier and chosen password must be provided later through the [protected local one-time handoff](ops/docs/native-services-runbook.md#3a-bootstrap-the-sole-owner-separately); no live owner is created by this repository. The command performs an atomic owner/workspace write; after commitment it is permanently closed.
 
 ## Operations
 
@@ -36,4 +36,4 @@ The legacy public Docker image remains externally available and untouched. A sep
 
 ## Deferred product scope
 
-Workspace/multi-user flows, governance/Jev, scoring, and migration or deletion of any legacy data remain deferred. The current PostgreSQL schema intentionally represents one owner-operated installation; future workspace isolation requires a separately reviewed schema migration.
+The additive `0002_workspaces.sql` migration preserves existing owners, sessions and sanitized provider evidence, backfills a distinct workspace and membership for each existing owner, and scopes new n8n connections and evidence to a selected session workspace and provider owner. Authenticated users can create/switch workspaces; public signup, billing, customer enrollment, governance/Jev and scoring remain deferred.

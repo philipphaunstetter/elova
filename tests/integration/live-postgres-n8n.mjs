@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { writeFile } from 'node:fs/promises';
+import { writeFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
@@ -33,6 +35,9 @@ const sessionSecret = secret();
 const credentialKey = secret();
 const email = 'owner@isolated.example.test';
 const password = `  ${randomBytes(24).toString('hex')}  `;
+const handoff = await mkdtemp(join(tmpdir(), 'elova-fixture-password-'));
+const passwordFile = join(handoff, 'password');
+await writeFile(passwordFile, password, { mode: 0o400 });
 const apiKeyA = `synthetic-key-a-${randomBytes(12).toString('hex')}`;
 const apiKeyB = `synthetic-key-b-${randomBytes(12).toString('hex')}`;
 const backendEnv = {
@@ -101,7 +106,7 @@ try {
   assert.equal(migration.code, 0, `Migration failed: ${migration.output}`);
   const operatorEnv = {
     ...backendEnv, ELOVA_BOOTSTRAP_EMAIL: email, ELOVA_BOOTSTRAP_NAME: 'Synthetic Owner',
-    ELOVA_BOOTSTRAP_PASSWORD: password,
+    ELOVA_BOOTSTRAP_PASSWORD_FILE: passwordFile,
   };
   const first = await run(resolve(backend, 'dist/src/bootstrap-owner.js'), [], backend, operatorEnv);
   assert.equal(first.code, 0, `Operator bootstrap failed: ${first.output}`);
@@ -217,6 +222,7 @@ try {
     sanitation: 'Synthetic personal data and secrets absent from both persisted content columns',
   }));
 } finally {
+  await rm(handoff, { recursive: true, force: true });
   for (const child of children.reverse()) {
     if (child.pid) {
       try { process.kill(-child.pid, 'SIGTERM'); } catch { /* Already exited. */ }

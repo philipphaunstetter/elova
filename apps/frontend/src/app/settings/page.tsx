@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { AppNav } from "../app-nav";
+import { WorkspaceSwitcher } from "../workspace-switcher";
 
 type Provider = {
   id: string;
@@ -66,7 +67,8 @@ export default function SettingsPage() {
       <AppNav />
       <section className="dashboard-panel narrow">
         <p className="eyebrow">Authenticated settings</p><h1>n8n connections</h1>
-        <p className="intro left">Each private origin has a separate immutable identity and history. Changing instances requires a new connection.</p>
+        <p className="intro left">Connections belong to the selected workspace. Each private origin has a separate immutable identity and history.</p>
+        {!unauthorized && <WorkspaceSwitcher />}
         {unauthorized ? <p className="notice">Sign in before configuring n8n.</p> : (
           <>
             <form className="form-card" onSubmit={addProvider}>

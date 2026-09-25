@@ -21,7 +21,7 @@ export default function LoginPage() {
     });
     setPending(false);
     if (!response.ok) {
-      setError("Login failed. Check your owner credentials.");
+      setError("Login failed. Check your account credentials.");
       return;
     }
     router.push("/dashboard");
@@ -32,9 +32,9 @@ export default function LoginPage() {
     <main className="app-shell">
       <AppNav />
       <section className="form-panel">
-        <p className="eyebrow">Owner access</p>
+        <p className="eyebrow">Private workspace access</p>
         <h1>Sign in to Elova</h1>
-        <p className="intro">The initial owner is created once by the GX10 operator.</p>
+        <p className="intro">The first super administrator and admin workspace are enrolled once through a protected local operator handoff.</p>
         <form onSubmit={submit} className="form-card">
           <label>Email<input name="email" type="email" autoComplete="username" required /></label>
           <label>Password<input name="password" type="password" autoComplete="current-password" minLength={12} required /></label>

@@ -81,8 +81,8 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
   )
   assert.deepEqual(
     baselineMigrations.map((migration) => migration.name),
-    ['0001_postgres_authority.sql'],
-    'vNext must create its complete PostgreSQL authority through one ordered baseline',
+    ['0001_postgres_authority.sql', '0002_workspaces.sql'],
+    'vNext must apply its original authority and additive workspace migration in order',
   )
 
   await Promise.all([
@@ -102,7 +102,7 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
   )
   assert.deepEqual(tables.rows.map((row) => row.table_name), [
     'executions', 'n8n_providers', 'owners', 'schema_migrations', 'sessions',
-    'sync_cursors', 'sync_runs', 'workflows',
+    'sync_cursors', 'sync_runs', 'workflows', 'workspace_members', 'workspaces',
   ])
   const privacyConstraints = await pool.query(
     `SELECT table_name, column_name FROM information_schema.columns
@@ -118,6 +118,11 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
     password: 'correct horse battery staple',
   })
   assert.equal(owner.email, 'owner@example.test')
+  const workspaces = await repository.listWorkspaces(owner.id)
+  assert.equal(workspaces.length, 1)
+  assert.equal(workspaces[0].name, 'admin workspace')
+  const adminRole = await pool.query('SELECT role FROM owners WHERE id = $1', [owner.id])
+  assert.equal(adminRole.rows[0].role, 'super_admin')
   await assert.rejects(
     bootstrapOwner(repository, {
       email: 'other@example.test',

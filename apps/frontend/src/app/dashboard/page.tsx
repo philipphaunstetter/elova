@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppNav } from "../app-nav";
+import { WorkspaceSwitcher } from "../workspace-switcher";
 
 type Metrics = {
   totalExecutions: number;
@@ -51,8 +52,9 @@ export default function DashboardPage() {
       <section className="dashboard-panel">
         <p className="eyebrow">Private PostgreSQL evidence</p>
         <h1>Workflow observability</h1>
+        {state !== "unauthorized" && <WorkspaceSwitcher />}
         {state === "loading" && <p className="notice">Loading current execution evidence…</p>}
-        {state === "unauthorized" && <p className="notice">Sign in with the operator-created owner account.</p>}
+        {state === "unauthorized" && <p className="notice">Sign in with your operator-enrolled administrator account.</p>}
         {state === "error" && <p className="notice error">Observability data is temporarily unavailable.</p>}
         {state === "ready" && metrics && (
           <>

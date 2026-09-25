@@ -26,8 +26,8 @@ test('the canonical private API is valid and owns PostgreSQL-backed product oper
   assert.deepEqual(openapi.servers.map((server) => server.url), ['/v1'])
   assert.deepEqual(Object.keys(openapi.paths), [
     '/health/live', '/health/ready', '/auth/login', '/auth/logout', '/auth/session',
-    '/providers', '/providers/{providerId}/sync', '/workflows', '/executions',
-    '/dashboard/metrics',
+    '/workspaces', '/workspaces/select', '/providers', '/providers/{providerId}/sync',
+    '/workflows', '/executions', '/dashboard/metrics',
   ])
   assert.equal(openapi.paths['/health/live'].get.operationId, 'getLiveness')
   assert.equal(openapi.paths['/health/ready'].get.operationId, 'getReadiness')

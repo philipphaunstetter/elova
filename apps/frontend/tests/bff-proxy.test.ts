@@ -52,6 +52,24 @@ test("forwards same-origin requests to the private /v1 path without forwarding h
   assert.equal(response.headers.get("x-request-id"), "request-1");
 });
 
+test("workspace selection uses the same-origin BFF and forwards only the session cookie", async () => {
+  const requests: Array<{ url: string; body: string; cookie: string | null }> = [];
+  const fakeFetch: typeof fetch = async (input, init) => {
+    requests.push({ url: input.toString(), body: init?.body ? new TextDecoder().decode(init.body as ArrayBuffer) : "",
+      cookie: new Headers(init?.headers).get("cookie") });
+    return Response.json({ activeWorkspaceId: "33333333-3333-4333-8333-333333333333" },
+      { headers: { "x-elova-api-version": "1" } });
+  };
+  const switched = await proxyToBackend(browserRequest("/api/v1/workspaces/select", {
+    method: "POST", headers: { origin: "https://elova.example", cookie: "elova_session=synthetic" },
+    body: JSON.stringify({ workspaceId: "33333333-3333-4333-8333-333333333333" }),
+  }), ["workspaces", "select"], fakeFetch);
+  assert.equal(switched.status, 200);
+  assert.deepEqual(requests.map((item) => item.url), [`${PRIVATE_URL}/v1/workspaces/select`]);
+  assert.equal(requests[0]?.cookie, "elova_session=synthetic");
+  assert.match(requests[0]?.body ?? "", /workspaceId/);
+});
+
 test("rejects cross-origin browser access before contacting the backend", async () => {
   let called = false;
   const fakeFetch: typeof fetch = async () => {

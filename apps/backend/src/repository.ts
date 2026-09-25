@@ -9,12 +9,23 @@ export interface Owner {
   email: string
   displayName: string
   passwordHash: string
+  role?: string
 }
 
 export interface SessionOwner {
   id: string
   email: string
   displayName: string
+  role: string
+  workspaceId: string | null
+  sessionId: string
+}
+
+export interface Workspace {
+  id: string
+  name: string
+  role: string
+  createdAt: string
 }
 
 export interface ProviderSummary {
@@ -29,6 +40,7 @@ export interface ProviderSummary {
 export interface ProviderSecret extends ProviderSummary {
   encryptedApiKey: string
   ownerId: string
+  workspaceId: string
 }
 
 export interface StoredWorkflow {
@@ -78,18 +90,22 @@ export interface ElovaRepository extends SyncRepository {
   createSession(sessionId: string, ownerId: string, tokenDigest: string, expiresAt: Date): Promise<void>
   resolveSession(sessionId: string, tokenDigest: string, now: Date): Promise<SessionOwner | undefined>
   revokeSession(sessionId: string): Promise<void>
-  listProviders(ownerId: string): Promise<ProviderSummary[]>
+  listWorkspaces(ownerId: string): Promise<Workspace[]>
+  createWorkspace(ownerId: string, name: string): Promise<Workspace>
+  selectWorkspace(sessionId: string, ownerId: string, workspaceId: string): Promise<boolean>
+  listProviders(ownerId: string, workspaceId: string): Promise<ProviderSummary[]>
   createProvider(input: {
     ownerId: string
+    workspaceId: string
     name: string
     baseUrl: string
     encryptedApiKey: string
   }): Promise<ProviderSummary>
-  getProviderSecret(ownerId: string, providerId: string): Promise<ProviderSecret | undefined>
+  getProviderSecret(ownerId: string, workspaceId: string, providerId: string): Promise<ProviderSecret | undefined>
   withProviderSyncLock<T>(providerId: string, operation: (repository: SyncRepository) => Promise<T>): Promise<T>
-  listWorkflows(ownerId: string, limit: number): Promise<unknown[]>
-  listExecutions(ownerId: string, limit: number): Promise<unknown[]>
-  dashboardMetrics(ownerId: string): Promise<DashboardMetrics>
+  listWorkflows(ownerId: string, workspaceId: string, limit: number): Promise<unknown[]>
+  listExecutions(ownerId: string, workspaceId: string, limit: number): Promise<unknown[]>
+  dashboardMetrics(ownerId: string, workspaceId: string): Promise<DashboardMetrics>
 }
 
 export class OwnerAlreadyExistsError extends Error {}
@@ -111,12 +127,17 @@ export class PostgresRepository implements ElovaRepository {
       await client.query('SELECT pg_advisory_xact_lock($1)', [1_817_652_862])
       const count = await client.query<{ count: string }>('SELECT count(*)::text AS count FROM owners')
       if (count.rows[0]?.count !== '0') throw new OwnerAlreadyExistsError('Initial owner already exists')
-      const owner: Owner = { id: randomUUID(), ...input }
+      const owner: Owner = { id: randomUUID(), role: 'super_admin', ...input }
       await client.query(
-        `INSERT INTO owners (id, email, display_name, password_hash)
-         VALUES ($1, lower($2), $3, $4)`,
+        `INSERT INTO owners (id, email, display_name, password_hash, role)
+         VALUES ($1, lower($2), $3, $4, 'super_admin')`,
         [owner.id, owner.email, owner.displayName, owner.passwordHash],
       )
+      const workspaceId = randomUUID()
+      await client.query('INSERT INTO workspaces (id, name, created_by) VALUES ($1, $2, $3)',
+        [workspaceId, 'admin workspace', owner.id])
+      await client.query("INSERT INTO workspace_members (workspace_id, owner_id, role) VALUES ($1, $2, 'owner')",
+        [workspaceId, owner.id])
       await client.query('COMMIT')
       return { ...owner, email: owner.email.toLowerCase() }
     } catch (error) {
@@ -133,8 +154,9 @@ export class PostgresRepository implements ElovaRepository {
       email: string
       display_name: string
       password_hash: string
+      role: string
     }>(
-      'SELECT id, email, display_name, password_hash FROM owners WHERE email = lower($1)',
+      'SELECT id, email, display_name, password_hash, role FROM owners WHERE email = lower($1)',
       [email],
     )
     const row = result.rows[0]
@@ -143,6 +165,7 @@ export class PostgresRepository implements ElovaRepository {
       email: row.email,
       displayName: row.display_name,
       passwordHash: row.password_hash,
+      role: row.role,
     } : undefined
   }
 
@@ -158,21 +181,61 @@ export class PostgresRepository implements ElovaRepository {
       id: string
       email: string
       display_name: string
+      role: string
+      workspace_id: string | null
     }>(
-      `SELECT o.id, o.email, o.display_name
+      `SELECT o.id, o.email, o.display_name, o.role, s.workspace_id
        FROM sessions s JOIN owners o ON o.id = s.owner_id
-       WHERE s.id = $1 AND s.token_digest = $2 AND s.revoked_at IS NULL AND s.expires_at > $3`,
+       LEFT JOIN workspace_members m ON m.owner_id = o.id AND m.workspace_id = s.workspace_id
+       WHERE s.id = $1 AND s.token_digest = $2 AND s.revoked_at IS NULL AND s.expires_at > $3
+         AND (s.workspace_id IS NULL OR m.workspace_id IS NOT NULL)`,
       [sessionId, tokenDigest, now],
     )
     const row = result.rows[0]
-    return row ? { id: row.id, email: row.email, displayName: row.display_name } : undefined
+    return row ? { id: row.id, email: row.email, displayName: row.display_name,
+      role: row.role, workspaceId: row.workspace_id, sessionId } : undefined
   }
 
   async revokeSession(sessionId: string): Promise<void> {
     await this.pool.query('UPDATE sessions SET revoked_at = now() WHERE id = $1', [sessionId])
   }
 
-  async listProviders(ownerId: string): Promise<ProviderSummary[]> {
+  async listWorkspaces(ownerId: string): Promise<Workspace[]> {
+    const result = await this.pool.query<{ id: string; name: string; role: string; created_at: Date }>(
+      `SELECT w.id, w.name, m.role, w.created_at FROM workspaces w
+       JOIN workspace_members m ON m.workspace_id = w.id
+       WHERE m.owner_id = $1 ORDER BY w.created_at, w.id`, [ownerId])
+    return result.rows.map((row) => ({ id: row.id, name: row.name, role: row.role,
+      createdAt: row.created_at.toISOString() }))
+  }
+
+  async createWorkspace(ownerId: string, name: string): Promise<Workspace> {
+    const id = randomUUID()
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      const result = await client.query<{ created_at: Date }>(
+        'INSERT INTO workspaces (id, name, created_by) VALUES ($1, $2, $3) RETURNING created_at',
+        [id, name, ownerId])
+      await client.query("INSERT INTO workspace_members (workspace_id, owner_id, role) VALUES ($1, $2, 'owner')", [id, ownerId])
+      await client.query('COMMIT')
+      return { id, name, role: 'owner', createdAt: result.rows[0]!.created_at.toISOString() }
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally { client.release() }
+  }
+
+  async selectWorkspace(sessionId: string, ownerId: string, workspaceId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE sessions s SET workspace_id = $3
+       WHERE s.id = $1 AND s.owner_id = $2 AND s.revoked_at IS NULL AND s.expires_at > now()
+         AND EXISTS (SELECT 1 FROM workspace_members m WHERE m.workspace_id = $3 AND m.owner_id = $2)`,
+      [sessionId, ownerId, workspaceId])
+    return result.rowCount === 1
+  }
+
+  async listProviders(ownerId: string, workspaceId: string): Promise<ProviderSummary[]> {
     const result = await this.pool.query<{
       id: string
       name: string
@@ -184,9 +247,10 @@ export class PostgresRepository implements ElovaRepository {
       `SELECT p.id, p.name, p.base_url, p.status, p.created_at,
               max(c.last_synced_at) AS last_synced_at
        FROM n8n_providers p LEFT JOIN sync_cursors c ON c.provider_id = p.id
-       WHERE p.owner_id = $1
+       JOIN workspace_members m ON m.workspace_id = p.workspace_id AND m.owner_id = $1
+       WHERE p.workspace_id = $2 AND p.owner_id = $1
        GROUP BY p.id ORDER BY p.created_at`,
-      [ownerId],
+      [ownerId, workspaceId],
     )
     return result.rows.map((row) => ({
       id: row.id,
@@ -200,6 +264,7 @@ export class PostgresRepository implements ElovaRepository {
 
   async createProvider(input: {
     ownerId: string
+    workspaceId: string
     name: string
     baseUrl: string
     encryptedApiKey: string
@@ -207,10 +272,13 @@ export class PostgresRepository implements ElovaRepository {
     const id = randomUUID()
     try {
       const result = await this.pool.query<{ created_at: Date }>(
-        `INSERT INTO n8n_providers (id, owner_id, name, base_url, encrypted_api_key)
-         VALUES ($1, $2, $3, $4, $5) RETURNING created_at`,
-        [id, input.ownerId, input.name, input.baseUrl, input.encryptedApiKey],
+        `INSERT INTO n8n_providers (id, owner_id, workspace_id, name, base_url, encrypted_api_key)
+         SELECT $1, $2, $3, $4, $5, $6
+         WHERE EXISTS (SELECT 1 FROM workspace_members WHERE owner_id = $2 AND workspace_id = $3)
+         RETURNING created_at`,
+        [id, input.ownerId, input.workspaceId, input.name, input.baseUrl, input.encryptedApiKey],
       )
+      if (!result.rows[0]) throw new Error('Workspace membership is required')
       return {
         id,
         name: input.name,
@@ -227,10 +295,11 @@ export class PostgresRepository implements ElovaRepository {
     }
   }
 
-  async getProviderSecret(ownerId: string, providerId: string): Promise<ProviderSecret | undefined> {
+  async getProviderSecret(ownerId: string, workspaceId: string, providerId: string): Promise<ProviderSecret | undefined> {
     const result = await this.pool.query<{
       id: string
       owner_id: string
+      workspace_id: string
       name: string
       base_url: string
       encrypted_api_key: string
@@ -238,17 +307,19 @@ export class PostgresRepository implements ElovaRepository {
       created_at: Date
       last_synced_at: Date | null
     }>(
-      `SELECT p.id, p.owner_id, p.name, p.base_url, p.encrypted_api_key, p.status, p.created_at,
+      `SELECT p.id, p.owner_id, p.workspace_id, p.name, p.base_url, p.encrypted_api_key, p.status, p.created_at,
               max(c.last_synced_at) AS last_synced_at
        FROM n8n_providers p LEFT JOIN sync_cursors c ON c.provider_id = p.id
-       WHERE p.owner_id = $1 AND p.id = $2
+       JOIN workspace_members m ON m.workspace_id = p.workspace_id AND m.owner_id = $1
+       WHERE p.workspace_id = $2 AND p.owner_id = $1 AND p.id = $3
        GROUP BY p.id`,
-      [ownerId, providerId],
+      [ownerId, workspaceId, providerId],
     )
     const row = result.rows[0]
     return row ? {
       id: row.id,
       ownerId: row.owner_id,
+      workspaceId: row.workspace_id,
       name: row.name,
       baseUrl: row.base_url,
       encryptedApiKey: row.encrypted_api_key,
@@ -372,20 +443,21 @@ export class PostgresRepository implements ElovaRepository {
     await this.syncDatabase.query("UPDATE n8n_providers SET status = 'error', updated_at = now() WHERE id = $1", [providerId])
   }
 
-  async listWorkflows(ownerId: string, limit: number): Promise<unknown[]> {
+  async listWorkflows(ownerId: string, workspaceId: string, limit: number): Promise<unknown[]> {
     const result = await this.pool.query(
       `SELECT w.id, w.provider_workflow_id AS "providerWorkflowId", w.name, w.active,
               w.privacy_mode AS "privacyMode", w.sanitizer_version AS "sanitizerVersion",
               w.content_digest AS "contentDigest", w.source_updated_at AS "sourceUpdatedAt",
               p.id AS "providerId", p.name AS "providerName"
        FROM workflows w JOIN n8n_providers p ON p.id = w.provider_id
-       WHERE p.owner_id = $1 ORDER BY w.updated_at DESC LIMIT $2`,
-      [ownerId, limit],
+       JOIN workspace_members m ON m.workspace_id = p.workspace_id AND m.owner_id = $1
+       WHERE p.workspace_id = $2 AND p.owner_id = $1 ORDER BY w.updated_at DESC LIMIT $3`,
+      [ownerId, workspaceId, limit],
     )
     return result.rows
   }
 
-  async listExecutions(ownerId: string, limit: number): Promise<unknown[]> {
+  async listExecutions(ownerId: string, workspaceId: string, limit: number): Promise<unknown[]> {
     const result = await this.pool.query(
       `SELECT e.id, e.provider_execution_id AS "providerExecutionId", e.status, e.mode,
               e.started_at AS "startedAt", e.stopped_at AS "stoppedAt", e.duration_ms AS "durationMs",
@@ -394,13 +466,14 @@ export class PostgresRepository implements ElovaRepository {
               p.id AS "providerId", p.name AS "providerName"
        FROM executions e JOIN n8n_providers p ON p.id = e.provider_id
        LEFT JOIN workflows w ON w.id = e.workflow_id
-       WHERE p.owner_id = $1 ORDER BY e.started_at DESC NULLS LAST LIMIT $2`,
-      [ownerId, limit],
+       JOIN workspace_members m ON m.workspace_id = p.workspace_id AND m.owner_id = $1
+       WHERE p.workspace_id = $2 AND p.owner_id = $1 ORDER BY e.started_at DESC NULLS LAST LIMIT $3`,
+      [ownerId, workspaceId, limit],
     )
     return result.rows
   }
 
-  async dashboardMetrics(ownerId: string): Promise<DashboardMetrics> {
+  async dashboardMetrics(ownerId: string, workspaceId: string): Promise<DashboardMetrics> {
     const result = await this.pool.query<{
       total: string
       successful: string
@@ -412,8 +485,9 @@ export class PostgresRepository implements ElovaRepository {
               count(*) FILTER (WHERE e.status IN ('error','failed','crashed'))::text AS failed,
               avg(e.duration_ms)::text AS average_duration
        FROM executions e JOIN n8n_providers p ON p.id = e.provider_id
-       WHERE p.owner_id = $1`,
-      [ownerId],
+       JOIN workspace_members m ON m.workspace_id = p.workspace_id AND m.owner_id = $1
+       WHERE p.workspace_id = $2 AND p.owner_id = $1`,
+      [ownerId, workspaceId],
     )
     const row = result.rows[0]!
     const totalExecutions = Number(row.total)
