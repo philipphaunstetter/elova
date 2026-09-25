@@ -32,12 +32,14 @@ export default function DashboardPage() {
   const [state, setState] = useState<"loading" | "ready" | "unauthorized" | "error">("loading");
   const onUnauthorized = useCallback(() => setState("unauthorized"), []);
   const onWorkspaceError = useCallback(() => setState("error"), []);
+  const onWorkspaceChange = useCallback((id: string) => {
+    setWorkspaceId(id);
+    setState(id ? "loading" : "error");
+  }, []);
 
   useEffect(() => {
-    if (workspaceId === null) return;
-    if (!workspaceId) { setState("error"); return; }
+    if (!workspaceId) return;
     const controller = new AbortController();
-    setState("loading");
     const options = { cache: "no-store" as const, signal: controller.signal, headers: { "x-elova-workspace-id": workspaceId } };
     void Promise.all([
       fetch("/api/v1/dashboard/metrics", options),
@@ -69,7 +71,7 @@ export default function DashboardPage() {
           <div><p className="eyebrow"><span className="eyebrow-dot" aria-hidden="true" /> Private workspace</p><h1>Workflow <em>observability.</em></h1><p className="intro">Review synchronized n8n execution outcomes and recent history in the selected workspace.</p></div>
           <span className="heading-tag">EXECUTION EVIDENCE / N8N</span>
         </div>
-        {state !== "unauthorized" && <WorkspaceSwitcher onWorkspaceChange={setWorkspaceId} onUnauthorized={onUnauthorized} onError={onWorkspaceError} />}
+        {state !== "unauthorized" && <WorkspaceSwitcher onWorkspaceChange={onWorkspaceChange} onUnauthorized={onUnauthorized} onError={onWorkspaceError} />}
         {state === "loading" && <p className="notice" role="status">Loading current execution evidence…</p>}
         {state === "unauthorized" && <div className="notice" role="status"><p>Sign in with your operator-enrolled account to view execution evidence.</p><Link className="text-link" href="/login">Sign in <span aria-hidden="true">↗</span></Link></div>}
         {state === "error" && <p className="notice error" role="alert">Observability data is temporarily unavailable. Please try again later.</p>}
