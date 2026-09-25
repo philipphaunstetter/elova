@@ -1,6 +1,6 @@
 # Elova frontend
 
-Deployable Next.js frontend and same-origin BFF foundation.
+Deployable Next.js frontend and same-origin BFF foundation. The application shell, owner login, dashboard and n8n connection settings share a visual language with the shipped Sales site (`elova-sales` at `1ced277726b8676b9d057344afc980f3ca0266a2`): original footer `Elova ✳` wordmark, Match typography, warm neutral background and violet/ink accents. This is an authenticated product UI, not a copy of the Sales page; its workflow visual is decorative, not a live execution diagram. The locally bundled Match font files are byte-identical to the Sales reference (also present on the read-only legacy branch).
 
 ## Runtime configuration
 
