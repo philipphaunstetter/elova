@@ -138,8 +138,9 @@ fs.writeFileSync(destination, `${JSON.stringify({
   version,
   private: true,
   engines,
-  scripts: { start: 'node apps/frontend/server.js' },
+  scripts: { start: 'node apps/frontend/start.js' },
 }, null, 2)}\n`);
+fs.writeFileSync(`${require('node:path').dirname(destination)}/apps/frontend/start.js`, `process.env.HOSTNAME ??= '127.0.0.1';\nprocess.env.PORT ??= '43180';\nrequire('./server.js');\n`);
 NODE
 
 for package_root in "$work/backend/package" "$frontend_package"; do

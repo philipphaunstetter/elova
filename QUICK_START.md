@@ -20,7 +20,7 @@ The backend requires a same-host Unix-socket or loopback PostgreSQL URL and refu
 ```bash
 cd apps/backend
 npm run migrate
-ELOVA_BACKEND_HOST=127.0.0.1 PORT=3001 npm start
+ELOVA_BACKEND_HOST=127.0.0.1 PORT=43181 npm start
 ```
 
 ## Run the frontend locally
@@ -29,8 +29,8 @@ In a separate terminal:
 
 ```bash
 cd apps/frontend
-NODE_ENV=development ELOVA_BACKEND_URL=http://127.0.0.1:3001 \
-  HOSTNAME=127.0.0.1 PORT=3000 npm start
+NODE_ENV=development ELOVA_BACKEND_URL=http://127.0.0.1:43181 \
+  HOSTNAME=127.0.0.1 PORT=43180 npm start
 ```
 
 Production accepts only the GX10 HTTP origin using Tailnet IPv4, Tailscale IPv6, or a fully qualified MagicDNS `.ts.net` name. The frontend must configure it only on the server.

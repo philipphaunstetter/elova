@@ -11,8 +11,8 @@ import { test } from 'node:test'
 import { promisify } from 'node:util'
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url))
-const frontendPort = 43100
-const backendPort = 43200
+const frontendPort = 43180
+const backendPort = 43181
 const execFileAsync = promisify(execFile)
 
 async function nativeScriptCommand(packageRoot, scriptName) {
@@ -250,9 +250,10 @@ dns.promises.lookup = async function lookup(hostname, options = {}) {
       commonEnvironment.NODE_OPTIONS,
       `--require=${lookupOverride}`,
     ].filter(Boolean).join(' '),
-    HOSTNAME: '127.0.0.1',
-    PORT: String(frontendPort),
   }
+  // Packaged frontend defaults must be loopback-only on the native port too.
+  delete frontendEnvironment.HOSTNAME
+  delete frontendEnvironment.PORT
 
   const [migrationExecutable, migrationArguments] =
     await nativeScriptCommand(backendRoot, 'migrate')
@@ -310,6 +311,11 @@ dns.promises.lookup = async function lookup(hostname, options = {}) {
   const ready = await waitFor(`${directBackendOrigin}/v1/health/ready`, 200, backend)
   assert.equal(ready.headers.get('x-elova-api-version'), '1')
   assert.deepEqual(await ready.json(), await fixture('readiness-ready.json'))
+  // A second loopback address models an interface outside the private bind;
+  // nothing on the backend port should listen there (or on a wildcard bind).
+  await assert.rejects(fetch(`http://127.0.0.2:${backendPort}/v1/health/live`, {
+    signal: AbortSignal.timeout(2_000),
+  }))
 
   const proxiedRequestId = `integration-${Date.now()}`
   const proxied = await waitFor(
@@ -317,6 +323,9 @@ dns.promises.lookup = async function lookup(hostname, options = {}) {
     200,
     frontend,
   )
+  await assert.rejects(fetch(`http://127.0.0.2:${frontendPort}/api/v1/health/live`, {
+    signal: AbortSignal.timeout(2_000),
+  }))
   const correlated = await fetch(`${frontendOrigin}/api/v1/health/live`, {
     cache: 'no-store',
     headers: { 'x-request-id': proxiedRequestId },

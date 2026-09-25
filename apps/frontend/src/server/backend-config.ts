@@ -51,7 +51,8 @@ export function getBackendOrigin(): URL {
   const isIpv4Loopback = isIP(hostname) === 4 && Number(hostname.split(".")[0]) === 127;
   const isLoopback = hostname === "localhost" || hostname === "::1" || isIpv4Loopback;
   const isDevelopmentLoopback = process.env.NODE_ENV === "development" && isLoopback;
-  if (!isTailnetHostname(hostname) && !isDevelopmentLoopback) {
+  if ((!isTailnetHostname(hostname) && !isDevelopmentLoopback) ||
+      (process.env.NODE_ENV === "production" && url.port !== "43181")) {
     throw new BackendConfigurationError();
   }
 

@@ -6,8 +6,8 @@ readonly INSTALL_ROOT=/opt/elova
 readonly CONFIG_ROOT=/etc/elova
 readonly JOURNAL_ROOT=/var/lib/elova/releases
 readonly LOCK_ROOT=/run/lock
-readonly FRONTEND_PORT=3000
-readonly BACKEND_PORT=3001
+readonly FRONTEND_PORT=43180
+readonly BACKEND_PORT=43181
 readonly HEALTH_TIMEOUT_SECONDS=60
 readonly HEALTH_REQUEST_TIMEOUT_SECONDS=9
 readonly HEALTH_DELAY_SECONDS=2
@@ -356,6 +356,7 @@ host_preflight() {
     systemd-analyze verify /etc/systemd/system/elova-backend-migrate@.service >/dev/null
     check_backend_env "$file"
   fi
+  check_port_conflicts
 }
 
 artifact_preflight() {
@@ -512,6 +513,29 @@ pid_in_control_group() {
     fi
   done < "/proc/$pid/cgroup"
   return 1
+}
+
+# Run on the target host before activation (also via host preflight). An existing
+# release may own the intended listener; unrelated or additional listeners fail.
+# This is a local read-only check, not evidence of availability on another host.
+check_port_conflicts() {
+  local host port sockets line endpoint pid_entry pid control_group
+  read -r host port < <(listener_coordinates) || die "cannot determine $service listener"
+  sockets=$(ss -H -ltnp "sport = :$port") || die "cannot inspect TCP listeners on port $port"
+  [[ -n $sockets ]] || return 0
+  unit_owns_listener "$(service_unit)" || die "port $port is already in use by a non-$service service"
+  control_group=$(systemctl show "$(service_unit)" --property=ControlGroup --value) || die "cannot inspect $service unit"
+  while IFS= read -r line; do
+    endpoint=$(awk '{print $4}' <<< "$line")
+    [[ $endpoint == "$host:$port" || $endpoint == "[$host]:$port" ]] ||
+      die "port $port has a listener outside the intended $service bind: $endpoint"
+    [[ $line == *'pid='* ]] || die "cannot verify owner of listener on port $port (run preflight as root)"
+    while IFS= read -r pid_entry; do
+      pid=${pid_entry#pid=}
+      pid_in_control_group "$pid" "$control_group" ||
+        die "port $port has a listener outside the $service unit"
+    done < <(grep -oE 'pid=[0-9]+' <<< "$line")
+  done <<< "$sockets"
 }
 
 unit_owns_listener() {
