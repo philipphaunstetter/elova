@@ -67,7 +67,7 @@ paths:
       operationId: listWorkspaces
       responses:
         "200":
-          description: Workspaces joined by the authenticated user and active session workspace.
+          description: Owned workspaces, plus globally accessible workspaces for the super administrator, and the active session workspace.
           content:
             application/json:
               schema:
@@ -323,7 +323,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        role: { type: string, const: owner }
+        role: { type: string, enum: [owner, super_admin] }
         createdAt: { type: string, format: date-time }
     Session:
       type: object

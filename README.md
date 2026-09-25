@@ -36,4 +36,4 @@ The legacy public Docker image remains externally available and untouched. A sep
 
 ## Deferred product scope
 
-The additive `0002_workspaces.sql` migration preserves existing owners, sessions and sanitized provider evidence, backfills a distinct workspace and membership for each existing owner, and scopes new n8n connections and evidence to a selected session workspace and provider owner. Authenticated users can create/switch workspaces; public signup, billing, customer enrollment, governance/Jev and scoring remain deferred.
+The additive `0002_workspaces.sql` migration preserves existing owners, sessions and sanitized provider evidence, backfills a distinct owned workspace for each existing owner, and scopes n8n connections and evidence to an explicitly selected workspace with owner or super-administrator authorization. Authenticated users can create/switch workspaces; public signup, billing, customer enrollment, governance/Jev and scoring remain deferred.

@@ -27,7 +27,7 @@ export type Owner = {
 export type Workspace = {
     id: string;
     name: string;
-    role: 'owner';
+    role: 'owner' | 'super_admin';
     createdAt: string;
 };
 
@@ -204,7 +204,7 @@ export type ListWorkspacesError = ListWorkspacesErrors[keyof ListWorkspacesError
 
 export type ListWorkspacesResponses = {
     /**
-     * Workspaces joined by the authenticated user and active session workspace.
+     * Owned workspaces, plus globally accessible workspaces for the super administrator, and the active session workspace.
      */
     200: {
         activeWorkspaceId: string | null;

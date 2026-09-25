@@ -30,6 +30,7 @@ export default function DashboardPage() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "unauthorized" | "error">("loading");
   const onUnauthorized = useCallback(() => setState("unauthorized"), []);
+  const onWorkspaceError = useCallback(() => setState("error"), []);
 
   useEffect(() => {
     if (workspaceId === null) return;
@@ -62,7 +63,7 @@ export default function DashboardPage() {
       <section className="dashboard-panel">
         <p className="eyebrow">Private PostgreSQL evidence</p>
         <h1>Workflow observability</h1>
-        {state !== "unauthorized" && <WorkspaceSwitcher onWorkspaceChange={setWorkspaceId} onUnauthorized={onUnauthorized} />}
+        {state !== "unauthorized" && <WorkspaceSwitcher onWorkspaceChange={setWorkspaceId} onUnauthorized={onUnauthorized} onError={onWorkspaceError} />}
         {state === "loading" && <p className="notice">Loading current execution evidence…</p>}
         {state === "unauthorized" && <p className="notice">Sign in with your operator-enrolled administrator account.</p>}
         {state === "error" && <p className="notice error">Observability data is temporarily unavailable.</p>}

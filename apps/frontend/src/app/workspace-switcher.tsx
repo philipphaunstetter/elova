@@ -4,9 +4,10 @@ import { FormEvent, useEffect, useState } from "react";
 
 type Workspace = { id: string; name: string; role: string };
 
-export function WorkspaceSwitcher({ onWorkspaceChange, onUnauthorized }: {
+export function WorkspaceSwitcher({ onWorkspaceChange, onUnauthorized, onError }: {
   onWorkspaceChange: (id: string) => void;
   onUnauthorized: () => void;
+  onError?: () => void;
 }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [active, setActive] = useState("");
@@ -23,9 +24,11 @@ export function WorkspaceSwitcher({ onWorkspaceChange, onUnauthorized }: {
       setWorkspaces(result.workspaces);
       setActive(result.activeWorkspaceId ?? "");
       onWorkspaceChange(result.activeWorkspaceId ?? "");
-    }).catch(() => { if (mounted) setMessage("Workspaces are unavailable."); });
+    }).catch(() => {
+      if (mounted) { setMessage("Workspaces are unavailable."); onError?.(); }
+    });
     return () => { mounted = false; };
-  }, [onWorkspaceChange, onUnauthorized]);
+  }, [onWorkspaceChange, onUnauthorized, onError]);
 
   async function select(id: string) {
     setPending(true);
@@ -34,6 +37,7 @@ export function WorkspaceSwitcher({ onWorkspaceChange, onUnauthorized }: {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ workspaceId: id }),
       });
+      if (response.status === 401) { onUnauthorized(); return; }
       if (!response.ok) throw new Error("selection failed");
       window.location.reload();
     } catch { setMessage("Unable to switch workspace."); setPending(false); }
@@ -47,6 +51,7 @@ export function WorkspaceSwitcher({ onWorkspaceChange, onUnauthorized }: {
       const response = await fetch("/api/v1/workspaces", {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }),
       });
+      if (response.status === 401) { onUnauthorized(); return; }
       if (!response.ok) throw new Error("creation failed");
       window.location.reload();
     } catch { setMessage("Unable to create workspace."); setPending(false); }

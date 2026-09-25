@@ -103,7 +103,7 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
   )
   assert.deepEqual(tables.rows.map((row) => row.table_name), [
     'executions', 'n8n_providers', 'owners', 'schema_migrations', 'sessions',
-    'sync_cursors', 'sync_runs', 'workflows', 'workspace_members', 'workspaces',
+    'sync_cursors', 'sync_runs', 'workflows', 'workspaces',
   ])
   const privacyConstraints = await pool.query(
     `SELECT table_name, column_name FROM information_schema.columns
