@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { AppNav } from "../app-nav";
+import Link from "next/link";
+import { AppFooter, AppNav } from "../app-nav";
 import { WorkspaceSwitcher } from "../workspace-switcher";
 import { resolveSettingsAccess, type SettingsAccess } from "./workspace-access";
 
@@ -25,9 +26,11 @@ export default function SettingsPage() {
   const [message, setMessage] = useState("");
   const [unauthorized, setUnauthorized] = useState(false);
   const [access, setAccess] = useState<SettingsAccess | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState<string | null>(null);
   const providers = providerResult?.workspaceId === workspaceId && access?.workspaceId === workspaceId
     ? providerResult.providers : [];
-  const [checking, setChecking] = useState(true);
   const accessGeneration = useRef(0);
   const currentWorkspace = useRef(workspaceId);
   const onUnauthorized = useCallback(() => {
@@ -36,6 +39,7 @@ export default function SettingsPage() {
     setAccess(null);
     setProviderResult(null);
   }, []);
+  const onWorkspaceError = useCallback(() => setMessage("Workspaces are unavailable."), []);
 
   const refreshAccess = useCallback(async (id: string): Promise<boolean> => {
     const generation = ++accessGeneration.current;
@@ -92,19 +96,22 @@ export default function SettingsPage() {
   }, [workspaceId, unauthorized, refreshAccess]);
 
   async function refresh(id: string) {
-    const response = await fetch("/api/v1/providers", { cache: "no-store", headers: { "x-elova-workspace-id": id } });
-    if (response.status === 401) { onUnauthorized(); return; }
-    if (!response.ok) {
-      if (response.status === 403 || response.status === 409) {
-        setAccess(null);
-        setProviderResult(null);
-        void refreshAccess(id);
+    try {
+      const response = await fetch("/api/v1/providers", { cache: "no-store", headers: { "x-elova-workspace-id": id } });
+      if (response.status === 401) { onUnauthorized(); return; }
+      if (!response.ok) {
+        if (response.status === 403 || response.status === 409) {
+          setAccess(null);
+          setProviderResult(null);
+          void refreshAccess(id);
+        }
+        setMessage(await workspaceChanged(response) ? "Workspace changed in another tab. Reload before retrying." : "Settings are temporarily unavailable.");
+        return;
       }
-      setMessage(await workspaceChanged(response) ? "Workspace changed in another tab. Reload before retrying." : "Settings are temporarily unavailable.");
-      return;
-    }
-    if (currentWorkspace.current === id) {
-      setProviderResult({ workspaceId: id, providers: ((await response.json()) as { providers: Provider[] }).providers });
+      const result = await response.json() as { providers: Provider[] };
+      if (currentWorkspace.current === id) setProviderResult({ workspaceId: id, providers: result.providers });
+    } catch {
+      if (currentWorkspace.current === id) setMessage("Settings are temporarily unavailable.");
     }
   }
 
@@ -132,85 +139,109 @@ export default function SettingsPage() {
   async function addProvider(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const id = workspaceId;
-    if (!id || access?.workspaceId !== id || !access.canManageConnections || checking) return;
+    if (!id || access?.workspaceId !== id || !access.canManageConnections || checking || saving) return;
     const formElement = event.currentTarget;
-    if (!await refreshAccess(id) || currentWorkspace.current !== id) return;
-    const form = new FormData(formElement);
-    const response = await fetch("/api/v1/providers", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-elova-workspace-id": id },
-      body: JSON.stringify({ name: form.get("name"), baseUrl: form.get("baseUrl"), apiKey: form.get("apiKey") }),
-    });
-    if (!response.ok) {
-      if (response.status === 401) { onUnauthorized(); return; }
-      if (response.status === 403 || response.status === 409) {
-        setAccess(null);
-        void refreshAccess(id);
+    setSaving(true);
+    setMessage("");
+    try {
+      if (!await refreshAccess(id) || currentWorkspace.current !== id) return;
+      const form = new FormData(formElement);
+      const response = await fetch("/api/v1/providers", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-elova-workspace-id": id },
+        body: JSON.stringify({ name: form.get("name"), baseUrl: form.get("baseUrl"), apiKey: form.get("apiKey") }),
+      });
+      if (!response.ok) {
+        if (response.status === 401) { onUnauthorized(); return; }
+        if (response.status === 403 || response.status === 409) {
+          setAccess(null);
+          void refreshAccess(id);
+        }
+        if (currentWorkspace.current === id) setMessage(await workspaceChanged(response) ? "Workspace changed in another tab. Reload before retrying."
+          : response.status === 403 ? "Your workspace role changed. Connections are read-only."
+          : "The private n8n connection could not be saved. Existing origins cannot be replaced.");
+        return;
       }
-      setMessage(await workspaceChanged(response) ? "Workspace changed in another tab. Reload before retrying."
-        : response.status === 403 ? "Your workspace role changed. Connections are read-only."
-        : "The private n8n connection could not be saved. Existing origins cannot be replaced.");
-      return;
+      if (currentWorkspace.current !== id) return;
+      formElement.reset();
+      setMessage("Connection saved. The API key is encrypted in PostgreSQL.");
+      await refresh(id);
+    } catch {
+      if (currentWorkspace.current === id) setMessage("The connection could not be saved. Please try again.");
+    } finally {
+      setSaving(false);
     }
-    if (currentWorkspace.current !== id) return;
-    formElement.reset();
-    setMessage("Connection saved. The API key is encrypted in PostgreSQL.");
-    await refresh(id);
   }
 
   async function synchronize(id: string) {
     const selectedId = workspaceId;
-    if (!selectedId || access?.workspaceId !== selectedId || !access.canManageConnections || checking) return;
-    if (!await refreshAccess(selectedId) || currentWorkspace.current !== selectedId) return;
-    setMessage("Synchronizing sanitized workflow and execution evidence…");
-    const response = await fetch(`/api/v1/providers/${id}/sync`, {
-      method: "POST", headers: { "x-elova-workspace-id": selectedId },
-    });
-    if (response.status === 401) { onUnauthorized(); return; }
-    if (response.status === 403 || response.status === 409) {
-      setAccess(null);
-      void refreshAccess(selectedId);
+    if (!selectedId || access?.workspaceId !== selectedId || !access.canManageConnections || checking || syncing) return;
+    setSyncing(id);
+    try {
+      if (!await refreshAccess(selectedId) || currentWorkspace.current !== selectedId) return;
+      setMessage("Synchronizing sanitized workflow and execution evidence…");
+      const response = await fetch(`/api/v1/providers/${encodeURIComponent(id)}/sync`, {
+        method: "POST", headers: { "x-elova-workspace-id": selectedId },
+      });
+      if (response.status === 401) { onUnauthorized(); return; }
+      if (response.status === 403 || response.status === 409) {
+        setAccess(null);
+        void refreshAccess(selectedId);
+      }
+      if (currentWorkspace.current !== selectedId) return;
+      setMessage(response.ok ? "Synchronization completed." : await workspaceChanged(response)
+        ? "Workspace changed in another tab. Reload before retrying."
+        : response.status === 403 ? "Your workspace role changed. Connections are read-only."
+        : response.status === 409 ? "Synchronization already in progress. Try again after it finishes."
+        : response.status === 429 ? "Sync capacity reached. Try again shortly."
+        : "Synchronization failed without storing raw content.");
+      await refresh(selectedId);
+    } catch {
+      if (currentWorkspace.current === selectedId) setMessage("Synchronization could not be started. Please try again.");
+    } finally {
+      setSyncing(null);
     }
-    if (currentWorkspace.current !== selectedId) return;
-    setMessage(response.ok ? "Synchronization completed." : await workspaceChanged(response)
-      ? "Workspace changed in another tab. Reload before retrying."
-      : response.status === 403 ? "Your workspace role changed. Connections are read-only."
-      : response.status === 409 ? "Synchronization already in progress. Try again after it finishes."
-      : response.status === 429 ? "Sync capacity reached. Try again shortly."
-      : "Synchronization failed without storing raw content.");
-    await refresh(selectedId);
   }
 
   const canManage = !!access && access.workspaceId === workspaceId && access.canManageConnections;
 
   return (
-    <main className="app-shell">
+    <div className="app-shell">
       <AppNav />
-      <section className="dashboard-panel narrow">
-        <p className="eyebrow">Authenticated settings</p><h1>n8n connections</h1>
-        <p className="intro left">Connections belong to the selected workspace. Adding an n8n connection is optional; no API key is needed to use your workspace.</p>
-        {!unauthorized && <WorkspaceSwitcher onWorkspaceChange={setWorkspaceId} onUnauthorized={onUnauthorized} />}
-        {unauthorized ? <p className="notice">Sign in before configuring n8n.</p> : (
-          <>
-            {workspaceId && access?.workspaceId !== workspaceId && <p className="notice" role="status">Checking workspace permissions before enabling connections.</p>}
-            {access && access.workspaceId === workspaceId && !access.canManageConnections &&
-              <p className="notice" role="status">Read-only workspace access ({access.role}). You can view sanitized data, but only an owner or admin can add or sync connections.</p>}
-            {canManage && <form className="form-card" onSubmit={addProvider}>
-              <label>Connection name<input name="name" maxLength={120} required /></label>
-              <label>Private Tailnet origin<input name="baseUrl" type="url" placeholder="http://gx10.example.ts.net:5678" required /></label>
-              <label>API key<input name="apiKey" type="password" autoComplete="off" required /></label>
-              <button className="button primary" disabled={checking}>Add connection</button>
-            </form>}
-            {message && <p className="notice" role="status">{message}</p>}
-            {workspaceId && access?.workspaceId === workspaceId && providerResult?.workspaceId === workspaceId && providers.length === 0 &&
-              <p className="empty">No n8n connections in this workspace yet.</p>}
-            <div className="provider-list">{providers.map((provider) => <article className="provider-card" key={provider.id}>
-              <div><h2>{provider.name}</h2><p>{provider.baseUrl}</p><small>{provider.status} · {provider.lastSyncedAt ? `last sync ${new Date(provider.lastSyncedAt).toLocaleString()}` : "not synchronized"}</small></div>
-              {canManage && <button className="button" disabled={checking} onClick={() => void synchronize(provider.id)}>Sync now</button>}
-            </article>)}</div>
-          </>
-        )}
-      </section>
-    </main>
+      <main id="main" tabIndex={-1} className="shell page-content settings-layout">
+        <div className="page-heading"><div><p className="eyebrow"><span className="eyebrow-dot" aria-hidden="true" /> Authenticated settings</p><h1>n8n <em>connections.</em></h1><p className="intro">Connections belong to the selected workspace. An n8n connection is optional; no API key is needed to use your workspace.</p></div><span className="heading-tag">PRIVATE CONNECTIONS / N8N</span></div>
+        {!unauthorized && <WorkspaceSwitcher onWorkspaceChange={setWorkspaceId} onUnauthorized={onUnauthorized} onError={onWorkspaceError} />}
+        {!unauthorized && !workspaceId && !message && <p className="notice" role="status">Loading connections…</p>}
+        {unauthorized && <div className="notice" role="status"><p>Sign in before configuring n8n.</p><Link className="text-link" href="/login">Sign in <span aria-hidden="true">↗</span></Link></div>}
+        {!unauthorized && <>
+          {workspaceId && access?.workspaceId !== workspaceId && <p className="notice" role="status">Checking workspace permissions before enabling connections.</p>}
+          {access && access.workspaceId === workspaceId && !access.canManageConnections &&
+            <p className="notice" role="status">Read-only workspace access ({access.role}). You can view sanitized data, but only an owner or admin can add or sync connections.</p>}
+          {workspaceId && <div className={canManage ? "settings-grid" : "settings-grid settings-grid-readonly"}>
+            {canManage && <section className="form-surface" aria-labelledby="add-title">
+              <p className="section-index">01 / ADD CONNECTION</p><h2 id="add-title">Connect n8n</h2>
+              <p className="subtle">Each private origin keeps its own identity and history. To change instances, add a new connection.</p>
+              <form className="form-card" onSubmit={addProvider}>
+                <label>Connection name<input name="name" maxLength={120} required /></label>
+                <label>Private Tailnet origin<input name="baseUrl" type="url" placeholder="http://n8n.example.ts.net:5678" required /></label>
+                <label>API key<input name="apiKey" type="password" autoComplete="off" required /></label>
+                <button className="button primary" disabled={checking || saving}>{saving ? "Saving…" : "Add connection"} <span aria-hidden="true">↗</span></button>
+              </form>
+            </section>}
+            <section className="connections-surface" aria-labelledby="connections-title">
+              <p className="section-index">02 / YOUR CONNECTIONS</p><h2 id="connections-title">Connected instances</h2>
+              {access?.workspaceId === workspaceId && providerResult?.workspaceId === workspaceId && providers.length === 0 &&
+                <p className="empty">No n8n connections in this workspace yet.</p>}
+              <div className="provider-list">{providers.map((provider) => <article className="provider-card" key={provider.id}>
+                <div className="provider-details"><h3>{provider.name}</h3><p>{provider.baseUrl}</p><small>{provider.status} · {provider.lastSyncedAt ? `last sync ${new Date(provider.lastSyncedAt).toLocaleString()}` : "not synchronized"}</small></div>
+                {canManage && <button className="button" disabled={checking || syncing !== null} onClick={() => void synchronize(provider.id)}>{syncing === provider.id ? "Syncing…" : "Sync now"}</button>}
+              </article>)}</div>
+            </section>
+          </div>}
+          {message && <p className="notice" role="status">{message}</p>}
+        </>}
+      </main>
+      <AppFooter />
+    </div>
   );
 }

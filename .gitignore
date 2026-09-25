@@ -80,6 +80,7 @@ WARP.md
 # Development artifacts
 cookies.txt
 build_log.txt
+.preview-evidence/
 
 # Local testing scripts (dev-only utilities)
 scripts/test-local.sh
