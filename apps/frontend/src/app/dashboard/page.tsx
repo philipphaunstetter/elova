@@ -76,7 +76,7 @@ export default function DashboardPage() {
             </section>
             <section className="table-card" aria-labelledby="recent-title">
               <div className="card-heading"><div><p className="section-index">02 / RECENT ACTIVITY</p><h2 id="recent-title">Recent executions</h2></div><p>Execution content is sanitized before storage.</p></div>
-              {executions.length === 0 ? <p className="empty">No synchronized executions yet. Add a connection in <Link href="/settings">settings</Link> to get started.</p> : (
+              {executions.length === 0 ? <p className="empty">No synchronized executions yet.</p> : (
                 <div className="table-wrap"><table><thead><tr><th scope="col">Workflow</th><th scope="col">Status</th><th scope="col">Started</th><th scope="col">Duration</th><th scope="col">Privacy</th></tr></thead>
                   <tbody>{executions.map((execution) => <tr key={execution.id}>
                     <td className="workflow-name">{execution.workflowName ?? execution.providerExecutionId}</td><td><span className="status-pill">{execution.status}</span></td>
