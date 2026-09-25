@@ -5,6 +5,9 @@ import type {
   DashboardMetrics,
   ElovaRepository,
   Owner,
+  MemberWriteResult,
+  WorkspaceMember,
+  WorkspaceRole,
   ProviderSecret,
   ProviderSummary,
   SessionOwner,
@@ -37,6 +40,10 @@ class MemoryRepository implements ElovaRepository {
     this.owner = { id: '11111111-1111-4111-8111-111111111111', ...input }
     return this.owner
   }
+  async createOrdinaryUser(input: { email: string; displayName: string; passwordHash: string }): Promise<Owner> {
+    this.owner = { id: '99999999-9999-4999-8999-999999999999', role: 'user', ...input }
+    return this.owner
+  }
   async findOwnerByEmail(email: string) { return this.owner?.email === email ? this.owner : undefined }
   async createSession(sessionId: string, ownerId: string, digest: string, expiresAt: Date) {
     this.session = { id: sessionId, ownerId, digest, expiresAt }
@@ -50,7 +57,7 @@ class MemoryRepository implements ElovaRepository {
   async listWorkspaces(): Promise<Workspace[]> { return this.workspaces }
   async createWorkspace(sessionId: string, ownerId: string, name: string): Promise<Workspace | undefined> {
     if (this.failCreateSelection || this.session?.id !== sessionId || this.session.ownerId !== ownerId) return undefined
-    const workspace = { id: '44444444-4444-4444-8444-444444444444', name, role: 'owner', createdAt: new Date().toISOString() }
+    const workspace: Workspace = { id: '44444444-4444-4444-8444-444444444444', name, role: 'owner', createdAt: new Date().toISOString() }
     this.workspaces.push(workspace)
     this.activeWorkspaceId = workspace.id
     return workspace
@@ -62,6 +69,15 @@ class MemoryRepository implements ElovaRepository {
     this.activeWorkspaceId = selected.id
     return true
   }
+  async getWorkspaceRole(_ownerId: string, workspaceId: string): Promise<WorkspaceRole | undefined> {
+    return this.workspaces.find((space) => space.id === workspaceId)?.role
+  }
+  async renameWorkspace(): Promise<MemberWriteResult> { return 'ok' }
+  async listMembers(): Promise<WorkspaceMember[]> { return [] }
+  async addMember(): Promise<MemberWriteResult> { return 'ok' }
+  async setMemberRole(): Promise<MemberWriteResult> { return 'ok' }
+  async removeMember(): Promise<MemberWriteResult> { return 'ok' }
+  async transferOwnership(): Promise<MemberWriteResult> { return 'ok' }
   async listProviders(_ownerId: string, workspaceId: string): Promise<ProviderSummary[]> {
     return this.providers.filter((item) => item.workspaceId === workspaceId)
   }
@@ -279,6 +295,38 @@ test('selection revoked during a request returns unauthorized instead of claimin
   const response = await application.handle(request('POST', '/v1/workspaces/select', { workspaceId: ADMIN_WORKSPACE }, cookie))
   assert.equal(response?.status, 401)
   assert.equal(repository.activeWorkspaceId, ADMIN_WORKSPACE)
+})
+
+test('fixed workspace roles gate secrets, membership and settings from live role reads', async () => {
+  const { application, repository, cookie } = await loggedIn()
+  const space = repository.workspaces[0]!
+  const provider = { name: 'Synthetic n8n', baseUrl: 'http://100.100.10.20:5678', apiKey: 'synthetic-only' }
+  const call = (method: string, path: string, body?: unknown) =>
+    application.handle(request(method, path, body, cookie, ADMIN_WORKSPACE))
+  space.role = 'viewer'
+  assert.equal((await call('GET', '/v1/providers'))?.status, 200)
+  assert.equal((await call('GET', '/v1/workflows'))?.status, 200)
+  assert.equal((await call('POST', '/v1/providers', provider))?.status, 403)
+  assert.equal((await call('POST', '/v1/providers/22222222-2222-4222-8222-222222222222/sync'))?.status, 403)
+  assert.equal((await call('PATCH', '/v1/workspaces/settings', { name: 'Renamed' }))?.status, 403)
+  assert.equal((await call('GET', '/v1/workspaces/members'))?.status, 403)
+  assert.equal((await call('POST', '/v1/workspaces/members', { email: 'other@example.test', role: 'owner' }))?.status, 403)
+  space.role = 'editor'
+  assert.equal((await call('GET', '/v1/executions'))?.status, 200)
+  assert.equal((await call('POST', '/v1/providers', provider))?.status, 403)
+  space.role = 'admin'
+  assert.equal((await call('PATCH', '/v1/workspaces/settings', { name: 'Renamed' }))?.status, 204)
+  assert.equal((await call('POST', '/v1/providers', provider))?.status, 201)
+  assert.equal((await call('GET', '/v1/workspaces/members'))?.status, 403)
+  assert.equal((await call('POST', '/v1/workspaces/members', { email: 'other@example.test', role: 'owner' }))?.status, 403)
+  space.role = 'owner'
+  assert.equal((await call('POST', '/v1/workspaces/members', { email: 'other@example.test', role: 'viewer' }))?.status, 204)
+  assert.equal((await call('PATCH', '/v1/workspaces/members/99999999-9999-4999-8999-999999999999', { role: 'editor' }))?.status, 204)
+  assert.equal((await call('POST', '/v1/workspaces/ownership/transfer', { userId: '99999999-9999-4999-8999-999999999999' }))?.status, 204)
+  assert.equal((await call('DELETE', '/v1/workspaces/members/99999999-9999-4999-8999-999999999999'))?.status, 204)
+  repository.workspaces.splice(0, 1)
+  assert.equal((await call('GET', '/v1/workflows'))?.status, 403)
+  assert.equal((await call('POST', '/v1/providers', provider))?.status, 403)
 })
 
 test('overlapping provider syncs cannot overwrite fresher execution outcomes', async () => {

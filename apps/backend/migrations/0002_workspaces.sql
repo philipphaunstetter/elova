@@ -8,24 +8,28 @@ CREATE TABLE workspaces (
   id uuid PRIMARY KEY,
   name text NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
   created_by uuid NOT NULL REFERENCES owners(id) ON DELETE RESTRICT,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE(id, created_by)
+  designated_owner_id uuid NOT NULL REFERENCES owners(id) ON DELETE RESTRICT,
+  designated_owner_role text NOT NULL DEFAULT 'owner' CHECK (designated_owner_role = 'owner'),
+  created_at timestamptz NOT NULL DEFAULT now()
 );
-INSERT INTO workspaces (id, name, created_by)
-SELECT gen_random_uuid(), 'Original workspace', id FROM owners;
--- Initial membership is strictly one creator per workspace; no shared-user enrollment.
+INSERT INTO workspaces (id, name, created_by, designated_owner_id)
+SELECT gen_random_uuid(), 'Original workspace', id, id FROM owners;
+-- One user can hold a different fixed role in each workspace. Creator is provenance, not access.
 CREATE TABLE workspace_members (
-  workspace_id uuid PRIMARY KEY,
+  workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT,
   owner_id uuid NOT NULL REFERENCES owners(id) ON DELETE RESTRICT,
-  UNIQUE(workspace_id, owner_id),
-  FOREIGN KEY (workspace_id, owner_id) REFERENCES workspaces(id, created_by) ON DELETE RESTRICT
+  role text NOT NULL CHECK (role IN ('owner', 'admin', 'editor', 'viewer')),
+  PRIMARY KEY (workspace_id, owner_id),
+  UNIQUE(workspace_id, owner_id, role)
 );
 CREATE INDEX workspace_members_owner_idx ON workspace_members(owner_id, workspace_id);
-INSERT INTO workspace_members (workspace_id, owner_id)
-SELECT id, created_by FROM workspaces;
--- Require the creator's membership on every committed workspace, including fresh bootstrap.
-ALTER TABLE workspaces ADD CONSTRAINT workspaces_creator_membership_fk
-  FOREIGN KEY (id, created_by) REFERENCES workspace_members(workspace_id, owner_id)
+INSERT INTO workspace_members (workspace_id, owner_id, role)
+SELECT id, created_by, 'owner' FROM workspaces;
+-- At every commit a designated member must actually have owner role. Transfer the pointer
+-- explicitly before demoting/removing that owner; creator identity never confers access.
+ALTER TABLE workspaces ADD CONSTRAINT workspaces_designated_owner_fk
+  FOREIGN KEY (id, designated_owner_id, designated_owner_role)
+  REFERENCES workspace_members(workspace_id, owner_id, role)
   DEFERRABLE INITIALLY DEFERRED;
 ALTER TABLE sessions ADD COLUMN workspace_id uuid REFERENCES workspaces(id) ON DELETE SET NULL;
 UPDATE sessions s SET workspace_id = (

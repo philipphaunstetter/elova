@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Elova private backend API
-  version: 1.2.0
+  version: 1.3.0
   description: Canonical contract between the public VPS BFF and the private GX10 PostgreSQL-backed service.
 servers:
   - url: /v1
@@ -124,11 +124,136 @@ paths:
                   activeWorkspaceId: { type: string, format: uuid }
         "401": { $ref: "#/components/responses/ErrorResponse" }
         "404": { $ref: "#/components/responses/ErrorResponse" }
+  /workspaces/settings:
+    parameters:
+      - { $ref: "#/components/parameters/WorkspaceId" }
+    patch:
+      operationId: renameWorkspace
+      description: Only a workspace owner, admin, or global super administrator may rename the selected workspace.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 120 }
+      responses:
+        "204": { description: Workspace renamed. }
+        "400": { $ref: "#/components/responses/ErrorResponse" }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+        "403": { $ref: "#/components/responses/ErrorResponse" }
+        "409": { $ref: "#/components/responses/ErrorResponse" }
+  /workspaces/members:
+    parameters:
+      - { $ref: "#/components/parameters/WorkspaceId" }
+    get:
+      operationId: listWorkspaceMembers
+      description: Only a workspace owner or global super administrator may list memberships.
+      responses:
+        "200":
+          description: Confirmed members and their per-workspace roles.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [members]
+                properties:
+                  members:
+                    type: array
+                    items: { $ref: "#/components/schemas/WorkspaceMember" }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+        "403": { $ref: "#/components/responses/ErrorResponse" }
+        "409": { $ref: "#/components/responses/ErrorResponse" }
+    post:
+      operationId: addWorkspaceMember
+      description: Owner or global super administrator attaches only an already-provisioned exact user identity. Never creates a login.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, role]
+              properties:
+                email: { type: string, format: email, maxLength: 320 }
+                role: { $ref: "#/components/schemas/MemberRole" }
+      responses:
+        "204": { description: Existing user attached. }
+        "400": { $ref: "#/components/responses/ErrorResponse" }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+        "403": { $ref: "#/components/responses/ErrorResponse" }
+        "404": { $ref: "#/components/responses/ErrorResponse" }
+        "409": { $ref: "#/components/responses/ErrorResponse" }
+  /workspaces/members/{userId}:
+    parameters:
+      - { $ref: "#/components/parameters/WorkspaceId" }
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: changeWorkspaceMemberRole
+      description: Owner or global super administrator changes an existing member role; transfer designation first to demote the designated owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [role]
+              properties:
+                role: { $ref: "#/components/schemas/MemberRole" }
+      responses:
+        "204": { description: Member role changed. }
+        "400": { $ref: "#/components/responses/ErrorResponse" }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+        "403": { $ref: "#/components/responses/ErrorResponse" }
+        "404": { $ref: "#/components/responses/ErrorResponse" }
+        "409": { $ref: "#/components/responses/ErrorResponse" }
+    delete:
+      operationId: removeWorkspaceMember
+      description: Owner or global super administrator removes a member; cannot remove the designated last owner.
+      responses:
+        "204": { description: Member removed and their selected sessions for this workspace cleared. }
+        "400": { $ref: "#/components/responses/ErrorResponse" }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+        "403": { $ref: "#/components/responses/ErrorResponse" }
+        "404": { $ref: "#/components/responses/ErrorResponse" }
+        "409": { $ref: "#/components/responses/ErrorResponse" }
+  /workspaces/ownership/transfer:
+    parameters:
+      - { $ref: "#/components/parameters/WorkspaceId" }
+    post:
+      operationId: transferWorkspaceOwnership
+      description: Owner or global super administrator designates an existing owner member to preserve the at-least-one-owner invariant before removing or demoting the prior designated owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [userId]
+              properties:
+                userId: { type: string, format: uuid }
+      responses:
+        "204": { description: Designated owner transferred. }
+        "400": { $ref: "#/components/responses/ErrorResponse" }
+        "401": { $ref: "#/components/responses/ErrorResponse" }
+        "403": { $ref: "#/components/responses/ErrorResponse" }
+        "409": { $ref: "#/components/responses/ErrorResponse" }
   /providers:
     parameters:
       - { $ref: "#/components/parameters/WorkspaceId" }
     get:
       operationId: listProviders
+      description: Any current workspace member or global super administrator; returns summaries, never credentials.
       responses:
         "200":
           description: Immutable n8n provider identities.
@@ -146,6 +271,7 @@ paths:
         "409": { $ref: "#/components/responses/ErrorResponse" }
     post:
       operationId: createProvider
+      description: Only a workspace owner, admin or global super administrator may add a connection.
       requestBody:
         required: true
         content:
@@ -177,6 +303,7 @@ paths:
       - { $ref: "#/components/parameters/WorkspaceId" }
     post:
       operationId: synchronizeProvider
+      description: Only a workspace owner, admin or global super administrator may run the secret-bearing sync.
       parameters:
         - name: providerId
           in: path
@@ -204,6 +331,7 @@ paths:
       - { $ref: "#/components/parameters/WorkspaceId" }
     get:
       operationId: listWorkflows
+      description: Sanitized read for any current member or global super administrator; no workflow write operation exists.
       responses:
         "200":
           description: Sanitized workflow summaries.
@@ -218,6 +346,7 @@ paths:
       - { $ref: "#/components/parameters/WorkspaceId" }
     get:
       operationId: listExecutions
+      description: Sanitized read for any current member or global super administrator.
       parameters:
         - name: limit
           in: query
@@ -236,6 +365,7 @@ paths:
       - { $ref: "#/components/parameters/WorkspaceId" }
     get:
       operationId: getDashboardMetrics
+      description: Sanitized aggregate read for any current member or global super administrator.
       responses:
         "200":
           description: Execution outcome metrics from PostgreSQL.
@@ -323,8 +453,20 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        role: { type: string, enum: [owner, super_admin] }
+        role: { type: string, enum: [owner, admin, editor, viewer, super_admin] }
         createdAt: { type: string, format: date-time }
+    MemberRole:
+      type: string
+      enum: [owner, admin, editor, viewer]
+    WorkspaceMember:
+      type: object
+      additionalProperties: false
+      required: [userId, email, displayName, role]
+      properties:
+        userId: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        role: { $ref: "#/components/schemas/MemberRole" }
     Session:
       type: object
       additionalProperties: false

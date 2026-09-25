@@ -48,14 +48,14 @@ test('0001 upgrade retains owner, session, provider and sanitized evidence witho
   assert.equal(alienWorkspaces[0].name, 'Original workspace')
   assert.notEqual(alienWorkspaces[0].id, space)
   assert.deepEqual((await pool.query(
-    'SELECT workspace_id, owner_id FROM workspace_members ORDER BY owner_id')).rows, [
-    { workspace_id: space, owner_id: owner },
-    { workspace_id: alienWorkspaces[0].id, owner_id: alien },
+    'SELECT workspace_id, owner_id, role FROM workspace_members ORDER BY owner_id')).rows, [
+    { workspace_id: space, owner_id: owner, role: 'owner' },
+    { workspace_id: alienWorkspaces[0].id, owner_id: alien, role: 'owner' },
   ])
   await assert.rejects(pool.query(
-    'UPDATE workspace_members SET owner_id = $2 WHERE workspace_id = $1', [space, alien]), { code: '23503' })
+    "UPDATE workspace_members SET role = 'viewer' WHERE workspace_id = $1 AND owner_id = $2", [space, owner]), { code: '23503' })
   await assert.rejects(pool.query(
-    'DELETE FROM workspace_members WHERE workspace_id = $1', [space]), { code: '23503' })
+    'DELETE FROM workspace_members WHERE workspace_id = $1 AND owner_id = $2', [space, owner]), { code: '23503' })
   assert.deepEqual((await pool.query('SELECT id, role FROM owners ORDER BY id')).rows, [
     { id: owner, role: 'user' }, { id: alien, role: 'user' },
   ])
@@ -165,4 +165,49 @@ test('0001 upgrade retains owner, session, provider and sanitized evidence witho
   assert.equal(await repository.createWorkspace(session, owner, 'Rejected workspace'), undefined)
   assert.equal((await pool.query('SELECT count(*)::integer AS total FROM workspace_members WHERE owner_id = $1', [owner])).rows[0].total, 2)
   assert.deepEqual((await repository.listWorkspaces(owner)).map((item) => item.id), [space, second.id])
+
+  // A creator need not remain owner: one user has different roles in two workspaces.
+  assert.equal(await repository.addMember(owner, space, 'other@example.test', 'viewer'), 'ok')
+  assert.equal((await repository.listWorkspaces(alien)).find((item) => item.id === space).role, 'viewer')
+  assert.equal(await repository.getProviderSecret(alien, space, provider), undefined)
+  assert.equal((await repository.listProviders(alien, space)).length, 1)
+  await assert.rejects(repository.createProvider({
+    ownerId: alien, workspaceId: space, name: 'Forbidden viewer',
+    baseUrl: 'http://100.100.10.23:5678', encryptedApiKey: 'v1.synthetic',
+  }), /Workspace access is required/)
+  assert.equal(await repository.setMemberRole(owner, space, alien, 'admin'), 'ok')
+  assert.equal(await repository.renameWorkspace(alien, space, 'Shared workspace'), 'ok')
+  assert.equal((await repository.listWorkspaces(alien)).find((item) => item.id === space).role, 'admin')
+  assert.equal((await repository.getProviderSecret(alien, space, provider)).encryptedApiKey, 'v1.synthetic')
+  const sharedProvider = await repository.createProvider({
+    ownerId: alien, workspaceId: space, name: 'Shared n8n',
+    baseUrl: 'http://100.100.10.24:5678', encryptedApiKey: 'v1.shared',
+  })
+  assert.deepEqual((await pool.query('SELECT owner_id, workspace_id FROM n8n_providers WHERE id = $1',
+    [sharedProvider.id])).rows[0], { owner_id: alien, workspace_id: space },
+  'provider creator does not become workspace owner')
+  assert.equal((await repository.listProviders(owner, space)).length, 2)
+  assert.equal(await repository.addMember(alien, space, 'unknown@example.test', 'owner'), 'forbidden')
+  assert.equal(await repository.addMember(owner, space, 'unknown@example.test', 'viewer'), 'not_found')
+  assert.equal(await repository.setMemberRole(owner, space, alien, 'owner'), 'ok')
+  assert.equal(await repository.setMemberRole(alien, space, owner, 'viewer'), 'conflict')
+  assert.equal(await repository.removeMember(alien, space, owner), 'conflict')
+  assert.equal(await repository.transferOwnership(alien, space, alien), 'ok')
+  assert.equal(await repository.setMemberRole(alien, space, owner, 'viewer'), 'ok')
+  assert.equal((await repository.listWorkspaces(owner)).find((item) => item.id === space).role, 'viewer')
+  assert.equal(await repository.getProviderSecret(owner, space, provider), undefined)
+  const liveSession = '99999999-9999-4999-8999-999999999999'
+  await repository.createSession(liveSession, owner, 'live-digest', new Date(Date.now() + 86_400_000))
+  assert.equal(await repository.selectWorkspace(liveSession, owner, space), true)
+  assert.equal(await repository.removeMember(alien, space, owner), 'ok')
+  assert.equal((await repository.resolveSession(liveSession, 'live-digest', new Date())).workspaceId, null)
+  assert.equal(await repository.selectWorkspace(liveSession, owner, space), false)
+  assert.deepEqual(await repository.listProviders(owner, space), [])
+  assert.equal(await repository.getWorkspaceRole(owner, space), undefined)
+  assert.deepEqual(await Promise.all([
+    repository.removeMember(alien, space, alien),
+    repository.setMemberRole(alien, space, alien, 'viewer'),
+  ]), ['conflict', 'conflict'])
+  assert.equal((await pool.query("SELECT count(*)::integer AS total FROM workspace_members WHERE workspace_id = $1 AND role = 'owner'", [space])).rows[0].total, 1)
+  assert.equal((await pool.query('SELECT created_by FROM workspaces WHERE id = $1', [space])).rows[0].created_by, owner)
 })

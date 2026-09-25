@@ -17,9 +17,10 @@ const { Pool } = requireFromBackend('pg')
 const { applyMigrations, loadMigrations, migrationsAreCompatible } =
   await import(pathToFileURL(migrationsModulePath).href)
 const { PostgresGateway } = await import(pathToFileURL(databaseModulePath).href)
-const { PostgresRepository, OwnerAlreadyExistsError, ProviderSyncAlreadyRunningError } = await import(pathToFileURL(repositoryModulePath).href)
+const { PostgresRepository, OwnerAlreadyExistsError, InitialAdminRequiredError, ProviderSyncAlreadyRunningError } = await import(pathToFileURL(repositoryModulePath).href)
 const { ElovaApplication } = await import(pathToFileURL(join(backendRoot, 'dist/src/application.js')).href)
 const { bootstrapOwner } = await import(pathToFileURL(bootstrapModulePath).href)
+const { provisionOrdinaryUser } = await import(pathToFileURL(join(backendRoot, 'dist/src/provision-user.js')).href)
 
 const databaseUrl = process.env.DATABASE_URL
 assert.ok(
@@ -114,6 +115,9 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
 
   const repository = new PostgresRepository(pool)
   assert.equal((await pool.query('SELECT count(*)::integer AS total FROM owners')).rows[0].total, 0)
+  await assert.rejects(provisionOrdinaryUser(repository, {
+    email: 'premature@example.test', displayName: 'Premature', password: 'synthetic chosen password',
+  }), InitialAdminRequiredError)
   const owner = await bootstrapOwner(repository, {
     email: 'owner@example.test',
     displayName: 'Initial Owner',
@@ -169,6 +173,55 @@ test('the migration seam serializes changes and keeps readiness fail-closed', as
   assert.equal((await request('POST', '/v1/workspaces/select', cookie, undefined,
     { workspaceId: workspaces[0].id })).status, 200)
   await empty(workspaces[0].id)
+  assert.equal((await pool.query('SELECT count(*)::integer AS total FROM n8n_providers')).rows[0].total, 0)
+
+  const teammate = await provisionOrdinaryUser(repository, {
+    email: 'teammate@example.test', displayName: 'Teammate', password: 'teammate chosen synthetic password',
+  })
+  assert.equal((await repository.findOwnerByEmail(teammate.email)).role, 'user')
+  assert.deepEqual(await repository.listWorkspaces(teammate.id), [])
+  assert.equal((await request('POST', '/v1/workspaces/members', cookie, workspaces[0].id,
+    { email: teammate.email, role: 'viewer' })).status, 204)
+  assert.equal((await request('POST', '/v1/workspaces/members', cookie, workspaces[0].id,
+    { email: teammate.email, role: 'viewer' })).status, 409)
+  assert.equal((await request('GET', '/v1/workspaces/members', cookie, workspaces[0].id)).body.members.length, 2)
+  assert.equal((await request('POST', '/v1/workspaces/ownership/transfer', cookie, workspaces[0].id,
+    { userId: teammate.id })).status, 409, 'viewer cannot become designated owner')
+  assert.equal(await repository.addMember(owner.id, secondId, teammate.email, 'editor'), 'ok')
+  const teammateLogin = await request('POST', '/v1/auth/login', undefined, undefined,
+    { email: teammate.email, password: 'teammate chosen synthetic password' })
+  assert.equal(teammateLogin.status, 200)
+  const teammateCookie = teammateLogin.headers['set-cookie'].split(';')[0]
+  const membershipList = await request('GET', '/v1/workspaces', teammateCookie)
+  assert.deepEqual(membershipList.body.workspaces.map((space) => [space.id, space.role]),
+    [[workspaces[0].id, 'viewer'], [secondId, 'editor']])
+  assert.equal((await request('GET', '/v1/workflows', teammateCookie, workspaces[0].id)).status, 200)
+  const syntheticConnection = { name: 'Synthetic', baseUrl: 'http://100.100.10.20:5678', apiKey: 'synthetic-only' }
+  assert.equal((await request('POST', '/v1/providers', teammateCookie, workspaces[0].id, syntheticConnection)).status, 403)
+  assert.equal((await request('POST', '/v1/workspaces/members', teammateCookie, workspaces[0].id,
+    { email: 'missing@example.test', role: 'owner' })).status, 403)
+  assert.equal((await request('POST', '/v1/workspaces/select', teammateCookie, undefined,
+    { workspaceId: secondId })).status, 200)
+  assert.equal((await request('GET', '/v1/executions', teammateCookie, workspaces[0].id)).status, 409,
+    'stale tab may not read another workspace after selection')
+  assert.equal((await request('GET', '/v1/workspaces/members', cookie, secondId)).status, 409,
+    'global admin also requires the selected workspace header for member operations')
+  assert.equal((await request('GET', '/v1/workflows', teammateCookie, secondId)).status, 200)
+  assert.equal((await request('POST', '/v1/providers', teammateCookie, secondId, syntheticConnection)).status, 403)
+  assert.equal(await repository.setMemberRole(owner.id, secondId, teammate.id, 'admin'), 'ok')
+  assert.equal((await request('PATCH', '/v1/workspaces/settings', teammateCookie, secondId,
+    { name: 'Shared workspace' })).status, 204)
+  assert.equal((await request('GET', '/v1/workspaces/members', teammateCookie, secondId)).status, 403)
+  assert.equal(await repository.setMemberRole(owner.id, secondId, teammate.id, 'viewer'), 'ok')
+  assert.equal((await request('PATCH', '/v1/workspaces/settings', teammateCookie, secondId,
+    { name: 'Not allowed' })).status, 403)
+  assert.equal(await repository.removeMember(owner.id, secondId, teammate.id), 'ok')
+  assert.equal((await request('GET', '/v1/auth/session', teammateCookie)).body.user.workspaceId, null)
+  assert.equal((await request('GET', '/v1/workflows', teammateCookie, secondId)).status, 409)
+  assert.equal((await request('POST', '/v1/workspaces/select', teammateCookie, undefined,
+    { workspaceId: secondId })).status, 404)
+  assert.deepEqual((await request('GET', '/v1/workspaces', teammateCookie)).body.workspaces.map((space) => space.id),
+    [workspaces[0].id])
   assert.equal((await pool.query('SELECT count(*)::integer AS total FROM n8n_providers')).rows[0].total, 0)
 
   let signalEntered

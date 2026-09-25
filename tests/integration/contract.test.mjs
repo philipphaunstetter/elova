@@ -23,15 +23,20 @@ test('the canonical private API is valid and owns PostgreSQL-backed product oper
 
   assert.equal(packageMetadata.name, '@elova/api-contract')
   assert.equal(openapi.openapi, '3.1.0')
+  assert.equal(openapi.info.version, '1.3.0')
   assert.deepEqual(openapi.servers.map((server) => server.url), ['/v1'])
   assert.deepEqual(Object.keys(openapi.paths), [
     '/health/live', '/health/ready', '/auth/login', '/auth/logout', '/auth/session',
-    '/workspaces', '/workspaces/select', '/providers', '/providers/{providerId}/sync',
-    '/workflows', '/executions', '/dashboard/metrics',
+    '/workspaces', '/workspaces/select', '/workspaces/settings', '/workspaces/members',
+    '/workspaces/members/{userId}', '/workspaces/ownership/transfer',
+    '/providers', '/providers/{providerId}/sync', '/workflows', '/executions', '/dashboard/metrics',
   ])
   assert.equal(openapi.paths['/health/live'].get.operationId, 'getLiveness')
   assert.equal(openapi.paths['/health/ready'].get.operationId, 'getReadiness')
   assert.equal(openapi.paths['/auth/login'].post.operationId, 'login')
+  assert.equal(openapi.paths['/workspaces/members'].post.operationId, 'addWorkspaceMember')
+  assert.equal(openapi.paths['/workspaces/ownership/transfer'].post.operationId, 'transferWorkspaceOwnership')
+  assert.deepEqual(openapi.components.schemas.MemberRole.enum, ['owner', 'admin', 'editor', 'viewer'])
   assert.equal(openapi.paths['/providers'].post.operationId, 'createProvider')
   assert.equal(openapi.paths['/providers/{providerId}/sync'].post.operationId, 'synchronizeProvider')
 
