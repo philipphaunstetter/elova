@@ -24,6 +24,8 @@ class MemoryRepository implements ElovaRepository {
   session: { id: string; ownerId: string; digest: string; expiresAt: Date } | undefined
   workspaces: Workspace[] = [{ id: ADMIN_WORKSPACE, name: 'admin workspace', role: 'owner', createdAt: new Date().toISOString() }]
   activeWorkspaceId: string | null = null
+  failCreateSelection = false
+  revokeOnSelect = false
   providers: ProviderSecret[] = []
   workflows: StoredWorkflow[] = []
   executions: StoredExecution[] = []
@@ -46,12 +48,15 @@ class MemoryRepository implements ElovaRepository {
   }
   async revokeSession() { this.session = undefined }
   async listWorkspaces(): Promise<Workspace[]> { return this.workspaces }
-  async createWorkspace(_ownerId: string, name: string): Promise<Workspace> {
+  async createWorkspace(sessionId: string, ownerId: string, name: string): Promise<Workspace | undefined> {
+    if (this.failCreateSelection || this.session?.id !== sessionId || this.session.ownerId !== ownerId) return undefined
     const workspace = { id: '44444444-4444-4444-8444-444444444444', name, role: 'owner', createdAt: new Date().toISOString() }
     this.workspaces.push(workspace)
+    this.activeWorkspaceId = workspace.id
     return workspace
   }
   async selectWorkspace(sessionId: string, ownerId: string, workspaceId: string): Promise<boolean> {
+    if (this.revokeOnSelect) { this.session = undefined; return false }
     if (this.session?.id !== sessionId || this.session.ownerId !== ownerId ||
         !this.workspaces.some((workspace) => workspace.id === workspaceId)) return false
     this.activeWorkspaceId = workspaceId
@@ -97,8 +102,8 @@ class MemoryRepository implements ElovaRepository {
   }
 }
 
-function request(method: string, pathname: string, body?: unknown, cookie?: string): ApplicationRequest {
-  return { method, pathname, searchParams: new URLSearchParams(), headers: { cookie }, body }
+function request(method: string, pathname: string, body?: unknown, cookie?: string, workspaceId?: string): ApplicationRequest {
+  return { method, pathname, searchParams: new URLSearchParams(), headers: { cookie, 'x-elova-workspace-id': workspaceId }, body }
 }
 
 async function loggedIn(): Promise<{ application: ElovaApplication; repository: MemoryRepository; cookie: string }> {
@@ -119,7 +124,7 @@ async function loggedIn(): Promise<{ application: ElovaApplication; repository: 
 test('operator-created owner can log in and signed session authorizes API access', async () => {
   const { application, cookie } = await loggedIn()
   const session = await application.handle(request('GET', '/v1/auth/session', undefined, cookie))
-  const metrics = await application.handle(request('GET', '/v1/dashboard/metrics', undefined, cookie))
+  const metrics = await application.handle(request('GET', '/v1/dashboard/metrics', undefined, cookie, ADMIN_WORKSPACE))
   assert.equal(session?.status, 200)
   assert.equal(metrics?.status, 200)
 })
@@ -180,7 +185,7 @@ test('workspace creation and switching scope provider, workflow, execution and m
   assert.equal((await application.handle(request('GET', '/v1/workspaces')))?.status, 401)
   const provider = await application.handle(request('POST', '/v1/providers', {
     name: 'Synthetic n8n', baseUrl: 'http://100.100.10.20:5678', apiKey: 'synthetic-only',
-  }, cookie))
+  }, cookie, ADMIN_WORKSPACE))
   assert.equal(provider?.status, 201)
   assert.equal(repository.providers[0]?.workspaceId, ADMIN_WORKSPACE)
   assert.equal((await application.handle(request('POST', '/v1/workspaces/select', {
@@ -189,13 +194,53 @@ test('workspace creation and switching scope provider, workflow, execution and m
   const created = await application.handle(request('POST', '/v1/workspaces', { name: 'Second workspace' }, cookie))
   assert.equal(created?.status, 201)
   assert.equal(repository.workspaces[1]?.name, 'Second workspace')
-  assert.deepEqual((await application.handle(request('GET', '/v1/providers', undefined, cookie)))?.body,
+  const secondWorkspace = repository.workspaces[1]!.id
+  assert.deepEqual((await application.handle(request('GET', '/v1/providers', undefined, cookie, secondWorkspace)))?.body,
     { providers: [] })
-  assert.equal((await application.handle(request('POST', `/v1/providers/${repository.providers[0]?.id}/sync`, undefined, cookie)))?.status, 404)
-  assert.deepEqual((await application.handle(request('GET', '/v1/workflows', undefined, cookie)))?.body, { workflows: [] })
-  assert.deepEqual((await application.handle(request('GET', '/v1/executions', undefined, cookie)))?.body, { executions: [] })
+  assert.equal((await application.handle(request('POST', `/v1/providers/${repository.providers[0]?.id}/sync`, undefined, cookie, secondWorkspace)))?.status, 404)
+  assert.deepEqual((await application.handle(request('GET', '/v1/workflows', undefined, cookie, secondWorkspace)))?.body, { workflows: [] })
+  assert.deepEqual((await application.handle(request('GET', '/v1/executions', undefined, cookie, secondWorkspace)))?.body, { executions: [] })
   assert.equal((await application.handle(request('POST', '/v1/workspaces/select', { workspaceId: ADMIN_WORKSPACE }, cookie)))?.status, 200)
-  assert.equal(((await application.handle(request('GET', '/v1/providers', undefined, cookie)))?.body as { providers: unknown[] }).providers.length, 1)
+  assert.equal(((await application.handle(request('GET', '/v1/providers', undefined, cookie, ADMIN_WORKSPACE)))?.body as { providers: unknown[] }).providers.length, 1)
+})
+
+test('stale two-tab workspace requests cannot place credentials or read evidence in another workspace', async () => {
+  const { application, repository, cookie } = await loggedIn()
+  const second = await application.handle(request('POST', '/v1/workspaces', { name: 'Second workspace' }, cookie))
+  assert.equal(second?.status, 201)
+  const secondId = repository.workspaces[1]!.id
+  const connection = { name: 'Synthetic n8n', baseUrl: 'http://100.100.10.20:5678', apiKey: 'synthetic-only' }
+  assert.equal((await application.handle(request('POST', '/v1/providers', connection, cookie)))?.status, 400)
+  assert.equal((await application.handle(request('POST', '/v1/providers', connection, cookie, '66666666-6666-4666-8666-666666666666')))?.status, 409)
+  assert.equal((await application.handle(request('POST', '/v1/providers', connection, cookie, ADMIN_WORKSPACE)))?.status, 409)
+  assert.equal((await application.handle(request('GET', '/v1/providers', undefined, cookie, ADMIN_WORKSPACE)))?.status, 409)
+  assert.equal((await application.handle(request('GET', '/v1/workflows', undefined, cookie, ADMIN_WORKSPACE)))?.status, 409)
+  assert.equal((await application.handle(request('GET', '/v1/executions', undefined, cookie, ADMIN_WORKSPACE)))?.status, 409)
+  assert.equal((await application.handle(request('GET', '/v1/dashboard/metrics', undefined, cookie, ADMIN_WORKSPACE)))?.status, 409)
+  assert.equal(repository.providers.length, 0)
+  assert.equal((await application.handle(request('POST', '/v1/providers', connection, cookie, secondId)))?.status, 201)
+  assert.equal(repository.providers[0]?.workspaceId, secondId)
+  assert.equal((await application.handle(request('POST', `/v1/providers/${repository.providers[0]?.id}/sync`, undefined, cookie, ADMIN_WORKSPACE)))?.status, 409)
+  assert.equal((await application.handle(request('POST', '/v1/workspaces/select', { workspaceId: ADMIN_WORKSPACE }, cookie)))?.status, 200)
+  assert.equal((await application.handle(request('POST', '/v1/providers', connection, cookie, ADMIN_WORKSPACE)))?.status, 201)
+  assert.equal(repository.providers[1]?.workspaceId, ADMIN_WORKSPACE)
+  assert.equal((await application.handle(request('POST', '/v1/providers', connection, cookie, secondId)))?.status, 409)
+})
+
+test('failed workspace creation selection never reports a successful creation', async () => {
+  const { application, repository, cookie } = await loggedIn()
+  repository.failCreateSelection = true
+  assert.equal((await application.handle(request('POST', '/v1/workspaces', { name: 'Second workspace' }, cookie)))?.status, 401)
+  assert.equal(repository.workspaces.length, 1)
+  assert.equal(repository.activeWorkspaceId, ADMIN_WORKSPACE)
+})
+
+test('selection revoked during a request returns unauthorized instead of claiming the workspace is absent', async () => {
+  const { application, repository, cookie } = await loggedIn()
+  repository.revokeOnSelect = true
+  const response = await application.handle(request('POST', '/v1/workspaces/select', { workspaceId: ADMIN_WORKSPACE }, cookie))
+  assert.equal(response?.status, 401)
+  assert.equal(repository.activeWorkspaceId, ADMIN_WORKSPACE)
 })
 
 test('overlapping provider syncs cannot overwrite fresher execution outcomes', async () => {
@@ -223,15 +268,15 @@ test('overlapping provider syncs cannot overwrite fresher execution outcomes', a
   const firstApplication = new ElovaApplication(repository, SECRET, SECRET, fetchImplementation)
   const secondApplication = new ElovaApplication(repository, SECRET, SECRET, fetchImplementation)
   const path = '/v1/providers/22222222-2222-4222-8222-222222222222/sync'
-  const first = firstApplication.handle(request('POST', path, undefined, cookie))
+  const first = firstApplication.handle(request('POST', path, undefined, cookie, ADMIN_WORKSPACE))
   await firstFetchStarted
-  const overlapping = await secondApplication.handle(request('POST', path, undefined, cookie))
+  const overlapping = await secondApplication.handle(request('POST', path, undefined, cookie, ADMIN_WORKSPACE))
   assert.equal(overlapping?.status, 409)
   assert.equal(executionFetches, 1)
   assert.equal(repository.failedSyncs, 0)
   releaseFirstFetch()
   assert.equal((await first)?.status, 200)
-  assert.equal((await secondApplication.handle(request('POST', path, undefined, cookie)))?.status, 200)
+  assert.equal((await secondApplication.handle(request('POST', path, undefined, cookie, ADMIN_WORKSPACE)))?.status, 200)
   assert.equal(repository.executions.at(-1)?.status, 'success')
 })
 
@@ -239,7 +284,7 @@ test('provider synchronization stores only sanitized workflow and execution repr
   const { application, repository, cookie } = await loggedIn()
   const created = await application.handle(request('POST', '/v1/providers', {
     name: 'Client automation', baseUrl: 'http://100.100.10.20:5678', apiKey: 'private-api-key',
-  }, cookie))
+  }, cookie, ADMIN_WORKSPACE))
   assert.equal(created?.status, 201)
 
   const fetchImplementation: typeof fetch = async (input) => {
@@ -251,7 +296,7 @@ test('provider synchronization stores only sanitized workflow and execution repr
   }
   const syncApplication = new ElovaApplication(repository, SECRET, SECRET, fetchImplementation)
   const response = await syncApplication.handle(request(
-    'POST', '/v1/providers/22222222-2222-4222-8222-222222222222/sync', undefined, cookie,
+    'POST', '/v1/providers/22222222-2222-4222-8222-222222222222/sync', undefined, cookie, ADMIN_WORKSPACE,
   ))
   assert.equal(response?.status, 200)
   const stored = JSON.stringify({ workflows: repository.workflows, executions: repository.executions, cursors: repository.cursors })

@@ -13,6 +13,7 @@ const FORWARDED_REQUEST_HEADERS = [
   "content-type",
   "cookie",
   "x-csrf-token",
+  "x-elova-workspace-id",
   "x-request-id",
   "x-correlation-id",
 ] as const;

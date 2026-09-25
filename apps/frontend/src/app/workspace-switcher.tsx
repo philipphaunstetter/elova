@@ -4,20 +4,28 @@ import { FormEvent, useEffect, useState } from "react";
 
 type Workspace = { id: string; name: string; role: string };
 
-export function WorkspaceSwitcher() {
+export function WorkspaceSwitcher({ onWorkspaceChange, onUnauthorized }: {
+  onWorkspaceChange: (id: string) => void;
+  onUnauthorized: () => void;
+}) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [active, setActive] = useState("");
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
     void fetch("/api/v1/workspaces", { cache: "no-store" }).then(async (response) => {
-      if (!response.ok) return;
+      if (response.status === 401) { if (mounted) onUnauthorized(); return; }
+      if (!response.ok) throw new Error("workspaces unavailable");
       const result = await response.json() as { workspaces: Workspace[]; activeWorkspaceId: string | null };
+      if (!mounted) return;
       setWorkspaces(result.workspaces);
       setActive(result.activeWorkspaceId ?? "");
-    }).catch(() => setMessage("Workspaces are unavailable."));
-  }, []);
+      onWorkspaceChange(result.activeWorkspaceId ?? "");
+    }).catch(() => { if (mounted) setMessage("Workspaces are unavailable."); });
+    return () => { mounted = false; };
+  }, [onWorkspaceChange, onUnauthorized]);
 
   async function select(id: string) {
     setPending(true);

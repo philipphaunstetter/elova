@@ -89,7 +89,7 @@ export const selectWorkspace = <ThrowOnError extends boolean = false>(options: O
     }
 });
 
-export const listProviders = <ThrowOnError extends boolean = false>(options?: Options<ListProvidersData, ThrowOnError>): RequestResult<ListProvidersResponses, ListProvidersErrors, ThrowOnError> => (options?.client ?? client).get<ListProvidersResponses, ListProvidersErrors, ThrowOnError>({
+export const listProviders = <ThrowOnError extends boolean = false>(options: Options<ListProvidersData, ThrowOnError>): RequestResult<ListProvidersResponses, ListProvidersErrors, ThrowOnError> => (options.client ?? client).get<ListProvidersResponses, ListProvidersErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'elova_session',
@@ -123,7 +123,7 @@ export const synchronizeProvider = <ThrowOnError extends boolean = false>(option
     ...options
 });
 
-export const listWorkflows = <ThrowOnError extends boolean = false>(options?: Options<ListWorkflowsData, ThrowOnError>): RequestResult<ListWorkflowsResponses, ListWorkflowsErrors, ThrowOnError> => (options?.client ?? client).get<ListWorkflowsResponses, ListWorkflowsErrors, ThrowOnError>({
+export const listWorkflows = <ThrowOnError extends boolean = false>(options: Options<ListWorkflowsData, ThrowOnError>): RequestResult<ListWorkflowsResponses, ListWorkflowsErrors, ThrowOnError> => (options.client ?? client).get<ListWorkflowsResponses, ListWorkflowsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'elova_session',
@@ -133,7 +133,7 @@ export const listWorkflows = <ThrowOnError extends boolean = false>(options?: Op
     ...options
 });
 
-export const listExecutions = <ThrowOnError extends boolean = false>(options?: Options<ListExecutionsData, ThrowOnError>): RequestResult<ListExecutionsResponses, ListExecutionsErrors, ThrowOnError> => (options?.client ?? client).get<ListExecutionsResponses, ListExecutionsErrors, ThrowOnError>({
+export const listExecutions = <ThrowOnError extends boolean = false>(options: Options<ListExecutionsData, ThrowOnError>): RequestResult<ListExecutionsResponses, ListExecutionsErrors, ThrowOnError> => (options.client ?? client).get<ListExecutionsResponses, ListExecutionsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'elova_session',
@@ -143,7 +143,7 @@ export const listExecutions = <ThrowOnError extends boolean = false>(options?: O
     ...options
 });
 
-export const getDashboardMetrics = <ThrowOnError extends boolean = false>(options?: Options<GetDashboardMetricsData, ThrowOnError>): RequestResult<GetDashboardMetricsResponses, GetDashboardMetricsErrors, ThrowOnError> => (options?.client ?? client).get<GetDashboardMetricsResponses, GetDashboardMetricsErrors, ThrowOnError>({
+export const getDashboardMetrics = <ThrowOnError extends boolean = false>(options: Options<GetDashboardMetricsData, ThrowOnError>): RequestResult<GetDashboardMetricsResponses, GetDashboardMetricsErrors, ThrowOnError> => (options.client ?? client).get<GetDashboardMetricsResponses, GetDashboardMetricsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'elova_session',

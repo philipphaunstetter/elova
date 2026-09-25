@@ -99,6 +99,7 @@ paths:
                 type: object
                 properties:
                   workspace: { $ref: "#/components/schemas/Workspace" }
+        "400": { $ref: "#/components/responses/ErrorResponse" }
         "401": { $ref: "#/components/responses/ErrorResponse" }
   /workspaces/select:
     post:
@@ -124,6 +125,8 @@ paths:
         "401": { $ref: "#/components/responses/ErrorResponse" }
         "404": { $ref: "#/components/responses/ErrorResponse" }
   /providers:
+    parameters:
+      - { $ref: "#/components/parameters/WorkspaceId" }
     get:
       operationId: listProviders
       responses:
@@ -138,7 +141,9 @@ paths:
                   providers:
                     type: array
                     items: { $ref: "#/components/schemas/Provider" }
+        "400": { $ref: "#/components/responses/ErrorResponse" }
         "401": { $ref: "#/components/responses/ErrorResponse" }
+        "409": { $ref: "#/components/responses/ErrorResponse" }
     post:
       operationId: createProvider
       requestBody:
@@ -163,10 +168,13 @@ paths:
                 required: [provider]
                 properties:
                   provider: { $ref: "#/components/schemas/Provider" }
+        "400": { $ref: "#/components/responses/ErrorResponse" }
         "401": { $ref: "#/components/responses/ErrorResponse" }
         "409": { $ref: "#/components/responses/ErrorResponse" }
         "422": { $ref: "#/components/responses/ErrorResponse" }
   /providers/{providerId}/sync:
+    parameters:
+      - { $ref: "#/components/parameters/WorkspaceId" }
     post:
       operationId: synchronizeProvider
       parameters:
@@ -185,12 +193,15 @@ paths:
                 properties:
                   workflows: { type: integer, minimum: 0 }
                   executions: { type: integer, minimum: 0 }
+        "400": { $ref: "#/components/responses/ErrorResponse" }
         "401": { $ref: "#/components/responses/ErrorResponse" }
         "404": { $ref: "#/components/responses/ErrorResponse" }
         "409": { $ref: "#/components/responses/ErrorResponse" }
         "429": { $ref: "#/components/responses/ErrorResponse" }
         "502": { $ref: "#/components/responses/ErrorResponse" }
   /workflows:
+    parameters:
+      - { $ref: "#/components/parameters/WorkspaceId" }
     get:
       operationId: listWorkflows
       responses:
@@ -199,8 +210,12 @@ paths:
           content:
             application/json:
               schema: { type: object, additionalProperties: true }
+        "400": { $ref: "#/components/responses/ErrorResponse" }
         "401": { $ref: "#/components/responses/ErrorResponse" }
+        "409": { $ref: "#/components/responses/ErrorResponse" }
   /executions:
+    parameters:
+      - { $ref: "#/components/parameters/WorkspaceId" }
     get:
       operationId: listExecutions
       parameters:
@@ -213,8 +228,12 @@ paths:
           content:
             application/json:
               schema: { type: object, additionalProperties: true }
+        "400": { $ref: "#/components/responses/ErrorResponse" }
         "401": { $ref: "#/components/responses/ErrorResponse" }
+        "409": { $ref: "#/components/responses/ErrorResponse" }
   /dashboard/metrics:
+    parameters:
+      - { $ref: "#/components/parameters/WorkspaceId" }
     get:
       operationId: getDashboardMetrics
       responses:
@@ -223,8 +242,16 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DashboardMetrics" }
+        "400": { $ref: "#/components/responses/ErrorResponse" }
         "401": { $ref: "#/components/responses/ErrorResponse" }
+        "409": { $ref: "#/components/responses/ErrorResponse" }
 components:
+  parameters:
+    WorkspaceId:
+      name: x-elova-workspace-id
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
   securitySchemes:
     ownerSession:
       type: apiKey
@@ -296,7 +323,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        role: { type: string, enum: [owner, member] }
+        role: { type: string, const: owner }
         createdAt: { type: string, format: date-time }
     Session:
       type: object

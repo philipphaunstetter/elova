@@ -91,7 +91,7 @@ export interface ElovaRepository extends SyncRepository {
   resolveSession(sessionId: string, tokenDigest: string, now: Date): Promise<SessionOwner | undefined>
   revokeSession(sessionId: string): Promise<void>
   listWorkspaces(ownerId: string): Promise<Workspace[]>
-  createWorkspace(ownerId: string, name: string): Promise<Workspace>
+  createWorkspace(sessionId: string, ownerId: string, name: string): Promise<Workspace | undefined>
   selectWorkspace(sessionId: string, ownerId: string, workspaceId: string): Promise<boolean>
   listProviders(ownerId: string, workspaceId: string): Promise<ProviderSummary[]>
   createProvider(input: {
@@ -209,15 +209,23 @@ export class PostgresRepository implements ElovaRepository {
       createdAt: row.created_at.toISOString() }))
   }
 
-  async createWorkspace(ownerId: string, name: string): Promise<Workspace> {
+  async createWorkspace(sessionId: string, ownerId: string, name: string): Promise<Workspace | undefined> {
     const id = randomUUID()
     const client = await this.pool.connect()
     try {
       await client.query('BEGIN')
+      const active = await client.query(
+        `SELECT id FROM sessions WHERE id = $1 AND owner_id = $2
+         AND revoked_at IS NULL AND expires_at > now() FOR UPDATE`, [sessionId, ownerId])
+      if (active.rowCount !== 1) {
+        await client.query('ROLLBACK')
+        return undefined
+      }
       const result = await client.query<{ created_at: Date }>(
         'INSERT INTO workspaces (id, name, created_by) VALUES ($1, $2, $3) RETURNING created_at',
         [id, name, ownerId])
       await client.query("INSERT INTO workspace_members (workspace_id, owner_id, role) VALUES ($1, $2, 'owner')", [id, ownerId])
+      await client.query('UPDATE sessions SET workspace_id = $2 WHERE id = $1', [sessionId, id])
       await client.query('COMMIT')
       return { id, name, role: 'owner', createdAt: result.rows[0]!.created_at.toISOString() }
     } catch (error) {

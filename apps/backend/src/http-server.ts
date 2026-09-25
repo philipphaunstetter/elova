@@ -127,6 +127,9 @@ export function createBackendServer(database: DatabaseGateway, application?: Elo
           'x-csrf-token': typeof request.headers['x-csrf-token'] === 'string'
             ? request.headers['x-csrf-token']
             : undefined,
+          'x-elova-workspace-id': typeof request.headers['x-elova-workspace-id'] === 'string'
+            ? request.headers['x-elova-workspace-id']
+            : undefined,
         },
         body,
       })

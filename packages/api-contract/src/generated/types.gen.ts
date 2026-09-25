@@ -27,7 +27,7 @@ export type Owner = {
 export type Workspace = {
     id: string;
     name: string;
-    role: 'owner' | 'member';
+    role: 'owner';
     createdAt: string;
 };
 
@@ -65,6 +65,8 @@ export type BffFailure = {
         message: 'Service temporarily unavailable' | 'Service timed out';
     };
 };
+
+export type WorkspaceId = string;
 
 export type GetLivenessData = {
     body?: never;
@@ -225,6 +227,10 @@ export type CreateWorkspaceErrors = {
     /**
      * Stable non-sensitive error envelope.
      */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
     401: ErrorEnvelope;
 };
 
@@ -276,6 +282,9 @@ export type SelectWorkspaceResponse = SelectWorkspaceResponses[keyof SelectWorks
 
 export type ListProvidersData = {
     body?: never;
+    headers: {
+        'x-elova-workspace-id': string;
+    };
     path?: never;
     query?: never;
     url: '/providers';
@@ -285,7 +294,15 @@ export type ListProvidersErrors = {
     /**
      * Stable non-sensitive error envelope.
      */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
     401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
 };
 
 export type ListProvidersError = ListProvidersErrors[keyof ListProvidersErrors];
@@ -307,12 +324,19 @@ export type CreateProviderData = {
         baseUrl: string;
         apiKey: string;
     };
+    headers: {
+        'x-elova-workspace-id': string;
+    };
     path?: never;
     query?: never;
     url: '/providers';
 };
 
 export type CreateProviderErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    400: ErrorEnvelope;
     /**
      * Stable non-sensitive error envelope.
      */
@@ -342,6 +366,9 @@ export type CreateProviderResponse = CreateProviderResponses[keyof CreateProvide
 
 export type SynchronizeProviderData = {
     body?: never;
+    headers: {
+        'x-elova-workspace-id': string;
+    };
     path: {
         providerId: string;
     };
@@ -350,6 +377,10 @@ export type SynchronizeProviderData = {
 };
 
 export type SynchronizeProviderErrors = {
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    400: ErrorEnvelope;
     /**
      * Stable non-sensitive error envelope.
      */
@@ -388,6 +419,9 @@ export type SynchronizeProviderResponse = SynchronizeProviderResponses[keyof Syn
 
 export type ListWorkflowsData = {
     body?: never;
+    headers: {
+        'x-elova-workspace-id': string;
+    };
     path?: never;
     query?: never;
     url: '/workflows';
@@ -397,7 +431,15 @@ export type ListWorkflowsErrors = {
     /**
      * Stable non-sensitive error envelope.
      */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
     401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
 };
 
 export type ListWorkflowsError = ListWorkflowsErrors[keyof ListWorkflowsErrors];
@@ -415,6 +457,9 @@ export type ListWorkflowsResponse = ListWorkflowsResponses[keyof ListWorkflowsRe
 
 export type ListExecutionsData = {
     body?: never;
+    headers: {
+        'x-elova-workspace-id': string;
+    };
     path?: never;
     query?: {
         limit?: number;
@@ -426,7 +471,15 @@ export type ListExecutionsErrors = {
     /**
      * Stable non-sensitive error envelope.
      */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
     401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
 };
 
 export type ListExecutionsError = ListExecutionsErrors[keyof ListExecutionsErrors];
@@ -444,6 +497,9 @@ export type ListExecutionsResponse = ListExecutionsResponses[keyof ListExecution
 
 export type GetDashboardMetricsData = {
     body?: never;
+    headers: {
+        'x-elova-workspace-id': string;
+    };
     path?: never;
     query?: never;
     url: '/dashboard/metrics';
@@ -453,7 +509,15 @@ export type GetDashboardMetricsErrors = {
     /**
      * Stable non-sensitive error envelope.
      */
+    400: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
     401: ErrorEnvelope;
+    /**
+     * Stable non-sensitive error envelope.
+     */
+    409: ErrorEnvelope;
 };
 
 export type GetDashboardMetricsError = GetDashboardMetricsErrors[keyof GetDashboardMetricsErrors];

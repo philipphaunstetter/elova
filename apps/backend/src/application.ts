@@ -83,8 +83,12 @@ export class ElovaApplication {
   private async requireWorkspace(request: ApplicationRequest): Promise<(SessionOwner & { workspaceId: string }) | ApplicationResponse> {
     const owner = await this.requireOwner(request)
     if ('status' in owner) return owner
-    return owner.workspaceId ? owner as SessionOwner & { workspaceId: string }
-      : error(409, 'NO_WORKSPACE', 'Create or select a workspace first')
+    const workspaceId = request.headers['x-elova-workspace-id']
+    if (!workspaceId || !RESOURCE_UUID.test(workspaceId))
+      return error(400, 'BAD_REQUEST', 'Valid workspace ID is required')
+    if (!owner.workspaceId) return error(409, 'NO_WORKSPACE', 'Create or select a workspace first')
+    return owner.workspaceId === workspaceId ? owner as SessionOwner & { workspaceId: string }
+      : error(409, 'WORKSPACE_CHANGED', 'Refresh the workspace before retrying')
   }
 
   async handle(request: ApplicationRequest): Promise<ApplicationResponse | undefined> {
@@ -162,9 +166,9 @@ export class ElovaApplication {
       if ('status' in owner) return owner
       const name = stringField(record(request.body).name, 120)
       if (!name) return error(400, 'BAD_REQUEST', 'Workspace name is required')
-      const workspace = await this.repository.createWorkspace(owner.id, name)
-      await this.repository.selectWorkspace(owner.sessionId, owner.id, workspace.id)
-      return { status: 201, body: { workspace } }
+      const workspace = await this.repository.createWorkspace(owner.sessionId, owner.id, name)
+      return workspace ? { status: 201, body: { workspace } }
+        : error(401, 'UNAUTHORIZED', 'Authentication required')
     }
 
     if (request.pathname === '/v1/workspaces/select' && request.method === 'POST') {
@@ -174,8 +178,9 @@ export class ElovaApplication {
       if (typeof id !== 'string' || !RESOURCE_UUID.test(id))
         return error(400, 'BAD_REQUEST', 'Valid workspace ID is required')
       const selected = await this.repository.selectWorkspace(owner.sessionId, owner.id, id)
-      return selected ? { status: 200, body: { activeWorkspaceId: id } }
-        : error(404, 'NOT_FOUND', 'Workspace not found')
+      if (selected) return { status: 200, body: { activeWorkspaceId: id } }
+      return await this.owner(request) ? error(404, 'NOT_FOUND', 'Workspace not found')
+        : error(401, 'UNAUTHORIZED', 'Authentication required')
     }
 
     if (request.pathname === '/v1/providers' && request.method === 'GET') {

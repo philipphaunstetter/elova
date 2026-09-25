@@ -42,6 +42,17 @@ test('protected local handoff preserves the exact chosen password and rejects un
     const path = join(dir, 'handoff')
     writeFileSync(path, '  captain chosen secret  \n', { mode: 0o400 })
     assert.equal(readOperatorPassword(path), '  captain chosen secret  ')
+    const replace = (value: string) => {
+      chmodSync(path, 0o600)
+      writeFileSync(path, value)
+      chmodSync(path, 0o400)
+    }
+    replace(`${'é'.repeat(130)}\n`)
+    assert.equal(readOperatorPassword(path), 'é'.repeat(130))
+    replace(`${'界'.repeat(256)}\n`)
+    assert.equal(readOperatorPassword(path), '界'.repeat(256))
+    replace(`${'界'.repeat(257)}\n`)
+    assert.throws(() => readOperatorPassword(path), /securely/)
     chmodSync(path, 0o600)
     assert.throws(() => readOperatorPassword(path), /securely/)
     chmodSync(path, 0o400)

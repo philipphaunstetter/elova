@@ -26,7 +26,7 @@ export function readOperatorPassword(path: string): string {
     fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW)
     const stat = fstatSync(fd)
     if (!stat.isFile() || stat.uid !== process.getuid?.() ||
-        (stat.mode & 0o7777) !== 0o400 || stat.size < 12 || stat.size > 257) {
+        (stat.mode & 0o7777) !== 0o400 || stat.size < 12 || stat.size > 769) {
       throw new Error('Unsafe password file')
     }
     const password = readFileSync(fd, 'utf8').replace(/\n$/, '')

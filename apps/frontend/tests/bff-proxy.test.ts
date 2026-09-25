@@ -70,6 +70,25 @@ test("workspace selection uses the same-origin BFF and forwards only the session
   assert.match(requests[0]?.body ?? "", /workspaceId/);
 });
 
+test("forwards the displayed workspace ID on credential writes and preserves stale-workspace rejection", async () => {
+  const workspaceId = "33333333-3333-4333-8333-333333333333";
+  let upstreamWorkspaceId: string | null = null;
+  let upstreamBody = "";
+  const response = await proxyToBackend(browserRequest("/api/v1/providers", {
+    method: "POST", headers: { "content-type": "application/json", "x-elova-workspace-id": workspaceId },
+    body: JSON.stringify({ name: "Synthetic", baseUrl: "http://100.100.10.21:5678", apiKey: "synthetic-only" }),
+  }), ["providers"], async (_input, init) => {
+    upstreamWorkspaceId = new Headers(init?.headers).get("x-elova-workspace-id");
+    upstreamBody = new TextDecoder().decode(init?.body as ArrayBuffer);
+    return Response.json({ error: { code: "WORKSPACE_CHANGED", message: "Refresh the workspace before retrying" } },
+      { status: 409, headers: { "x-elova-api-version": "1" } });
+  });
+  assert.equal(upstreamWorkspaceId, workspaceId);
+  assert.equal(JSON.parse(upstreamBody).name, "Synthetic");
+  assert.equal(response.status, 409);
+  assert.equal((await response.json() as { error: { code: string } }).error.code, "WORKSPACE_CHANGED");
+});
+
 test("rejects cross-origin browser access before contacting the backend", async () => {
   let called = false;
   const fakeFetch: typeof fetch = async () => {

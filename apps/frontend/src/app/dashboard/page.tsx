@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppNav } from "../app-nav";
 import { WorkspaceSwitcher } from "../workspace-switcher";
 
@@ -27,24 +27,34 @@ type Execution = {
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<Metrics>();
   const [executions, setExecutions] = useState<Execution[]>([]);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "unauthorized" | "error">("loading");
+  const onUnauthorized = useCallback(() => setState("unauthorized"), []);
 
   useEffect(() => {
+    if (workspaceId === null) return;
+    if (!workspaceId) { setState("error"); return; }
+    let active = true;
+    const options = { cache: "no-store" as const, headers: { "x-elova-workspace-id": workspaceId } };
     void Promise.all([
-      fetch("/api/v1/dashboard/metrics", { cache: "no-store" }),
-      fetch("/api/v1/executions?limit=20", { cache: "no-store" }),
+      fetch("/api/v1/dashboard/metrics", options),
+      fetch("/api/v1/executions?limit=20", options),
     ]).then(async ([metricsResponse, executionsResponse]) => {
+      if (!active) return;
       if (metricsResponse.status === 401 || executionsResponse.status === 401) {
         setState("unauthorized");
         return;
       }
       if (!metricsResponse.ok || !executionsResponse.ok) throw new Error("request failed");
-      setMetrics(await metricsResponse.json() as Metrics);
+      const metricsBody = await metricsResponse.json() as Metrics;
       const executionBody = await executionsResponse.json() as { executions: Execution[] };
+      if (!active) return;
+      setMetrics(metricsBody);
       setExecutions(executionBody.executions);
       setState("ready");
-    }).catch(() => setState("error"));
-  }, []);
+    }).catch(() => { if (active) setState("error"); });
+    return () => { active = false; };
+  }, [workspaceId]);
 
   return (
     <main className="app-shell">
@@ -52,7 +62,7 @@ export default function DashboardPage() {
       <section className="dashboard-panel">
         <p className="eyebrow">Private PostgreSQL evidence</p>
         <h1>Workflow observability</h1>
-        {state !== "unauthorized" && <WorkspaceSwitcher />}
+        {state !== "unauthorized" && <WorkspaceSwitcher onWorkspaceChange={setWorkspaceId} onUnauthorized={onUnauthorized} />}
         {state === "loading" && <p className="notice">Loading current execution evidence…</p>}
         {state === "unauthorized" && <p className="notice">Sign in with your operator-enrolled administrator account.</p>}
         {state === "error" && <p className="notice error">Observability data is temporarily unavailable.</p>}
