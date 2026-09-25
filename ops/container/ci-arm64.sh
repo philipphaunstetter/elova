@@ -50,12 +50,12 @@ docker run --rm --network none --entrypoint node "$ELOVA_BACKEND_IMAGE" -e '
 '
 docker save "$ELOVA_BACKEND_IMAGE" | sha256sum
 "${compose[@]}" up -d postgres
-for i in $(seq 1 40); do
+for _ in $(seq 1 40); do
   if "${compose[@]}" exec -T postgres pg_isready -U postgres -d elova_vnext >/dev/null 2>&1; then break; fi
   sleep 2
 done
 "${compose[@]}" exec -T postgres pg_isready -U postgres -d elova_vnext >/dev/null
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
   role=$("${compose[@]}" exec -T postgres psql -U postgres -d elova_vnext -tAc "SELECT count(*) FROM pg_roles WHERE rolname = 'elova_backend' AND NOT rolsuper" 2>/dev/null || true)
   if [[ "$role" == 1 ]]; then break; fi
   sleep 2
@@ -64,7 +64,7 @@ done
 # Profile is off by default even after ordinary up; activation here is CI-only, deliberate.
 [[ "$("${compose[@]}" ps --status running --services)" == postgres ]]
 "${compose[@]}" --profile activate up -d --no-deps backend
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
   status=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:43181/v1/health/ready || true)
   if [[ "$status" == 503 ]]; then break; fi
   sleep 2
@@ -90,7 +90,7 @@ done
   } finally { await pool.end(); }
 '
 "${compose[@]}" --profile activate up -d --no-deps backend
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
   status=$(curl -sS -o "$secrets_dir/ready-response" -w '%{http_code}' http://127.0.0.1:43181/v1/health/ready || true)
   if [[ "$status" == 200 ]]; then break; fi
   sleep 2
