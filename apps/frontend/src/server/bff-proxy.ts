@@ -79,7 +79,25 @@ function sanitizeJson(value: unknown, privateTokens: string[]): unknown {
   return value;
 }
 
-function safeResponseHeaders(upstream: Response, privateTokens: string[]): Headers {
+// The backend always issues Secure cookies. Only the explicitly named browser-facing
+// HTTP development origin may receive its session cookie without Secure.
+function allowDevHttpSessionCookie(request: Request, path: string[]): boolean {
+  if (request.method !== "POST" || path.length !== 2 || path[0] !== "auth" ||
+      (path[1] !== "login" && path[1] !== "logout")) return false;
+  const configured = process.env.ELOVA_DEV_HTTP_COOKIE_ORIGIN;
+  if (!configured) return false;
+  try {
+    const origin = new URL(configured);
+    const forwardedProto = request.headers.get("x-forwarded-proto");
+    return origin.protocol === "http:" && origin.port !== "" && configured === origin.origin &&
+      new URL(request.url).origin === origin.origin && request.headers.get("origin") === origin.origin &&
+      (forwardedProto === null || forwardedProto === "http");
+  } catch {
+    return false;
+  }
+}
+
+function safeResponseHeaders(upstream: Response, privateTokens: string[], insecureSessionCookie = false): Headers {
   const headers = new Headers();
   for (const name of FORWARDED_RESPONSE_HEADERS) {
     const value = upstream.headers.get(name);
@@ -88,7 +106,9 @@ function safeResponseHeaders(upstream: Response, privateTokens: string[]): Heade
     headers.set(name, value);
   }
   for (const cookie of upstream.headers.getSetCookie()) {
-    if (sanitize(cookie, privateTokens) === cookie) headers.append("set-cookie", cookie);
+    if (sanitize(cookie, privateTokens) !== cookie) continue;
+    const sessionCookie = insecureSessionCookie && /^elova_session=[^;]*; HttpOnly; Secure; SameSite=Strict; Path=\/; Max-Age=\d+$/.test(cookie);
+    headers.append("set-cookie", sessionCookie ? cookie.replace("; Secure;", ";") : cookie);
   }
   return headers;
 }
@@ -268,15 +288,19 @@ export async function proxyToBackend(
     if (!upstream.ok) {
       return failure("unavailable", upstream.status === 503 ? 503 : 502);
     }
+    const insecureSessionCookie = allowDevHttpSessionCookie(request, path) &&
+      ((path[1] === "login" && upstream.status === 200) ||
+        (path[1] === "logout" && upstream.status === 204));
     if (upstream.status === 204 || upstream.status === 205) {
-      return new Response(null, { status: upstream.status, headers: safeResponseHeaders(upstream, privateTokens) });
+      return new Response(null, { status: upstream.status,
+        headers: safeResponseHeaders(upstream, privateTokens, insecureSessionCookie) });
     }
 
     try {
       const { serialized } = await readSanitizedJson(upstream, privateTokens, controller.signal);
       return new Response(serialized, {
         status: upstream.status,
-        headers: safeResponseHeaders(upstream, privateTokens),
+        headers: safeResponseHeaders(upstream, privateTokens, insecureSessionCookie),
       });
     } catch {
       return failure(timedOut ? "timeout" : "unavailable");

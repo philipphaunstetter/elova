@@ -8,6 +8,12 @@ Deployable Next.js frontend and same-origin BFF foundation. The application shel
 
 The browser uses `/api/v1/*`; the BFF maps that path to the backend's `/v1/*`, including browser-facing readiness at `/api/v1/health/ready`. Web probes are available at `/health/live` and `/health/ready`.
 
+### Development HTTP login (explicit opt-in only)
+
+The backend always issues `Secure; HttpOnly; SameSite=Strict` session cookies; the BFF normally forwards them unchanged. For an **approved development-only** HTTP browser origin, set `ELOVA_DEV_HTTP_COOKIE_ORIGIN=http://69.62.114.160:43180` in the **frontend server's** runtime environment (not a `NEXT_PUBLIC_*` variable). The value must be an exact HTTP origin with an explicit port, without a trailing slash, path, query, or credentials. Only successful `/api/v1/auth/login` and `/api/v1/auth/logout` responses whose request URL **and browser `Origin` header** match that HTTP origin (and whose forwarded protocol is not HTTPS) omit `Secure` from the `elova_session` cookie; all other cookies, origins, and HTTPS requests retain the backend attributes. Unset the variable to restore the secure default; an invalid value also fails closed. This does not open the loopback frontend bind or configure a proxy, backend route, or host.
+
+**HTTP exposes passwords and session tokens to the network.** Use only on the explicitly approved Elova development surface; never set this option on a production frontend or an unrelated app. HTTPS/production should leave it unset. The frontend may run as a production build (`NODE_ENV=production`) on a development surface; this exception is controlled by the exact origin, not by `NODE_ENV`. A TLS proxy must use HTTPS without this opt-in. This repository change does not deploy or activate any host.
+
 ## Previewing the rework
 
 From the repository root, run `npm ci`, then start the source dev server with `npm run dev --workspace @elova/frontend`. Open `http://127.0.0.1:43180/` on that machine to inspect the home and login screens. The dev server binds loopback only; `npm start` instead requires a prior frontend build. Without a configured backend, the dashboard and settings cannot display authenticated content.
