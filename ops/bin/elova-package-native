@@ -2,7 +2,8 @@
 set -Eeuo pipefail
 
 readonly PROGRAM=${0##*/}
-readonly ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+readonly ROOT
 
 die() {
   printf '%s: %s\n' "$PROGRAM" "$*" >&2
@@ -31,6 +32,13 @@ if [[ -z $build_id ]]; then
   build_id=$(git -C "$ROOT" rev-parse HEAD) || die "cannot derive immutable source identity"
 fi
 [[ $build_id =~ ^[A-Za-z0-9._-]{1,128}$ ]] || die "ELOVA_BUILD_ID must be an immutable source identifier"
+# A build ID does not certify source provenance. Refuse local edits (including
+# untracked sources) before deleting output, even with an explicit build ID.
+status=$(git -C "$ROOT" status --porcelain --untracked-files=all) || die "cannot inspect source checkout"
+[[ -z $status ]] || die "source checkout has uncommitted or untracked files; build from a clean, locked commit"
+if find "$ROOT/apps/frontend" -maxdepth 1 \( -name '.env' -o -name '.env.*' -o -name '*.env' -o -name '*.env.*' \) ! -name '.env.example' -print -quit | grep -q .; then
+  die "frontend environment file present; remove it before building"
+fi
 rm -rf -- "$ROOT/apps/backend/dist" "$ROOT/apps/frontend/.next"
 (
   cd -- "$ROOT"
@@ -137,6 +145,9 @@ NODE
 for package_root in "$work/backend/package" "$frontend_package"; do
   if find "$package_root" -type l -print -quit | grep -q .; then
     die "packaged releases may not contain symbolic links"
+  fi
+  if find "$package_root" -type f \( -name '.env' -o -name '.env.*' -o -name '*.env' -o -name '*.env.*' \) -print -quit | grep -q .; then
+    die "packaged releases may not contain environment files"
   fi
 done
 

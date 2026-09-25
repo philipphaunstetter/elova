@@ -20,14 +20,14 @@ npm ci
 npm run generate
 npm run lint
 npm test
-ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/to/output
+ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/outside/repo
 ```
 
-The example Tailnet address is build-time test input only; no network call is made during the frontend build. Packaging emits install-free frontend/backend archives and checksums without deploying them. PostgreSQL integration and staged-artifact startup tests run in CI with an ephemeral database.
+The example Tailnet address is build-time test input only; no network call is made during the frontend build. Packaging requires a clean checkout and emits install-free frontend/backend archives and checksums without deploying them; see the [native operations runbook](ops/docs/native-services-runbook.md) for artifact safety requirements. PostgreSQL integration and staged-artifact startup tests run in CI with an ephemeral database.
 
 ## Initial owner
 
-There is no public signup or web bootstrap. After an operator has separately provisioned and migrated private PostgreSQL on GX10, the operator runs the packaged backend's `bootstrap-owner` command once with `ELOVA_BOOTSTRAP_EMAIL`, `ELOVA_BOOTSTRAP_NAME`, and `ELOVA_BOOTSTRAP_PASSWORD` supplied through the protected host environment. The command performs one atomic owner write; failures before commit are retryable and every call after commitment is refused.
+There is no public signup or web bootstrap. After separately provisioning and migrating private PostgreSQL on GX10, an authorized operator can create the sole owner with the packaged backend's `bootstrap-owner` command. Use the [transient service-user procedure](ops/docs/native-services-runbook.md#3a-bootstrap-the-sole-owner-separately), not the persistent backend environment file, for bootstrap credentials. The command performs one atomic owner write; failures before commit are retryable and every call after commitment is refused.
 
 ## Operations
 

@@ -9,8 +9,9 @@ npm ci
 npm run generate
 npm run lint
 npm test
-ELOVA_BACKEND_URL=http://100.100.10.20:3001 npm run package:native -- /path/to/output
 ```
+
+For packaging, use the [README command](README.md#local-verification) and follow the [artifact contract](ops/docs/native-services-runbook.md#release-artifact-contract).
 
 ## Run the backend locally
 
