@@ -17,6 +17,7 @@ function browserRequest(path = "/api/v1/health/ready", init: RequestInit = {}): 
 
 test.beforeEach(() => {
   process.env.ELOVA_BACKEND_URL = PRIVATE_URL;
+  delete process.env.ELOVA_DEV_HTTP_COOKIE_ORIGIN;
 });
 
 test("forwards same-origin requests to the private /v1 path without forwarding host headers", async () => {
@@ -109,6 +110,71 @@ test("login and empty workspace views pass through the BFF without an n8n connec
     { path: "/v1/workspaces", cookie, workspaceId: null },
     { path: "/v1/providers", cookie, workspaceId },
   ]);
+});
+
+test("only an exact opted-in HTTP development origin gets a non-Secure auth session cookie", async () => {
+  const devOrigin = "http://69.62.114.160:43180";
+  const session = "elova_session=synthetic; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600";
+  const cleared = "elova_session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0";
+  const request = (origin: string, action: string) => new Request(`${origin}/api/v1/auth/${action}`, {
+    method: "POST", headers: { origin, "sec-fetch-site": "same-origin", "content-type": "application/json" },
+    body: "{}",
+  });
+  const response = (action: string) => {
+    const headers = new Headers({ "x-elova-api-version": "1" });
+    headers.append("set-cookie", action === "logout" ? cleared : session);
+    headers.append("set-cookie", "other=synthetic; HttpOnly; Secure; Path=/");
+    return action === "logout" ? new Response(null, { status: 204, headers })
+      : Response.json({ user: { id: "synthetic" } }, { headers });
+  };
+  const proxy = (origin: string, action: string) =>
+    proxyToBackend(request(origin, action), ["auth", action], async () => response(action));
+
+  // A missing, malformed or mismatched opt-in preserves the backend's Secure attribute.
+  assert.deepEqual((await proxy(devOrigin, "login")).headers.getSetCookie(), [session, "other=synthetic; HttpOnly; Secure; Path=/"]);
+  for (const configured of ["true", "https://69.62.114.160:43180", `${devOrigin}/path`, `${devOrigin}/`,
+    "http://different.example:43180"]) {
+    process.env.ELOVA_DEV_HTTP_COOKIE_ORIGIN = configured;
+    assert.equal((await proxy(devOrigin, "login")).headers.getSetCookie()[0], session);
+  }
+
+  process.env.ELOVA_DEV_HTTP_COOKIE_ORIGIN = devOrigin;
+  assert.equal((await proxy("https://69.62.114.160:43180", "login")).headers.getSetCookie()[0], session);
+  assert.equal((await proxy("http://69.62.114.160:43181", "login")).headers.getSetCookie()[0], session);
+  const untrustedHeaders: Record<string, string>[] = [
+    { origin: devOrigin, "x-forwarded-proto": "https" },
+    { origin: "https://69.62.114.160:43180" }, { origin: "" },
+  ];
+  for (const headers of untrustedHeaders) {
+    const untrusted = new Request(`${devOrigin}/api/v1/auth/login`, { method: "POST", headers, body: "{}" });
+    assert.equal((await proxyToBackend(untrusted, ["auth", "login"], async () => response("login")))
+      .headers.getSetCookie()[0], session);
+  }
+  assert.deepEqual((await proxy(devOrigin, "login")).headers.getSetCookie(), [
+    "elova_session=synthetic; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600",
+    "other=synthetic; HttpOnly; Secure; Path=/",
+  ]);
+  assert.deepEqual((await proxy(devOrigin, "logout")).headers.getSetCookie(), [
+    "elova_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0",
+    "other=synthetic; HttpOnly; Secure; Path=/",
+  ]);
+
+  let forwardedCookie: string | null = null;
+  await proxyToBackend(new Request(`${devOrigin}/api/v1/auth/session`, {
+    headers: { origin: devOrigin, cookie: "elova_session=synthetic" },
+  }), ["auth", "session"], async (_url, init) => {
+    forwardedCookie = new Headers(init?.headers).get("cookie");
+    return Response.json({ user: { id: "synthetic" } }, { headers: { "x-elova-api-version": "1" } });
+  });
+  assert.equal(forwardedCookie, "elova_session=synthetic");
+
+  const unrelated = await proxyToBackend(request(devOrigin, "login"), ["auth", "session"],
+    async () => response("login"));
+  assert.equal(unrelated.headers.getSetCookie()[0], session);
+  const rejected = await proxyToBackend(request(devOrigin, "login"), ["auth", "login"],
+    async () => Response.json({ error: { code: "INVALID_CREDENTIALS", message: "Invalid credentials" } },
+      { status: 401, headers: { "x-elova-api-version": "1", "set-cookie": session } }));
+  assert.equal(rejected.headers.getSetCookie()[0], session);
 });
 
 test("forwards the displayed workspace ID on credential writes and preserves stale-workspace rejection", async () => {
