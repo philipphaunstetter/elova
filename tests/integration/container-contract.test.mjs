@@ -44,6 +44,55 @@ test('backend activation and migrations are distinct from default database start
   assert.deepEqual(backend.cap_drop, ['ALL'])
 })
 
+test('disposable CI checks the initialized app role as the peer-authenticated postgres user', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'elova-arm64-peer-'))
+  try {
+    const bin = join(dir, 'bin')
+    mkdirSync(bin)
+    writeFileSync(join(dir, 'compose.json'), JSON.stringify(config))
+    writeFileSync(join(bin, 'docker'), `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$DOCKER_LOG"
+case "$*" in
+  'compose -f ops/container/compose.yaml config --format json') /bin/cat "$COMPOSE_FIXTURE" ;;
+  'image inspect --format {{.Os}}/{{.Architecture}} '*) printf 'linux/arm64\\n' ;;
+  'image inspect --format {{.Config.User}} '*) printf '10001:10001\\n' ;;
+  'image inspect --format {{json .Config.Cmd}} '*) printf '["node","dist/src/server.js"]\\n' ;;
+  'compose -f ops/container/compose.yaml exec '*'psql -U postgres -d elova_vnext -tAc '*)
+    if [[ "$*" == *'exec -T --user postgres postgres psql '* ]]; then
+      printf '1\\n'; : > "$ROLE_CHECKED"
+    else exit 1; fi ;;
+  'compose -f ops/container/compose.yaml ps --status running --services')
+    [[ -f "$ROLE_CHECKED" ]] || exit 97
+    printf 'postgres\\n' ;;
+  'compose -f ops/container/compose.yaml --profile activate up -d --no-deps backend')
+    [[ -f "$ROLE_CHECKED" ]] || exit 97
+    exit 42 ;;
+  *) exit 0 ;;
+esac
+`, { mode: 0o755 })
+    writeFileSync(join(bin, 'sudo'), `#!/usr/bin/env bash
+if [[ "$1" == rm ]]; then shift; exec /bin/rm "$@"; fi
+if [[ "$1" == chown ]]; then exit 0; fi
+exit 96
+`, { mode: 0o755 })
+    writeFileSync(join(bin, 'sleep'), '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 })
+    const run = spawnSync('bash', ['ops/container/ci-arm64.sh'], {
+      encoding: 'utf8', timeout: 10000,
+      env: {
+        ...process.env, PATH: `${bin}:${process.env.PATH}`,
+        CI: 'true', RUNNER_ARCH: 'ARM64', GITHUB_ACTIONS: 'true', RUNNER_TEMP: dir,
+        GITHUB_SHA: '0123456789abcdef0123456789abcdef01234567',
+        COMPOSE_FIXTURE: join(dir, 'compose.json'), DOCKER_LOG: join(dir, 'docker.log'),
+        ROLE_CHECKED: join(dir, 'role-checked'),
+      },
+    })
+    // The fake backend startup stops the script immediately after the role probe.
+    assert.equal(run.status, 42, `${run.stderr}\n${readFileSync(join(dir, 'docker.log'), 'utf8')}`)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 for (const platform of ['linux/arm64', 'linux/amd64']) {
   test(`disposable CI obtains pinned PostgreSQL for ${platform} before building`, () => {
     const dir = mkdtempSync(join(tmpdir(), 'elova-arm64-preflight-'))

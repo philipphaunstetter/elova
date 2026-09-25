@@ -56,7 +56,7 @@ for _ in $(seq 1 40); do
 done
 "${compose[@]}" exec -T postgres pg_isready -U postgres -d elova_vnext >/dev/null
 for _ in $(seq 1 30); do
-  role=$("${compose[@]}" exec -T postgres psql -U postgres -d elova_vnext -tAc "SELECT count(*) FROM pg_roles WHERE rolname = 'elova_backend' AND NOT rolsuper" 2>/dev/null || true)
+  role=$("${compose[@]}" exec -T --user postgres postgres psql -U postgres -d elova_vnext -tAc "SELECT count(*) FROM pg_roles WHERE rolname = 'elova_backend' AND NOT rolsuper" 2>/dev/null || true)
   if [[ "$role" == 1 ]]; then break; fi
   sleep 2
 done
