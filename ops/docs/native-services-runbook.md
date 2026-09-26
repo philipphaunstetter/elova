@@ -1,6 +1,6 @@
 # Elova native frontend/backend operations
 
-Status: native artifact packaging plus reviewed host templates. Packaging runs only in the build workspace. **Nothing in `ops/` is installed or executed on the VPS or GX10 by this repository change.** This change does not create users, install packages, deploy releases, run migrations, start or restart services, or alter the VPS, GX10, Tailnet, DNS, firewall, PostgreSQL, Docker Hub, credentials, n8n, or any external system.
+Status: historical native artifact packaging plus reviewed host templates; the VPS native frontend install was not run. The selected but unactivated frontend direction is the [separate Docker-provider plan](vps-frontend-container.md), not these service activation steps. Packaging runs only in the build workspace. **Nothing in `ops/` is installed or executed on the VPS or GX10 by this repository change.** This change does not create users, install packages, deploy releases, run migrations, start or restart services, or alter the VPS, GX10, Tailnet, DNS, firewall, PostgreSQL, Docker Hub, credentials, n8n, or any external system.
 
 The first vNext slice runs without containers:
 

@@ -1,0 +1,46 @@
+# VPS frontend only. Never use ops/container/compose.yaml for this project.
+# Default Traefik exposure is off; the operator must approve the dedicated
+# network attachment and route before explicitly setting ELOVA_TRAEFIK_ENABLE=true.
+name: elova-frontend
+services:
+  frontend:
+    image: ${ELOVA_FRONTEND_IMAGE:?verified immutable linux/amd64 image digest required}
+    platform: linux/amd64
+    pull_policy: never
+    restart: 'no'
+    init: true
+    user: '10001:10001'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: '1.0'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,uid=10001,gid=10001
+      - /app/apps/frontend/.next/cache:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+    env_file:
+      - path: ${ELOVA_FRONTEND_ENV_FILE:?protected absolute frontend runtime env file required}
+        required: true
+    networks: [elova_frontend_proxy, elova_frontend_egress]
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:43180/health/live').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      traefik.enable: ${ELOVA_TRAEFIK_ENABLE:-false}
+      traefik.docker.network: elova_frontend_proxy
+      traefik.http.routers.elova-app.rule: Host(`app.elova.dev`)
+      traefik.http.routers.elova-app.entrypoints: websecure
+      traefik.http.routers.elova-app.tls: 'true'
+      traefik.http.routers.elova-app.tls.certresolver: mytlschallenge
+      traefik.http.routers.elova-app.service: elova-app
+      traefik.http.services.elova-app.loadbalancer.server.port: '43180'
+networks:
+  elova_frontend_proxy:
+    name: elova_frontend_proxy
+    internal: true
+  elova_frontend_egress:
+    name: elova_frontend_egress
