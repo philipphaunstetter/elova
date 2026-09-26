@@ -189,6 +189,48 @@ jobs:
       - name: Build and exercise unpushed candidate in isolated CI
         run: bash ops/container/ci-arm64.sh
 
+  frontend-container-amd64:
+    name: Unpublished frontend candidate on disposable Linux amd64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@v4
+      - name: Set up Node.js for source contract check
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Check deployment model and runtime gate without Docker
+        run: |
+          npm ci
+          node --test tests/integration/frontend-container-contract.test.mjs
+      - name: Build and smoke-test unpushed image in isolated CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RUNNER_ARCH" == X64 && "$GITHUB_ACTIONS" == true ]]
+          image="elova-frontend-ci:${GITHUB_SHA}"
+          container="elova-frontend-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          docker build --platform linux/amd64 -f ops/container/Dockerfile.frontend \
+            --build-arg "ELOVA_BUILD_ID=$GITHUB_SHA" -t "$image" .
+          [[ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")" == linux/amd64 ]]
+          [[ "$(docker image inspect --format '{{.Config.User}}' "$image")" == 10001:10001 ]]
+          if docker image inspect --format '{{json .Config.Env}}' "$image" | grep -E 'ELOVA_BACKEND_URL|NEXT_PUBLIC_|DEV_HTTP_COOKIE'; then exit 1; fi
+          if docker run --rm --network none "$image" >/dev/null 2>&1; then exit 1; fi
+          docker run -d --name "$container" --network none --read-only --user 10001:10001 \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m,uid=10001,gid=10001 \
+            --tmpfs /app/apps/frontend/.next/cache:rw,noexec,nosuid,size=32m,uid=10001,gid=10001 \
+            -e ELOVA_BACKEND_URL=http://100.100.10.20:43181 "$image" >/dev/null
+          for attempt in {1..30}; do
+            if docker exec "$container" node -e "fetch('http://127.0.0.1:43180/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then break; fi
+            if (( attempt == 30 )); then docker logs "$container"; exit 1; fi
+            sleep 2
+          done
+          docker exec "$container" node -e "fetch('http://127.0.0.1:43180/health/ready').then(r=>process.exit(r.status===503?0:1)).catch(()=>process.exit(1))"
+
   security:
     name: Dependency and repository secret scanning
     runs-on: ubuntu-latest
@@ -224,7 +266,7 @@ jobs:
   build:
     name: build
     runs-on: ubuntu-latest
-    needs: [native-operations, frontend-quality, backend-quality, contract-drift, postgres-integration, container-arm64, security]
+    needs: [native-operations, frontend-quality, backend-quality, contract-drift, postgres-integration, container-arm64, frontend-container-amd64, security]
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

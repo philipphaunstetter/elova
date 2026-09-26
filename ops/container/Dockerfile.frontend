@@ -1,0 +1,25 @@
+# Build from the reviewed Node 22 multi-platform manifest; select only Linux amd64.
+ARG NODE_IMAGE=node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c
+FROM --platform=linux/amd64 ${NODE_IMAGE} AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/backend/package.json apps/backend/package.json
+COPY apps/frontend/package.json apps/frontend/package.json
+COPY packages/api-contract/package.json packages/api-contract/package.json
+RUN npm ci --ignore-scripts
+COPY apps/frontend/next.config.ts apps/frontend/postcss.config.mjs apps/frontend/tsconfig.json apps/frontend/
+COPY apps/frontend/src/ apps/frontend/src/
+COPY packages/api-contract/src/generated/ packages/api-contract/src/generated/
+ARG ELOVA_BUILD_ID
+RUN test -n "$ELOVA_BUILD_ID" && ELOVA_BUILD_ID="$ELOVA_BUILD_ID" npm run build:frontend
+
+FROM --platform=linux/amd64 ${NODE_IMAGE} AS runtime
+ENV NODE_ENV=production PORT=43180 HOSTNAME=0.0.0.0
+WORKDIR /app
+COPY --from=build --chown=10001:10001 /app/apps/frontend/.next/standalone/ ./
+COPY --from=build --chown=10001:10001 /app/apps/frontend/.next/static/ ./apps/frontend/.next/static/
+COPY --chmod=755 ops/container/frontend-entrypoint.sh /app/frontend-entrypoint.sh
+USER 10001:10001
+EXPOSE 43180
+ENTRYPOINT ["/app/frontend-entrypoint.sh"]
+CMD ["node", "apps/frontend/server.js"]

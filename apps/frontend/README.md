@@ -4,7 +4,7 @@ Deployable Next.js frontend and same-origin BFF foundation. The application shel
 
 ## Runtime configuration
 
-`ELOVA_BACKEND_URL` is the private backend **HTTP origin**, using a Tailnet IPv4 address, Tailscale IPv6 address, or fully qualified MagicDNS `.ts.net` name with no path. It is read only by server modules. Tailnet origins are accepted in every environment; explicit development additionally permits HTTP loopback. HTTPS and every other origin are rejected. There is deliberately no `NEXT_PUBLIC_*` equivalent. Production requires explicit backend port `43181`. Source `npm run dev` and `npm start` pin `127.0.0.1:43180`; the packaged native startup defaults to that bind, and the service unit pins it.
+`ELOVA_BACKEND_URL` is the private backend **HTTP origin**, using a Tailnet IPv4 address, Tailscale IPv6 address, or fully qualified MagicDNS `.ts.net` name with no path. It is read only by server modules. Tailnet origins are accepted in every environment; explicit development additionally permits HTTP loopback. HTTPS and every other origin are rejected. There is deliberately no `NEXT_PUBLIC_*` equivalent. Production requires explicit backend port `43181`. Source `npm run dev` and `npm start` pin `127.0.0.1:43180`; the packaged native startup defaults to that bind, and the uninstalled native service unit pins it. The [separate unactivated VPS container](../../ops/docs/vps-frontend-container.md) instead listens inside its dedicated bridge on 43180, with no host port publication and server-only backend origin supplied at runtime.
 
 The browser uses `/api/v1/*`; the BFF maps that path to the backend's `/v1/*`, including browser-facing readiness at `/api/v1/health/ready`. Web probes are available at `/health/live` and `/health/ready`.
 

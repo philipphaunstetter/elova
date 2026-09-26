@@ -1,6 +1,6 @@
 # VPS → GX10 private Elova route (operator plan; not activated)
 
-This is a **future, separately authorized** route procedure for the *current* main-line container topology, not a deployment script or evidence that a VPS is configured. This source change makes no host, proxy, Tailnet, firewall, DNS, TLS, Docker, credential, migration, or frontend change. Obtain explicit, exact-target authority for publication and frontend activation **after** reviewing this plan. Do not use the historical native backend service instructions in `native-services-runbook.md` to replace the running container backend.
+This is a **historical native-loopback frontend route proposal**, not the selected VPS frontend delivery. For the intended Docker-provider route and its own gateway approval gate see [vps-frontend-container.md](vps-frontend-container.md). It remains useful for GX10 private-route evidence; do not follow its VPS native frontend or loopback proxy steps for the Docker candidate. This is a future, separately authorized route procedure for the *current* main-line backend container topology, not a deployment script or evidence that a VPS is configured. This source change makes no host, proxy, Tailnet, firewall, DNS, TLS, Docker, credential, migration, or frontend change. Obtain explicit, exact-target authority for publication and frontend activation **after** reviewing this plan. Do not use the historical native backend service instructions in `native-services-runbook.md` to replace the running container backend.
 
 ## Fixed boundary and current evidence
 
