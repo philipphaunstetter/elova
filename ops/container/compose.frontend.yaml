@@ -1,6 +1,7 @@
 # VPS frontend only. Never use ops/container/compose.yaml for this project.
-# Default Traefik exposure is off; the operator must approve the dedicated
-# network attachment and route before explicitly setting ELOVA_TRAEFIK_ENABLE=true.
+# Default Traefik exposure is off; route activation needs separate operator approval.
+# Frontend joins the existing root_default shared proxy network; the retained
+# elova_frontend_proxy definition below is not attached to this service.
 name: elova-frontend
 services:
   frontend:
@@ -22,7 +23,7 @@ services:
     env_file:
       - path: ${ELOVA_FRONTEND_ENV_FILE:?protected absolute frontend runtime env file required}
         required: true
-    networks: [elova_frontend_proxy, elova_frontend_egress]
+    networks: [root_default, elova_frontend_egress]
     healthcheck:
       test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:43180/health/live').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
       interval: 15s
@@ -31,7 +32,7 @@ services:
       start_period: 20s
     labels:
       traefik.enable: ${ELOVA_TRAEFIK_ENABLE:-false}
-      traefik.docker.network: elova_frontend_proxy
+      traefik.docker.network: root_default
       traefik.http.routers.elova-app.rule: Host(`app.elova.dev`)
       traefik.http.routers.elova-app.entrypoints: websecure
       traefik.http.routers.elova-app.tls: 'true'
@@ -39,6 +40,9 @@ services:
       traefik.http.routers.elova-app.service: elova-app
       traefik.http.services.elova-app.loadbalancer.server.port: '43180'
 networks:
+  root_default:
+    external: true
+    name: root_default
   elova_frontend_proxy:
     name: elova_frontend_proxy
     internal: true
